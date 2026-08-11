@@ -1,0 +1,14 @@
+schema_version: 1
+
+storage:
+  data_dir: data
+
+tools:
+  # Null means resolve the executable from PATH.
+  ffmpeg_path: null
+  ffprobe_path: null
+  probe_timeout_seconds: 120
+
+logging:
+  level: INFO
+
