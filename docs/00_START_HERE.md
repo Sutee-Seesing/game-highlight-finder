@@ -6,7 +6,7 @@ Working project path: `C:\Data\Works\Personal_Projects\Active_Products\game-high
 
 ## Repository reference
 
-The requested upstream reference is [github.com/Sutee-Seesing/game-highlight-finder](https://github.com/Sutee-Seesing/game-highlight-finder). It was checked on 2026-08-11 with `git ls-remote` through an approved network path; the command succeeded but returned no refs or commits. Treat the repository as an empty remote at this point. The planning files below are therefore the initial project baseline, not a review of existing implementation. Once a branch/commit is published, re-audit it before scaffolding M1 and preserve any intentional repository conventions.
+The requested upstream reference is [github.com/Sutee-Seesing/game-highlight-finder](https://github.com/Sutee-Seesing/game-highlight-finder). It was initially empty when checked on 2026-08-11. This planning baseline has now been committed and pushed to `main` as `88a2795`; the working folder is the local checkout of that repository. Future implementation should preserve this documentation baseline and update it when decisions change.
 
 ## What we are building
 
