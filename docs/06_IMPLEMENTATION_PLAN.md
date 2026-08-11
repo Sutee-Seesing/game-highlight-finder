@@ -12,13 +12,15 @@ Build in vertical, demonstrable increments. Every milestone must leave the CLI r
 - Environment audited without installing or implementing.
 - Owner approval gate recorded.
 
-### M1 — Foundation and ingest
+### M1 — Foundation and ingest (complete)
 
 - Create repository, Python 3.12 environment, packaging, lint/type/test commands, `.gitignore`, `.env.example`, and example config.
 - Implement `highlight doctor`, `config check`, `analyze --stop-after ingest`, and `status`.
 - Discover/pin FFmpeg and validate ffprobe output.
 - Implement source hashing, `SourceAsset`, session ID, atomic JSON, lock, and stage manifest.
 - Exit: a fixture and real short clip ingest twice; second run is a verified cache hit; source hash unchanged.
+
+Implemented on 2026-08-11 with uv-managed Python 3.12, Pydantic v2, Typer, PyYAML, pytest, and Scoop-resolved FFmpeg/ffprobe 9.0. Validation covers strict configuration, doctor, safe ffprobe parsing, source hashing, atomic artifacts, manifest transitions, per-session locking, interrupted-run recovery, cache invalidation, status output, Unicode paths, and source immutability. No M2 components were added.
 
 ### M2 — Proxy and local signals foundation
 
@@ -154,4 +156,3 @@ V1 is done only after a representative 1–4 hour recording completes through re
 ## 7. Exact next action after approval
 
 Create M1 only. Install/choose Python 3.12 and FFmpeg, then scaffold the repository and implement `doctor`, validated configuration, source ingest, atomic manifest, and tests. Use a locally generated 10–30 second fixture. Stop at `--stop-after ingest` until the foundation is accepted; do not make an AI call in M1.
-

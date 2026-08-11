@@ -1,6 +1,6 @@
 # Game Highlight Finder — Start Here
 
-Status: planning complete; implementation intentionally not started  
+Status: Milestone 1 foundation and ingest implemented
 Plan date: 2026-08-11  
 Working project path: `C:\Data\Works\Personal_Projects\Active_Products\game-highlight-finder`
 
@@ -23,8 +23,8 @@ The product optimizes for reliability, cost control, resumability, and reducing 
 | RAM | 31.9 GB total; about 10.5 GB available during audit | Adequate for the proposed pipeline; stages should stream files rather than load videos into memory. |
 | GPU | NVIDIA GeForce RTX 4070, 12,282 MiB VRAM; driver `610.74` | Strong candidate for NVENC proxy/export and optional local Whisper acceleration. |
 | Storage | `C:` NTFS, 1,906.7 GB total, 1,128 GB free | Healthy now, but session storage needs preflight estimates and retention visibility. |
-| Python | CPython 3.14.6 only; pip 26.1.2 | Do not build on the system interpreter. Use a project-local Python 3.12 virtual environment for library compatibility. |
-| FFmpeg / ffprobe | Not found on `PATH` | Blocking prerequisite for video work. Install a pinned build and validate required codecs/filters. |
+| Python | Global CPython 3.14.6 remains installed; uv now manages CPython 3.12.13 in project-local `.venv` | M1 runs on its supported interpreter without relying on global Python. |
+| FFmpeg / ffprobe | FFmpeg/ffprobe 9.0 installed through Scoop's hash-verified `ffmpeg` package | M1 doctor and integration tests resolve both tools; explicit configured paths are also supported. |
 | Git | 2.55.0.windows.2 | Ready. The workspace root is not itself a repository. |
 | Useful installed Python packages | Pydantic 2.13.4, Click 8.4.2, PyYAML 6.0.3, pytest 8.4.2 | These system packages should not be relied on; dependencies will be pinned in the project environment. |
 | AI/transcription packages | `google-genai`, `faster-whisper`, and `torch` were not detected | Expected at this stage; install only in the project environment and keep transcription optional. |
@@ -48,9 +48,9 @@ Notes:
 9. Make the optional Reviewer consume only extracted candidates, never the full recording.
 10. Fail closed before paid calls when price data is missing/stale or the hard THB budget would be exceeded.
 
-## Recommended first implementation
+## Implemented M1 foundation
 
-Implement one thin, fully tested vertical foundation before any AI integration:
+The first implementation slice is complete:
 
 > Project skeleton + `doctor` + config loading/validation + session creation + ffprobe ingest + atomic stage manifest.
 
@@ -63,7 +63,7 @@ highlight status <session-id>
 highlight config check
 ```
 
-This slice proves Windows paths, dependency discovery, immutable source handling, stable session IDs, JSON schemas, hashing, atomic writes, and restart behavior. Those are dependencies of every later stage. Do not start Gemini integration until this slice passes tests against at least one short fixture video.
+This slice proves Windows/Unicode paths, dependency discovery, immutable source handling, stable session IDs, validated metadata, hashing, atomic writes, locking, cache hits, interrupted-run recovery, and status reporting. M2 remains approval-gated; no proxy, local-signal, AI, cost-ledger, or candidate logic is present.
 
 ## Documentation map
 
@@ -76,10 +76,8 @@ This slice proves Windows paths, dependency discovery, immutable source handling
 
 ## Approval gate
 
-No major implementation should begin until the owner approves this plan, especially these decisions:
+M2 and later work must not begin until the owner approves it, especially these decisions:
 
-- Python 3.12 as the supported runtime.
-- Installation method and license/source for FFmpeg.
 - Whether cloud-uploaded proxy data is acceptable under the chosen Gemini account/tier and data-use terms.
 - Initial Scout model alias and validated price entry at implementation time.
 - Default extraction mode: accurate high-quality re-encode versus faster keyframe-aligned stream copy.
