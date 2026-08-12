@@ -14,6 +14,33 @@ from game_highlight_finder.errors import StorageError, ValidationError
 MAX_JSON_BYTES = 16 * 1024 * 1024
 
 
+def atomic_write_bytes(path: Path, value: bytes) -> None:
+    """Atomically persist immutable raw bytes without normalizing their representation."""
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="wb",
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            dir=path.parent,
+            delete=False,
+        ) as handle:
+            temporary = Path(handle.name)
+            handle.write(value)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+    except OSError as exc:
+        if temporary is not None:
+            with suppress(OSError):
+                temporary.unlink(missing_ok=True)
+        raise StorageError(
+            f"Cannot atomically write bytes artifact: {path}", hint=str(exc)
+        ) from exc
+
+
 def atomic_write_json(path: Path, value: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary: Path | None = None

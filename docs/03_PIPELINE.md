@@ -24,7 +24,7 @@ Ranking and reporting are local. Reviewer is not a dependency for extraction or 
 | `ingest` | No | `source.json`, environment snapshot | readable source, ffprobe |
 | `proxy` | No | `proxy/analysis_proxy.mp4`, proxy metadata | ingest, FFmpeg |
 | `local_signals` | No | activity/silence/scene metadata; optional transcript | ingest; proxy/audio as configured |
-| `scout` | Potentially | independently cached raw/validated window results | proxy, signals, price/budget approval |
+| `scout` | No in M3 | raw Fake Scout response, validated canonical result, and `session_map.json` | proxy, signals; deterministic offline fixture |
 | `reconcile` | No | canonical `session_map.json`, `scout_results.json` | completed Scout windows |
 | `extract` | No | candidate media + extraction manifest | reconcile, source present and verified |
 | `reviewer` | Potentially | validated candidate reviews | extract, reviewer enabled, budget approval |
@@ -32,6 +32,13 @@ Ranking and reporting are local. Reviewer is not a dependency for extraction or 
 | `report` | No | `reports/report.html` and thumbnails | rank, extraction metadata |
 
 If Scout is disabled or budget-blocked, the run stops successfully-with-attention at that boundary; it must not claim full analysis completion.
+
+In M3 the `scout` stage is deliberately offline. It persists the exact Fake Scout
+response under `scout/raw/`, validates it as hostile input, and writes the
+canonical `scout/canonical/scout_result.json` plus `session_map.json`. A malformed
+response fails the stage while retaining the raw bytes for parser-only recovery.
+The stage cache includes only source/proxy/signal identities and Scout fixture/
+schema inputs; logging or storage settings do not invalidate M3.
 
 ## 3. Stage state machine
 
@@ -169,4 +176,3 @@ Use half-open intervals `[start_ms, end_ms)` internally. Clamp twice: after mode
 ## 10. Remote lifecycle
 
 Local cache is authoritative. A provider upload record contains remote ID, content hash, created/expiry times, and deletion state. Reuse only when provider, project, content hash, purpose, and validity match. On success or terminal failure, attempt explicit deletion; if deletion fails, record it and show a privacy warning. Never depend on a remote file surviving a resume beyond its documented retention period.
-

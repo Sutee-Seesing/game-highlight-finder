@@ -32,6 +32,8 @@ PROXY_CACHE_VERSION = 1
 PROXY_CONFIG_FINGERPRINT_VERSION = 1
 LOCAL_SIGNALS_CACHE_VERSION = 1
 LOCAL_SIGNALS_CONFIG_FINGERPRINT_VERSION = 1
+SCOUT_CACHE_VERSION = 1
+SCOUT_CONFIG_FINGERPRINT_VERSION = 1
 
 
 @dataclass(frozen=True)
@@ -46,6 +48,10 @@ class SessionPaths:
     proxy_dir: Path
     audio_dir: Path
     signals_dir: Path
+    scout_dir: Path
+    scout_raw_dir: Path
+    scout_canonical_dir: Path
+    session_map: Path
     tmp_dir: Path
 
 
@@ -64,6 +70,10 @@ def session_paths(data_dir: Path, session_id: str) -> SessionPaths:
         proxy_dir=root / "proxy",
         audio_dir=root / "audio",
         signals_dir=root / "signals",
+        scout_dir=root / "scout",
+        scout_raw_dir=root / "scout" / "raw",
+        scout_canonical_dir=root / "scout" / "canonical",
+        session_map=root / "session_map.json",
         tmp_dir=root / "tmp",
     )
 
@@ -278,6 +288,62 @@ def local_signals_cache_payload(
             config, ffmpeg_identity=ffmpeg_identity, ffprobe_identity=ffprobe_identity
         ),
     }
+
+
+def scout_config_fingerprint(config: AppConfig, *, fixture_sha256: str | None = None) -> str:
+    """Hash only deterministic Scout inputs; unrelated config never invalidates M3."""
+
+    payload = {
+        "fingerprint_version": SCOUT_CONFIG_FINGERPRINT_VERSION,
+        "backend": config.scout.backend,
+        "schema_version": config.scout.schema_version,
+        "canonicalization_version": config.scout.canonicalization_version,
+        "response_max_bytes": config.scout.response_max_bytes,
+        "fixture_sha256": fixture_sha256 or "builtin-deterministic",
+    }
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def scout_cache_payload(
+    source: SourceAsset,
+    config: AppConfig,
+    *,
+    proxy_artifact_sha256: str,
+    local_signals_artifact_sha256: str,
+    fixture_sha256: str | None = None,
+) -> dict[str, object]:
+    """Return the semantic identity for the M3 Scout stage."""
+
+    return {
+        "cache_version": SCOUT_CACHE_VERSION,
+        "source_sha256": source.sha256,
+        "proxy_artifact_sha256": proxy_artifact_sha256,
+        "local_signals_artifact_sha256": local_signals_artifact_sha256,
+        "scout_config_fingerprint": scout_config_fingerprint(config, fixture_sha256=fixture_sha256),
+    }
+
+
+def compute_scout_cache_key(
+    source: SourceAsset,
+    config: AppConfig,
+    *,
+    proxy_artifact_sha256: str,
+    local_signals_artifact_sha256: str,
+    fixture_sha256: str | None = None,
+) -> str:
+    encoded = json.dumps(
+        scout_cache_payload(
+            source,
+            config,
+            proxy_artifact_sha256=proxy_artifact_sha256,
+            local_signals_artifact_sha256=local_signals_artifact_sha256,
+            fixture_sha256=fixture_sha256,
+        ),
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
 
 
 def artifact_identity(path: Path, *, relative_to: Path | None = None) -> ArtifactIdentity:

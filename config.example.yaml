@@ -40,3 +40,11 @@ signals:
     min_duration_seconds: 0.25
   loudness:
     interval_ms: 500
+
+scout:
+  # M3 is offline and deterministic. Real providers are future M4/M5 work.
+  backend: fake
+  fixture_path: null
+  response_max_bytes: 1048576
+  schema_version: 1
+  canonicalization_version: m3-canonical-v1

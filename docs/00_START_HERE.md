@@ -1,6 +1,6 @@
 # Game Highlight Finder — Start Here
 
-Status: Milestone 2 proxy and local signals foundation implemented
+Status: Milestone 3 canonical domain and deterministic Fake Scout implemented
 Plan date: 2026-08-11  
 Working project path: `C:\Data\Works\Personal_Projects\Active_Products\game-highlight-finder`
 
@@ -78,6 +78,17 @@ highlight status <session-id>
 
 M2 generates an aspect-ratio-preserving analysis proxy, optional mono analysis audio, a versioned source/proxy timestamp mapping, and bounded silence/RMS/loudness metadata. Outputs are re-probed, hashed, atomically committed, and cached by stage-specific configuration plus external-tool identity. Existing M1 manifests are upgraded additively when an M2 command opens them. No cloud upload, AI provider, transcription, candidate detection, or cost-ledger code is part of M2.
 
+## Implemented M3 canonical domain and Fake Scout
+
+The current CLI can continue through an offline deterministic Scout:
+
+```text
+highlight analyze <video> --stop-after scout
+highlight status <session-id>
+```
+
+M3 adds bounded Pydantic Scout contracts, canonical `Session -> Match -> Candidate` models, controlled categories, distinct score/confidence semantics, compact evidence, deterministic local IDs, source-relative integer-millisecond normalization, and immutable raw-versus-canonical Scout artifacts. The Fake Scout demonstrates zero-candidate matches and multiple/overlapping candidates without network access, API keys, paid requests, or provider SDKs. Existing M1/M2 manifests are upgraded additively; changing Scout fixtures/configuration invalidates only the Scout stage.
+
 ## Documentation map
 
 - [01_PRODUCT_REQUIREMENTS.md](01_PRODUCT_REQUIREMENTS.md): scope, behavior, constraints, and success measures.
@@ -89,8 +100,8 @@ M2 generates an aspect-ratio-preserving analysis proxy, optional mono analysis a
 
 ## Approval gate
 
-M3 and later work remain approval-gated, especially these decisions:
+M3 is implemented and accepted. M4 and later work remain approval-gated, especially these decisions:
 
-- Whether cloud-uploaded proxy data is acceptable under the chosen Gemini account/tier and data-use terms.
-- Initial Scout model alias and validated price entry at implementation time.
+- Whether cloud-uploaded proxy data is acceptable under the chosen Gemini account/tier and data-use terms (future M5).
+- Provider/cost contract and validated price entry (future M4).
 - Default extraction mode: accurate high-quality re-encode versus faster keyframe-aligned stream copy.

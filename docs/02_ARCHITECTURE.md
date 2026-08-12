@@ -129,6 +129,10 @@ data/sessions/<session_id>/
   preprocessing.json
   session_map.json
   scout_results.json
+  scout/
+    raw/fake_response.json
+    canonical/scout_result.json
+  session_map.json
   reviewer_results.json
   cost.json
   proxy/analysis_proxy.mp4
@@ -235,4 +239,3 @@ As checked on 2026-08-11, Google's official documentation says Gemini video proc
 - [Gemini video understanding](https://ai.google.dev/gemini-api/docs/video-understanding)
 - [Gemini Files API](https://ai.google.dev/gemini-api/docs/files)
 - [Gemini structured outputs](https://ai.google.dev/gemini-api/docs/structured-output)
-

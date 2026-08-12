@@ -79,6 +79,16 @@ class SignalsConfig(StrictModel):
     loudness: LoudnessConfig = LoudnessConfig()
 
 
+class ScoutConfig(StrictModel):
+    """M3-only deterministic Scout settings; real providers arrive in M5."""
+
+    backend: Literal["fake"] = "fake"
+    fixture_path: Path | None = None
+    response_max_bytes: int = Field(default=1_048_576, ge=4_096, le=16 * 1024 * 1024)
+    schema_version: Literal[1] = 1
+    canonicalization_version: str = Field(default="m3-canonical-v1", min_length=1, max_length=64)
+
+
 class AppConfig(StrictModel):
     schema_version: Literal[1] = 1
     storage: StorageConfig = StorageConfig()
@@ -87,6 +97,7 @@ class AppConfig(StrictModel):
     media: MediaConfig = MediaConfig()
     disk: DiskConfig = DiskConfig()
     signals: SignalsConfig = SignalsConfig()
+    scout: ScoutConfig = ScoutConfig()
 
 
 class ConfigResult(StrictModel):
@@ -191,8 +202,15 @@ def load_config(
             "ffprobe_path": _resolve_optional_path(config.tools.ffprobe_path, working_dir),
         }
     )
+    scout = config.scout.model_copy(
+        update={"fixture_path": _resolve_optional_path(config.scout.fixture_path, working_dir)}
+    )
     config = config.model_copy(
-        update={"storage": config.storage.model_copy(update={"data_dir": data_dir}), "tools": tools}
+        update={
+            "storage": config.storage.model_copy(update={"data_dir": data_dir}),
+            "tools": tools,
+            "scout": scout,
+        }
     )
     return ConfigResult(
         config=config,

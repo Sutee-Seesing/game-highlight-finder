@@ -37,7 +37,9 @@ Implemented on 2026-08-12 with CPU-safe FFmpeg command adapters, machine-readabl
 - Drive the pipeline end-to-end with malformed and golden fake responses before network access.
 - Exit: all required malformed JSON/timestamp/overlap tests pass and a fake session map is deterministic.
 
-### M4 — Cost gate and provider contract
+Implemented on 2026-08-12 as the local-only canonical contract slice. The runtime now has bounded Pydantic Match/Candidate/Evidence/SessionMap models, controlled generic and game-profile categories, distinct score/confidence validation, half-open integer-millisecond normalization, deterministic local IDs, immutable raw Fake Scout artifacts, canonical session-map persistence, M3 cache identity, additive manifest migration, CLI `--stop-after scout`, and hostile-response validation. The complete automated suite is **94 passed / 0 failed / 0 skipped**.
+
+### M4 — Cost gate and provider contract (approval-gated; not started)
 
 - Implement price catalog, FX snapshot, SQLite migrations, transactional reservations, ambiguous-call handling, monthly reports, and provider registry/capabilities.
 - Exit: concurrent reservation test proves the hard limit cannot be crossed; unknown/stale pricing fails closed.
@@ -73,7 +75,7 @@ Implemented on 2026-08-12 with CPU-safe FFmpeg command adapters, machine-readabl
 - Add keep/maybe/reject/merge suggestions without destructive rewrites.
 - Exit: measured improvement in shortlist precision justifies incremental cost; otherwise leave disabled.
 
-The original milestone order is adjusted so schemas/fake AI and budget controls precede real API integration. Cache/resume is foundational from M1 rather than added late, preventing paid-stage rework.
+The original milestone order is adjusted so schemas/fake AI and budget controls precede real API integration. Cache/resume is foundational from M1 rather than added late, preventing paid-stage rework. M4 remains approval-gated and is not part of M3.
 
 ## 3. Test strategy
 
@@ -157,4 +159,4 @@ V1 is done only after a representative 1–4 hour recording completes through re
 
 ## 7. Exact next action after approval
 
-M2 is implemented and accepted. The next milestone is **M3 — Canonical domain and fake Scout**. M3 remains approval-gated; do not add Scout, candidate detection, provider SDKs, cost accounting, or other later-milestone work as part of M2 maintenance.
+M3 is implemented and accepted. The next milestone is **M4 — Cost gate + provider contract**. M4 remains approval-gated; do not add cost accounting, provider SDKs, Gemini integration, or later-milestone work as part of M3.

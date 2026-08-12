@@ -175,6 +175,18 @@ candidate_fragments[]
 
 Provider output should use a flatter bounded schema than the final domain model. Local code supplies IDs, absolute transforms, clip boundaries, and ranking; the model does not.
 
+### M3 canonical domain
+
+The implemented M3 runtime models are `Session`, `Match`, `Candidate`, `Evidence`,
+`ScoutResponse`, and `SessionMap`. `Candidate` stores distinct `score` (`0..10`)
+and `confidence` (`0..1`) values, compact bounded evidence, and source-relative
+integer-millisecond event/clip intervals. `Match.candidate_ids` preserves the
+hierarchy while `SessionMap.candidates` remains a complete, quota-free library.
+Raw Scout/provider IDs are never authoritative; canonical IDs use deterministic
+semantic hashes. The generic taxonomy plus bounded `GAME_<PROFILE>_<CATEGORY>`
+extension form rejects arbitrary unknown categories without requiring a global
+enum edit for every future game profile.
+
 ## 4. Cost models
 
 ### PricingEntry
@@ -263,4 +275,3 @@ Store ranking configuration/version and component scores. `best_of_candidate_ids
 - Readers reject unknown major versions.
 - Migrations write new files atomically and retain backups or regenerate derived artifacts.
 - Raw provider responses are immutable evidence; canonical results may be regenerated from them when parser logic changes without repeating the paid call, provided the prompt/schema contract remains compatible.
-

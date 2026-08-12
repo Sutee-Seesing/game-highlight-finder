@@ -1,4 +1,4 @@
-"""Typer command-line interface for the local M2 pipeline."""
+"""Typer command-line interface for the local M3 pipeline."""
 
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ from game_highlight_finder.status import get_session_status
 
 app = typer.Typer(
     name="highlight",
-    help="Local-first gameplay recording analysis (M2: proxy and local signals).",
+    help="Local-first gameplay recording analysis (M3: canonical domain + Fake Scout).",
     no_args_is_help=True,
     pretty_exceptions_enable=False,
 )
@@ -107,11 +107,11 @@ def analyze(
         str,
         typer.Option(
             "--stop-after",
-            help="Stop after ingest, proxy, or local-signals (default: local-signals).",
+            help="Stop after ingest, proxy, local-signals, or scout (default: scout).",
         ),
-    ] = "local-signals",
+    ] = "scout",
 ) -> None:
-    """Run local ingest, proxy, and signal stages without modifying the source."""
+    """Run local stages and deterministic Fake Scout without modifying the source."""
     _execute(ctx, lambda options: _analyze(options, video, stop_after))
 
 
@@ -128,6 +128,12 @@ def _analyze(options: RuntimeOptions, video: Path, stop_after: str) -> None:
         if result.local_signals.signals.warnings:
             for warning in result.local_signals.signals.warnings:
                 typer.echo(f"[WARN] local_signals: {warning}")
+    if result.scout is not None:
+        scout_outcome = "CACHE HIT" if result.scout.cache_hit else "COMPLETED"
+        typer.echo(f"[PASS] scout: {scout_outcome}")
+        typer.echo("Scout backend: fake (offline; no AI/API call)")
+        typer.echo(f"candidates: {len(result.scout.session_map.candidates)}")
+        typer.echo(f"session map: {result.scout.session_map_path}")
     typer.echo(f"session ID: {result.ingest.session_id}")
     typer.echo(f"source: {result.ingest.source.path}")
     typer.echo(f"duration_ms: {result.ingest.source.duration_ms}")

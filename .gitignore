@@ -19,3 +19,4 @@ dist/
 config.yaml
 data/
 *.log
+.test-tmp/
