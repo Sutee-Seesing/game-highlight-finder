@@ -12,6 +12,12 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from game_highlight_finder.errors import ProviderContractError
 
+# A provider adapter is an untrusted boundary.  Keep each usage dimension
+# bounded before it reaches cost arithmetic or the durable ledger.  The bound
+# is intentionally per dimension so a malformed response cannot smuggle an
+# unbounded integer through one modality while the others remain small.
+MAX_USAGE_TOKENS_PER_DIMENSION = 10_000_000
+
 
 class ProviderContractModel(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -20,12 +26,12 @@ class ProviderContractModel(BaseModel):
 class ProviderUsageEstimate(ProviderContractModel):
     """Maximum billable usage permitted for one future provider request."""
 
-    input_text_tokens: int = Field(default=0, ge=0)
-    input_image_tokens: int = Field(default=0, ge=0)
-    input_video_tokens: int = Field(default=0, ge=0)
-    input_audio_tokens: int = Field(default=0, ge=0)
-    cached_input_tokens: int = Field(default=0, ge=0)
-    output_tokens: int = Field(default=0, ge=0)
+    input_text_tokens: int = Field(default=0, ge=0, le=MAX_USAGE_TOKENS_PER_DIMENSION)
+    input_image_tokens: int = Field(default=0, ge=0, le=MAX_USAGE_TOKENS_PER_DIMENSION)
+    input_video_tokens: int = Field(default=0, ge=0, le=MAX_USAGE_TOKENS_PER_DIMENSION)
+    input_audio_tokens: int = Field(default=0, ge=0, le=MAX_USAGE_TOKENS_PER_DIMENSION)
+    cached_input_tokens: int = Field(default=0, ge=0, le=MAX_USAGE_TOKENS_PER_DIMENSION)
+    output_tokens: int = Field(default=0, ge=0, le=MAX_USAGE_TOKENS_PER_DIMENSION)
 
     @field_validator(
         "input_text_tokens",

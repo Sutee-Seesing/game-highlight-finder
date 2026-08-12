@@ -84,6 +84,10 @@ class CostIntegrityError(CostGateError):
     """Persisted actual billing exceeded the conservative reservation."""
 
 
+class CostSafetyHoldError(CostGateError):
+    """New reservations are blocked until an overage is explicitly acknowledged."""
+
+
 class ProviderContractError(CostGateError):
     """A provider-neutral contract or exact registry lookup failed."""
 

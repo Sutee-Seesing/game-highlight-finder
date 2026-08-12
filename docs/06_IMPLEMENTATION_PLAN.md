@@ -49,10 +49,11 @@ runtime now has exact provider/model/billing-mode contracts and aliases, bounded
 usage models, versioned pricing and FX snapshots, Decimal-to-integer micro-THB
 quotes with conservative rounding, a WAL/FULL SQLite ledger with explicit
 migrations, atomic monthly reservations, idempotent lifecycle transitions,
-ambiguous-call persistence/reconciliation, overage integrity detection, monthly
-CLI status/report/calls views, and an offline Fake Provider contract fixture.
+ambiguous-call persistence/reconciliation, global overage safety holds,
+fail-closed missing output-rate handling, monthly CLI status/report/calls views,
+and an offline Fake Provider contract fixture.
 Production provider SDKs, pricing, API keys, and network calls are intentionally
-absent. The complete automated suite is **122 passed / 0 failed / 0 skipped**.
+absent. The complete automated suite is **131 passed / 0 failed / 0 skipped**.
 
 ### M5 — Gemini Scout integration (approval-gated; not started)
 

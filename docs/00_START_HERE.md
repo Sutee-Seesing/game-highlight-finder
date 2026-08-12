@@ -105,12 +105,16 @@ and FX snapshot models, Decimal-based conservative quotes, and a durable SQLite
 ledger at `data/cost/ledger.sqlite3`. The default hard cap is ฿100.00 per month
 using the configured `Asia/Bangkok` budget timezone. Reservations use integer
 micro-THB values and `BEGIN IMMEDIATE`; ambiguous calls remain counted until
-explicit reconciliation. M4 performs no provider, AI, or network calls and does
-not include production Gemini pricing.
+explicit reconciliation. Untrusted usage counts are bounded, missing output
+rates fail closed, and a settled overage opens a persisted global safety hold
+until explicit acknowledgement. M4 performs no provider, AI, or network calls
+and does not include production Gemini pricing.
 
 ## Approval gate
 
-M4 is implemented and accepted. M5 and later work remain approval-gated, especially these decisions:
+M4 implementation and safety hardening are complete in the current worktree;
+owner acceptance is still required before publication or M5. M5 and later work
+remain approval-gated, especially these decisions:
 
 - Whether cloud-uploaded proxy data is acceptable under the chosen Gemini account/tier and data-use terms (future M5).
 - Exact production Gemini model, provider adapter, and validated official price entry (future M5).

@@ -13,7 +13,12 @@ from pydantic import BaseModel, ConfigDict, Field
 from game_highlight_finder.config import AppConfig
 from game_highlight_finder.cost.calculator import budget_period_for, quote_cost
 from game_highlight_finder.cost.fx import FxSnapshot
-from game_highlight_finder.cost.ledger import BudgetSummary, CostLedger, LedgerRecord
+from game_highlight_finder.cost.ledger import (
+    BudgetSummary,
+    CostLedger,
+    CostSafetyHold,
+    LedgerRecord,
+)
 from game_highlight_finder.cost.models import MICRO_UNITS_PER_THB, CostQuote
 from game_highlight_finder.cost.pricing import PricingCatalog
 from game_highlight_finder.errors import CostGateError
@@ -223,6 +228,18 @@ class CostService:
             release_confirmed=release_confirmed,
             provider_request_id=provider_request_id,
         )
+
+    def safety_hold(self) -> CostSafetyHold | None:
+        return self.ledger.safety_hold()
+
+    def get_safety_hold(self) -> CostSafetyHold | None:
+        return self.ledger.safety_hold()
+
+    def acknowledge_safety_hold(self, reason: str, *, now: datetime | None = None) -> None:
+        self.ledger.acknowledge_safety_hold(reason, now=now)
+
+    def clear_safety_hold(self, reason: str, *, now: datetime | None = None) -> None:
+        self.ledger.acknowledge_safety_hold(reason, now=now)
 
     def summary(self, *, now: datetime | None = None) -> BudgetSummary:
         timestamp = now or datetime.now(UTC)

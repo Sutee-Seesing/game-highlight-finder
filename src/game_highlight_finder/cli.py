@@ -156,6 +156,10 @@ def _cost_status(options: RuntimeOptions, month: str | None) -> None:
     typer.echo(f"Available: {_format_micro_thb(summary.available_micro_thb)}")
     typer.echo("Currency: THB (integer micro-THB ledger)")
     typer.echo(f"Unreconciled calls: {summary.unreconciled_calls}")
+    if summary.safety_hold_active:
+        typer.echo(f"SAFETY HOLD: {summary.safety_hold_reason}")
+    else:
+        typer.echo("Safety hold: none")
     if month is not None:
         grouped: dict[tuple[str, str, str], int] = {}
         for call in service.ledger.list_calls(budget_period=month):

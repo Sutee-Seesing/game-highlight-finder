@@ -124,8 +124,9 @@ Integration tests generate tiny videos with the locally resolved FFmpeg. No larg
 - The default hard budget is **฿100.00 per month** in the configured `Asia/Bangkok` timezone.
 - Quotes use explicit local pricing and FX snapshots, integer micro-THB accounting, and conservative upward rounding.
 - Reservations are transactional in `data/cost/ledger.sqlite3`; `RESERVED`, `IN_FLIGHT`, `SETTLED`, `RELEASED`, and `AMBIGUOUS` states are persisted for audit and recovery.
-- Unknown providers/models/modes, missing or stale prices/FX, unsupported usage dimensions, ledger failures, and budget overages fail closed.
+- Unknown providers/models/modes, missing or stale prices/FX, unsupported usage dimensions, malformed/oversized usage counts, missing output rates for non-zero output, ledger failures, and budget overages fail closed.
 - An ambiguous post-send outcome remains budget exposure until explicit settlement or evidence-backed release; it is never silently retried.
+- A persisted actual-cost overage opens a global cost safety hold; new reservations remain blocked until an explicit owner acknowledgement/reconciliation is recorded.
 - M4 has no provider SDK, API key, cloud upload, or automatic internet pricing/FX refresh. Production Gemini pricing is intentionally absent until M5 verifies an exact official entry.
 
 ## Known M3 limitations

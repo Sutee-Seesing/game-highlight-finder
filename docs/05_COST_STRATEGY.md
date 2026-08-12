@@ -71,6 +71,12 @@ Use SQLite in WAL mode with a short `BEGIN IMMEDIATE` transaction:
 8. On confirmed no-dispatch or no-charge failure, mark it `RELEASED`.
 9. On ambiguous timeout after dispatch, mark `RECONCILE_REQUIRED`; keep the conservative amount counted until manually/provider-reconciled.
 
+Usage metadata is an untrusted input: every modality count is bounded before
+arithmetic. A catalog with no output rate cannot quote non-zero output usage.
+If settlement proves an actual-cost overage, persist the actual amount and open
+a global safety hold. Every new reservation fails closed while that hold is
+active; only an explicit owner acknowledgement or reconciliation clears it.
+
 Reservations need an expiry only for requests proven not to have dispatched. They must never disappear merely because the local process crashed.
 
 ## 5. Usage and cost accounting

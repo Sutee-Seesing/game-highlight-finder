@@ -12,7 +12,7 @@ from typer.testing import CliRunner
 
 from game_highlight_finder.cli import app
 from game_highlight_finder.config import AppConfig, CostConfig, StorageConfig
-from game_highlight_finder.cost.calculator import budget_period_for, quote_cost
+from game_highlight_finder.cost.calculator import budget_period_for, calculate_cost, quote_cost
 from game_highlight_finder.cost.fx import FxSnapshot
 from game_highlight_finder.cost.ledger import CostLedger, LifecycleStatus
 from game_highlight_finder.cost.models import PricingEntry
@@ -22,9 +22,11 @@ from game_highlight_finder.errors import (
     BudgetExceededError,
     CostGateError,
     CostIntegrityError,
+    CostSafetyHoldError,
     StorageError,
 )
 from game_highlight_finder.providers.base import (
+    MAX_USAGE_TOKENS_PER_DIMENSION,
     ProviderCapabilities,
     ProviderDescriptor,
     ProviderModel,
@@ -187,6 +189,42 @@ def test_malformed_or_nonpositive_rates_fail_closed(factory: object) -> None:
         factory()  # type: ignore[operator]
 
 
+@pytest.mark.parametrize(
+    "field_name",
+    [
+        "input_text_tokens",
+        "input_image_tokens",
+        "input_video_tokens",
+        "input_audio_tokens",
+        "cached_input_tokens",
+        "output_tokens",
+    ],
+)
+def test_untrusted_usage_counts_have_an_absolute_upper_bound(field_name: str) -> None:
+    with pytest.raises(PydanticValidationError, match="less than or equal"):
+        ProviderUsageEstimate(**{field_name: MAX_USAGE_TOKENS_PER_DIMENSION + 1})
+
+
+def test_missing_output_rate_fails_closed_for_output_usage() -> None:
+    pricing = PricingEntry(
+        provider="fake",
+        model="fake-model",
+        billing_mode="standard",
+        input_rates_by_modality={"text": Decimal("0.10")},
+        effective_from=NOW,
+        verified_at=NOW,
+        source="test",
+        catalog_version="v1",
+    )
+    assert pricing.output_rate is None
+    with pytest.raises(CostGateError, match="output rate"):
+        calculate_cost(
+            ProviderUsageEstimate(output_tokens=1),
+            pricing,
+            _fx(),
+        )
+
+
 def test_unknown_provider_model_mode_and_price_fail_closed(tmp_path: Path) -> None:
     service = _service(tmp_path)
     with pytest.raises(CostGateError, match="Unknown provider"):
@@ -301,6 +339,29 @@ def test_actual_overage_is_persisted_and_raises_integrity_error(tmp_path: Path) 
     assert record.status is LifecycleStatus.SETTLED
     assert (record.settled_cost_micro_thb or 0) > record.reserved_cost_micro_thb
     assert record.integrity_error is not None
+    hold = service.safety_hold()
+    assert hold is not None
+    assert hold.active is True
+    assert hold.call_id == request.call_id
+    assert service.summary(now=NOW).safety_hold_active is True
+    reopened = CostLedger(
+        service.ledger.path,
+        budget_micro_thb=service.ledger.budget_micro_thb,
+    )
+    assert reopened.safety_hold() == hold
+    with pytest.raises(CostSafetyHoldError):
+        reopened.reserve(
+            call_id="call-blocked-after-reopen",
+            request_fingerprint="blocked-after-reopen",
+            quote=service.quote(_request("call-blocked-after-reopen"), now=NOW),
+            stage="scout",
+            now=NOW,
+        )
+    with pytest.raises(CostSafetyHoldError, match="safety hold"):
+        service.reserve(_request("call-blocked-by-overage"), now=NOW)
+    service.acknowledge_safety_hold("reviewed provider billing evidence", now=NOW)
+    assert service.safety_hold() is None
+    service.reserve(_request("call-after-ack"), now=NOW)
 
 
 def test_month_boundary_uses_configured_timezone() -> None:
@@ -315,12 +376,73 @@ def test_sqlite_migration_and_unknown_newer_schema_fail_safely(tmp_path: Path) -
     ledger = CostLedger(path, budget_micro_thb=100_000_000)
     assert ledger.path.is_file()
     with sqlite3.connect(path) as connection:
-        assert connection.execute("SELECT MAX(version) FROM schema_migrations").fetchone()[0] == 1
+        assert connection.execute("SELECT MAX(version) FROM schema_migrations").fetchone()[0] == 2
+        assert (
+            connection.execute(
+                "SELECT value_json FROM ledger_control WHERE key='safety_hold'"
+            ).fetchone()
+            is None
+        )
     with sqlite3.connect(path) as connection:
-        connection.execute("UPDATE schema_migrations SET version=999")
+        connection.execute(
+            "UPDATE schema_migrations SET version=999 "
+            "WHERE version=(SELECT MAX(version) FROM schema_migrations)"
+        )
         connection.commit()
     with pytest.raises(StorageError, match="newer than supported"):
         CostLedger(path, budget_micro_thb=100_000_000)
+
+
+def test_v1_ledger_is_upgraded_with_safety_control_table(tmp_path: Path) -> None:
+    path = tmp_path / "cost" / "ledger.sqlite3"
+    CostLedger(path, budget_micro_thb=100_000_000)
+    with sqlite3.connect(path) as connection:
+        connection.execute("DELETE FROM schema_migrations WHERE version=2")
+        connection.execute("DROP TABLE ledger_control")
+        connection.commit()
+    upgraded = CostLedger(path, budget_micro_thb=100_000_000)
+    assert upgraded.safety_hold() is None
+    with sqlite3.connect(path) as connection:
+        assert connection.execute("SELECT MAX(version) FROM schema_migrations").fetchone()[0] == 2
+        assert (
+            connection.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='ledger_control'"
+            ).fetchone()
+            is not None
+        )
+
+
+def test_v1_overage_is_migrated_into_a_global_safety_hold(tmp_path: Path) -> None:
+    path = tmp_path / "cost" / "ledger.sqlite3"
+    ledger = CostLedger(path, budget_micro_thb=100_000_000)
+    quote = quote_cost(
+        provider="fake",
+        model="fake-model",
+        billing_mode="standard",
+        usage=ProviderUsageEstimate(input_text_tokens=1),
+        pricing=_pricing(),
+        fx=_fx(),
+        now=NOW,
+        safety_factor="1",
+    )
+    ledger.reserve(
+        call_id="v1-overage",
+        request_fingerprint="v1-overage-fingerprint",
+        quote=quote,
+        stage="scout",
+        now=NOW,
+    )
+    ledger.mark_in_flight("v1-overage", now=NOW)
+    with pytest.raises(CostIntegrityError):
+        ledger.settle("v1-overage", ProviderUsageEstimate(input_text_tokens=200_000), now=NOW)
+    with sqlite3.connect(path) as connection:
+        connection.execute("DELETE FROM schema_migrations WHERE version=2")
+        connection.execute("DROP TABLE ledger_control")
+        connection.commit()
+    upgraded = CostLedger(path, budget_micro_thb=100_000_000)
+    hold = upgraded.safety_hold()
+    assert hold is not None
+    assert hold.call_id == "v1-overage"
 
 
 def test_fake_provider_is_deterministic_and_offline() -> None:

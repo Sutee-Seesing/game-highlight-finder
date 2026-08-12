@@ -18,11 +18,12 @@ from game_highlight_finder.errors import (
     BudgetExceededError,
     CostGateError,
     CostIntegrityError,
+    CostSafetyHoldError,
     StorageError,
 )
 from game_highlight_finder.providers.base import ProviderUsageActual, ProviderUsageEstimate
 
-CURRENT_SCHEMA_VERSION = 1
+CURRENT_SCHEMA_VERSION = 2
 ACTIVE_STATES = ("RESERVED", "IN_FLIGHT", "AMBIGUOUS")
 
 
@@ -83,6 +84,8 @@ class BudgetSummary(BaseModel):
     available_micro_thb: int = Field(ge=0)
     ambiguous_calls: int = Field(ge=0)
     unreconciled_calls: int = Field(ge=0)
+    safety_hold_active: bool = False
+    safety_hold_reason: str | None = None
 
     @property
     def active_micro_thb(self) -> int:
@@ -91,6 +94,19 @@ class BudgetSummary(BaseModel):
     @property
     def exposure_micro_thb(self) -> int:
         return self.settled_micro_thb + self.active_micro_thb
+
+
+class CostSafetyHold(BaseModel):
+    """Durable fail-closed state raised by a persisted reservation overage."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    active: bool = True
+    call_id: str = Field(min_length=1, max_length=128)
+    reason: str = Field(min_length=1, max_length=500)
+    detected_at: datetime
+    acknowledged_at: datetime | None = None
+    acknowledgement: str | None = Field(default=None, max_length=500)
 
 
 def _utc_now() -> datetime:
@@ -213,6 +229,50 @@ class CostLedger:
                     "INSERT INTO schema_migrations(version, applied_at) "
                     "VALUES (1, CURRENT_TIMESTAMP)"
                 )
+                version = 1
+            if version < 2:
+                connection.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS ledger_control (
+                        key TEXT PRIMARY KEY,
+                        value_json TEXT NOT NULL,
+                        updated_at TEXT NOT NULL
+                    )
+                    """
+                )
+                existing_overage = connection.execute(
+                    """
+                    SELECT call_id, integrity_error
+                    FROM calls
+                    WHERE integrity_error IS NOT NULL
+                    ORDER BY updated_at DESC, call_id DESC
+                    LIMIT 1
+                    """
+                ).fetchone()
+                if existing_overage is not None:
+                    detected_at = _timestamp(_utc_now())
+                    connection.execute(
+                        """
+                        INSERT INTO ledger_control(key, value_json, updated_at)
+                        VALUES ('safety_hold', ?, ?)
+                        ON CONFLICT(key) DO NOTHING
+                        """,
+                        (
+                            _json(
+                                {
+                                    "active": True,
+                                    "call_id": existing_overage["call_id"],
+                                    "reason": existing_overage["integrity_error"],
+                                    "detected_at": detected_at,
+                                }
+                            ),
+                            detected_at,
+                        ),
+                    )
+                connection.execute(
+                    "INSERT INTO schema_migrations(version, applied_at) "
+                    "VALUES (2, CURRENT_TIMESTAMP)"
+                )
             connection.execute("COMMIT")
         except StorageError:
             connection.execute("ROLLBACK")
@@ -240,6 +300,8 @@ class CostLedger:
             raise CostGateError("Reservation timestamp must be timezone-aware")
         connection = self._connect()
         blocked = False
+        blocked_by_safety_hold: CostSafetyHold | None = None
+        summary: BudgetSummary | None = None
         try:
             connection.execute("BEGIN IMMEDIATE")
             existing = connection.execute(
@@ -251,8 +313,21 @@ class CostLedger:
                 connection.execute("COMMIT")
                 return existing_record
 
+            blocked_by_safety_hold = self._safety_hold_in_transaction(connection)
             summary = self._summary_in_transaction(connection, quote.budget_period)
-            if summary.exposure_micro_thb + quote.reserved_cost_micro_thb > self.budget_micro_thb:
+            if blocked_by_safety_hold is not None:
+                self._event(
+                    connection,
+                    call_id=None,
+                    event_type="COST_SAFETY_HOLD_BLOCKED",
+                    occurred_at=timestamp,
+                    payload={
+                        "call_id": call_id,
+                        "hold_call_id": blocked_by_safety_hold.call_id,
+                        "reason": blocked_by_safety_hold.reason,
+                    },
+                )
+            elif summary.exposure_micro_thb + quote.reserved_cost_micro_thb > self.budget_micro_thb:
                 self._event(
                     connection,
                     call_id=None,
@@ -310,6 +385,12 @@ class CostLedger:
         except BudgetExceededError:
             connection.execute("ROLLBACK")
             raise
+        except CostSafetyHoldError:
+            connection.execute("ROLLBACK")
+            raise
+        except StorageError:
+            connection.execute("ROLLBACK")
+            raise
         except sqlite3.IntegrityError as exc:
             connection.execute("ROLLBACK")
             raise CostGateError(
@@ -322,7 +403,17 @@ class CostLedger:
             ) from exc
         finally:
             connection.close()
+        if blocked_by_safety_hold is not None:
+            raise CostSafetyHoldError(
+                "Cost safety hold is active; new reservations are blocked until it is explicitly "
+                "acknowledged or reconciled.",
+                hint=(
+                    f"Overage detected for call {blocked_by_safety_hold.call_id}: "
+                    f"{blocked_by_safety_hold.reason}"
+                ),
+            )
         if blocked:
+            assert summary is not None
             raise BudgetExceededError(
                 hint=(
                     f"Requested {quote.reserved_cost_micro_thb} micro-THB with "
@@ -439,6 +530,15 @@ class CostLedger:
                 occurred_at=timestamp,
                 payload={"settled_micro_thb": actual_cost},
             )
+            if overage:
+                self._set_safety_hold(
+                    connection,
+                    CostSafetyHold(
+                        call_id=call_id,
+                        reason="Actual provider cost exceeded the conservative reservation",
+                        detected_at=timestamp,
+                    ),
+                )
             connection.execute("COMMIT")
         except (CostGateError, CostIntegrityError):
             connection.execute("ROLLBACK")
@@ -475,6 +575,72 @@ class CostLedger:
             return self.release(call_id, confirmed_no_dispatch=True, now=now)
         raise CostGateError("Explicit reconciliation requires actual usage or no-charge evidence")
 
+    def safety_hold(self) -> CostSafetyHold | None:
+        """Return the active durable hold, if an overage has not been acknowledged."""
+
+        connection = self._connect()
+        try:
+            return self._safety_hold_in_transaction(connection)
+        except sqlite3.Error as exc:
+            raise StorageError("Cannot read cost safety hold.", hint=str(exc)) from exc
+        finally:
+            connection.close()
+
+    def get_safety_hold(self) -> CostSafetyHold | None:
+        """Compatibility alias for callers that prefer an explicit getter name."""
+
+        return self.safety_hold()
+
+    def acknowledge_safety_hold(self, reason: str, *, now: datetime | None = None) -> None:
+        """Explicitly clear the global hold after an owner review or reconciliation."""
+
+        acknowledgement = reason.strip()
+        if not acknowledgement:
+            raise CostGateError("Safety-hold acknowledgement reason is required")
+        timestamp = now or _utc_now()
+        if timestamp.tzinfo is None:
+            raise CostGateError("Safety-hold acknowledgement timestamp must be timezone-aware")
+        connection = self._connect()
+        try:
+            connection.execute("BEGIN IMMEDIATE")
+            hold = self._safety_hold_in_transaction(connection)
+            if hold is not None:
+                acknowledged = hold.model_copy(
+                    update={
+                        "active": False,
+                        "acknowledged_at": timestamp,
+                        "acknowledgement": acknowledgement,
+                    }
+                )
+                connection.execute(
+                    "UPDATE ledger_control SET value_json=?, updated_at=? WHERE key='safety_hold'",
+                    (_json(acknowledged.model_dump(mode="json")), _timestamp(timestamp)),
+                )
+                self._event(
+                    connection,
+                    call_id=None,
+                    event_type="COST_SAFETY_HOLD_ACKNOWLEDGED",
+                    occurred_at=timestamp,
+                    payload={
+                        "hold_call_id": hold.call_id,
+                        "acknowledgement": acknowledgement,
+                    },
+                )
+            connection.execute("COMMIT")
+        except (CostGateError, StorageError):
+            connection.execute("ROLLBACK")
+            raise
+        except sqlite3.Error as exc:
+            connection.execute("ROLLBACK")
+            raise StorageError("Cannot acknowledge cost safety hold.", hint=str(exc)) from exc
+        finally:
+            connection.close()
+
+    def clear_safety_hold(self, reason: str, *, now: datetime | None = None) -> None:
+        """Explicit reconciliation alias for acknowledge_safety_hold."""
+
+        self.acknowledge_safety_hold(reason, now=now)
+
     def get(self, call_id: str) -> LedgerRecord:
         connection = self._connect()
         try:
@@ -509,7 +675,7 @@ class CostLedger:
         connection = self._connect()
         try:
             return self._summary_in_transaction(connection, budget_period)
-        except sqlite3.Error as exc:
+        except (StorageError, sqlite3.Error) as exc:
             raise StorageError("Cannot summarize cost ledger.", hint=str(exc)) from exc
         finally:
             connection.close()
@@ -538,6 +704,7 @@ class CostLedger:
         in_flight = int(row["in_flight"])
         ambiguous = int(row["ambiguous"])
         exposure = settled + reserved + in_flight + ambiguous
+        hold = self._safety_hold_in_transaction(connection)
         return BudgetSummary(
             budget_period=budget_period,
             budget_micro_thb=self.budget_micro_thb,
@@ -548,6 +715,35 @@ class CostLedger:
             available_micro_thb=max(0, self.budget_micro_thb - exposure),
             ambiguous_calls=int(row["ambiguous_calls"]),
             unreconciled_calls=int(row["ambiguous_calls"]),
+            safety_hold_active=hold is not None,
+            safety_hold_reason=hold.reason if hold is not None else None,
+        )
+
+    @staticmethod
+    def _safety_hold_in_transaction(
+        connection: sqlite3.Connection,
+    ) -> CostSafetyHold | None:
+        row = connection.execute(
+            "SELECT value_json FROM ledger_control WHERE key='safety_hold'"
+        ).fetchone()
+        if row is None:
+            return None
+        try:
+            hold = CostSafetyHold.model_validate(json.loads(row["value_json"]))
+        except (json.JSONDecodeError, TypeError, ValueError) as exc:
+            raise StorageError("Cost ledger safety hold state is invalid.", hint=str(exc)) from exc
+        return hold if hold.active else None
+
+    @staticmethod
+    def _set_safety_hold(connection: sqlite3.Connection, hold: CostSafetyHold) -> None:
+        connection.execute(
+            """
+            INSERT INTO ledger_control(key, value_json, updated_at)
+            VALUES ('safety_hold', ?, ?)
+            ON CONFLICT(key) DO UPDATE SET value_json=excluded.value_json,
+                                           updated_at=excluded.updated_at
+            """,
+            (_json(hold.model_dump(mode="json")), _timestamp(hold.detected_at)),
         )
 
     def _transition(
@@ -593,7 +789,7 @@ class CostLedger:
                 payload={"status": target.value, "reason": ambiguity_reason},
             )
             connection.execute("COMMIT")
-        except CostGateError:
+        except (CostGateError, StorageError):
             connection.execute("ROLLBACK")
             raise
         except sqlite3.Error as exc:

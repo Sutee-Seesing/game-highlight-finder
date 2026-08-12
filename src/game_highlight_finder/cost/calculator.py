@@ -47,6 +47,10 @@ def _usage_base_currency(usage: ProviderUsageEstimate, pricing: PricingEntry) ->
         if count == 0:
             continue
         if dimension == "output_tokens":
+            if pricing.output_rate is None:
+                raise CostGateError(
+                    "Pricing does not define an output rate for non-zero output usage"
+                )
             rate = pricing.output_rate
         elif dimension == "cached_input_tokens":
             if pricing.cached_input_rate is None:

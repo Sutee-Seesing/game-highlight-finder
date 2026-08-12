@@ -203,7 +203,7 @@ source_url
 currency                  # normally USD
 input_rates_by_modality
 cached_input_rate
-output_rate
+output_rate                 # optional in catalog; required for non-zero output usage
 request_fees
 notes
 ```
@@ -231,6 +231,13 @@ provider_request_id
 ```
 
 Rates and FX are snapshots so old totals do not change when configuration changes.
+
+Provider usage counts are untrusted and bounded per modality before they reach
+cost arithmetic. If a non-zero output count arrives without an output-rate
+snapshot, the quote fails closed instead of treating output as free. When
+settlement proves actual cost exceeded its reservation, the SQLite ledger
+persists a global safety hold and blocks new reservations until an explicit
+acknowledgement/reconciliation is recorded.
 
 The implemented M4 ledger uses `RESERVED`, `IN_FLIGHT`, `SETTLED`, `RELEASED`,
 and `AMBIGUOUS`. Active, in-flight, and ambiguous reservations remain budget

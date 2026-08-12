@@ -68,7 +68,9 @@ class PricingEntry(CostModel):
         validation_alias=AliasChoices("input_rates_by_modality", "rates"),
     )
     cached_input_rate: Decimal | None = None
-    output_rate: Decimal = Decimal("0")
+    # None means the catalog did not provide an output rate.  It must not be
+    # silently interpreted as a free output when output usage is present.
+    output_rate: Decimal | None = None
     request_fee: Decimal = Decimal("0")
     effective_from: datetime = Field(
         validation_alias=AliasChoices("effective_from", "effective_at")
@@ -104,10 +106,20 @@ class PricingEntry(CostModel):
             raise ValueError("pricing rates cannot be negative")
         return parsed
 
-    @field_validator("output_rate", "request_fee", mode="before")
+    @field_validator("output_rate", mode="before")
     @classmethod
-    def strict_rates(cls, value: object) -> Decimal:
-        parsed = parse_decimal(value, field="pricing rate")
+    def strict_output_rate(cls, value: object) -> Decimal | None:
+        if value is None:
+            return None
+        parsed = parse_decimal(value, field="output rate")
+        if parsed < 0:
+            raise ValueError("pricing rates cannot be negative")
+        return parsed
+
+    @field_validator("request_fee", mode="before")
+    @classmethod
+    def strict_request_fee(cls, value: object) -> Decimal:
+        parsed = parse_decimal(value, field="request fee")
         if parsed < 0:
             raise ValueError("pricing rates cannot be negative")
         return parsed
@@ -126,7 +138,11 @@ class PricingEntry(CostModel):
             or self.currency.upper() != self.currency
         ):
             raise ValueError("pricing currency must be a three-letter uppercase code")
-        if not self.input_rates_by_modality and self.output_rate == 0 and self.request_fee == 0:
+        if (
+            not self.input_rates_by_modality
+            and (self.output_rate is None or self.output_rate == 0)
+            and self.request_fee == 0
+        ):
             raise ValueError("pricing entry must contain at least one non-zero rate")
         return self
 
