@@ -29,7 +29,7 @@ Implemented on 2026-08-11 with uv-managed Python 3.12, Pydantic v2, Typer, PyYAM
 - Add optional hooks—not a mandatory ML installation—for transcript and scene detectors.
 - Exit: representative CFR/VFR/no-audio fixtures preserve source-time mapping within tolerance.
 
-Implemented on 2026-08-12 with CPU-safe FFmpeg command adapters, machine-readable progress parsing, cancellation/timeout handling, conservative disk preflight, atomic temporary media commits, re-probe validation, versioned timestamp mapping, mono AAC audio extraction, deterministic silence/RMS/loudness parsing, additive M1 manifest migration, stage-specific cache keys, CLI stop boundaries, and 53 automated tests. M2 is local-only and makes no AI/API calls. The default proxy uses H.264/AAC, max 854x480, preserved aspect ratio, and a 2% duration tolerance with a 500 ms floor.
+Implemented on 2026-08-12 with CPU-safe FFmpeg command adapters, machine-readable progress parsing, cancellation/timeout handling, conservative disk preflight, atomic temporary media commits, re-probe validation, versioned timestamp mapping, mono AAC audio extraction, deterministic silence/RMS/loudness parsing, additive M1 manifest migration, stage-specific cache keys, CLI stop boundaries, and 68 automated tests. M2 is local-only and makes no AI/API calls. The default proxy uses H.264/AAC, max 854x480, preserved aspect ratio, and a 2% duration tolerance with a 500 ms floor.
 
 ### M3 — Canonical domain and fake Scout
 

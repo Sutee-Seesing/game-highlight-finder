@@ -65,14 +65,65 @@ def test_ffmpeg_commands_are_argument_arrays_and_preserve_unicode_paths() -> Non
 
 def test_progress_parser_reports_percent_and_completion() -> None:
     parser = FFmpegProgressParser(duration_ms=10_000)
-    assert parser.feed("out_time_ms=5000") is None
+    assert parser.feed("out_time_us=5000000") is None
     update = parser.feed("progress=continue")
     assert update is not None
     assert update.out_time_ms == 5000
     assert update.percent == 50
-    updates = parse_progress_text("out_time_ms=10000\nprogress=end\n", duration_ms=10_000)
+    updates = parse_progress_text("out_time_ms=10000000\nprogress=end\n", duration_ms=10_000)
     assert updates[-1].progress == "end"
     assert updates[-1].percent == 100
+
+
+def test_progress_parser_converts_legacy_out_time_ms_microseconds() -> None:
+    updates = parse_progress_text("out_time_ms=5000000\nprogress=continue\n", duration_ms=10_000)
+
+    assert updates[0].out_time_ms == 5000
+    assert updates[0].percent == 50
+
+
+def test_progress_parser_prefers_out_time_us_when_both_fields_are_present() -> None:
+    updates = parse_progress_text(
+        "out_time_ms=9000000\nout_time_us=5000000\nprogress=continue\n",
+        duration_ms=10_000,
+    )
+
+    assert updates[0].out_time_ms == 5000
+    assert updates[0].percent == 50
+
+
+def test_progress_parser_supports_textual_timestamp_fallback() -> None:
+    updates = parse_progress_text("out_time=00:00:05.250000\nprogress=continue\n")
+
+    assert updates[0].out_time_ms == 5250
+
+
+def test_progress_end_without_timestamp_reports_completion() -> None:
+    updates = parse_progress_text("progress=end\n", duration_ms=10_000)
+
+    assert updates[0].progress == "end"
+    assert updates[0].out_time_ms is None
+    assert updates[0].percent == 100
+
+
+def test_progress_parser_ignores_malformed_values_without_crashing() -> None:
+    updates = parse_progress_text(
+        "out_time_us=not-a-number\nout_time_ms=also-bad\nout_time=bad\nprogress=continue\n"
+    )
+
+    assert updates[0].out_time_ms is None
+    assert updates[0].percent is None
+
+
+def test_progress_parser_keeps_only_bounded_machine_fields() -> None:
+    parser = FFmpegProgressParser()
+    for index in range(10_000):
+        assert parser.feed(f"irrelevant_{index}=value") is None
+    assert parser.feed("speed=1.2x") is None
+    update = parser.feed("progress=end")
+
+    assert update is not None
+    assert update.speed == "1.2x"
 
 
 def test_ffmpeg_runner_reports_abnormal_exit_timeout_and_cancellation() -> None:

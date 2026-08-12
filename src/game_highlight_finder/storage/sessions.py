@@ -12,7 +12,6 @@ from pathlib import Path
 
 from pydantic import ValidationError as PydanticValidationError
 
-from game_highlight_finder import __version__
 from game_highlight_finder.config import AppConfig
 from game_highlight_finder.domain.models import (
     ArtifactIdentity,
@@ -130,16 +129,26 @@ def ingest_config_fingerprint(config: AppConfig) -> str:
 
 
 def compute_ingest_cache_key(source: SourceAsset, config: AppConfig) -> str:
-    payload = {
+    encoded = json.dumps(
+        ingest_cache_payload(source, config), sort_keys=True, separators=(",", ":")
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def ingest_cache_payload(source: SourceAsset, config: AppConfig) -> dict[str, object]:
+    """Return the semantic identity for an ingest result.
+
+    The stage cache version and ingest-specific inputs are authoritative here;
+    the global package version is intentionally not part of cache identity.
+    """
+
+    return {
         "cache_version": INGEST_CACHE_VERSION,
-        "producer_version": __version__,
         "source_sha256": source.sha256,
         "source_size_bytes": source.size_bytes,
         "source_mtime_ns": source.mtime_ns,
         "ingest_config_fingerprint": ingest_config_fingerprint(config),
     }
-    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
-    return hashlib.sha256(encoded).hexdigest()
 
 
 def _identity_payload(identity: object | None) -> str:
@@ -196,9 +205,30 @@ def compute_proxy_cache_key(
     ffmpeg_identity: object | None = None,
     ffprobe_identity: object | None = None,
 ) -> str:
-    payload = {
+    encoded = json.dumps(
+        proxy_cache_payload(
+            source,
+            config,
+            ffmpeg_identity=ffmpeg_identity,
+            ffprobe_identity=ffprobe_identity,
+        ),
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def proxy_cache_payload(
+    source: SourceAsset,
+    config: AppConfig,
+    *,
+    ffmpeg_identity: object | None = None,
+    ffprobe_identity: object | None = None,
+) -> dict[str, object]:
+    """Return the semantic identity for a proxy result."""
+
+    return {
         "cache_version": PROXY_CACHE_VERSION,
-        "producer_version": __version__,
         "source_sha256": source.sha256,
         "source_duration_ms": source.duration_ms,
         "source_timestamp_origin_ms": source.timestamp_origin_ms,
@@ -206,8 +236,6 @@ def compute_proxy_cache_key(
             config, ffmpeg_identity=ffmpeg_identity, ffprobe_identity=ffprobe_identity
         ),
     }
-    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
-    return hashlib.sha256(encoded).hexdigest()
 
 
 def compute_local_signals_cache_key(
@@ -218,17 +246,38 @@ def compute_local_signals_cache_key(
     ffmpeg_identity: object | None = None,
     ffprobe_identity: object | None = None,
 ) -> str:
-    payload = {
+    encoded = json.dumps(
+        local_signals_cache_payload(
+            source,
+            config,
+            proxy_artifact_sha256=proxy_artifact_sha256,
+            ffmpeg_identity=ffmpeg_identity,
+            ffprobe_identity=ffprobe_identity,
+        ),
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def local_signals_cache_payload(
+    source: SourceAsset,
+    config: AppConfig,
+    *,
+    proxy_artifact_sha256: str,
+    ffmpeg_identity: object | None = None,
+    ffprobe_identity: object | None = None,
+) -> dict[str, object]:
+    """Return the semantic identity for local signal artifacts."""
+
+    return {
         "cache_version": LOCAL_SIGNALS_CACHE_VERSION,
-        "producer_version": __version__,
         "source_sha256": source.sha256,
         "proxy_artifact_sha256": proxy_artifact_sha256,
         "local_signals_config_fingerprint": local_signals_config_fingerprint(
             config, ffmpeg_identity=ffmpeg_identity, ffprobe_identity=ffprobe_identity
         ),
     }
-    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
-    return hashlib.sha256(encoded).hexdigest()
 
 
 def artifact_identity(path: Path, *, relative_to: Path | None = None) -> ArtifactIdentity:

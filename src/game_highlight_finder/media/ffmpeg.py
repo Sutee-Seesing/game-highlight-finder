@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import queue
+import re
 import subprocess
 import threading
 import time
@@ -13,6 +14,9 @@ from pathlib import Path
 from game_highlight_finder.config import AppConfig
 from game_highlight_finder.errors import DependencyError, StorageError
 from game_highlight_finder.redaction import redact_text
+
+_PROGRESS_FIELDS = frozenset({"out_time_us", "out_time_ms", "out_time", "speed", "progress"})
+_MAX_PROGRESS_VALUE_LENGTH = 256
 
 
 @dataclass(frozen=True)
@@ -43,18 +47,25 @@ class FFmpegProgressParser:
         if not text or "=" not in text:
             return None
         key, value = text.split("=", 1)
-        self._values[key.strip()] = value.strip()
-        if key.strip() != "progress":
+        key = key.strip()
+        if key not in _PROGRESS_FIELDS:
             return None
-        out_time_ms = _parse_int(self._values.get("out_time_ms"))
+        value = value.strip()
+        self._values[key] = value if len(value) <= _MAX_PROGRESS_VALUE_LENGTH else ""
+        if key != "progress":
+            return None
+        out_time_ms = _parse_progress_time_ms(self._values)
+        progress = self._values.get("progress")
         percent: float | None = None
         if self.duration_ms and out_time_ms is not None:
             percent = max(0.0, min(100.0, out_time_ms * 100.0 / self.duration_ms))
+        elif self.duration_ms and progress == "end":
+            percent = 100.0
         return ProgressUpdate(
             out_time_ms=out_time_ms,
             percent=percent,
             speed=self._values.get("speed"),
-            progress=self._values.get("progress"),
+            progress=progress,
         )
 
 
@@ -71,10 +82,62 @@ def parse_progress_text(text: str, *, duration_ms: int | None = None) -> list[Pr
 def _parse_int(value: str | None) -> int | None:
     if value is None:
         return None
+    value = value.strip()
+    if not value or len(value) > 32:
+        return None
     try:
         return int(value)
     except ValueError:
         return None
+
+
+def _parse_progress_time_ms(values: dict[str, str]) -> int | None:
+    """Return the progress timestamp in canonical integer milliseconds.
+
+    FFmpeg's ``out_time_us`` is expressed in microseconds.  The legacy
+    ``out_time_ms`` field is unfortunately named: it carries the same
+    microsecond-scale value in FFmpeg's machine-readable progress output.
+    Prefer the explicit field when both are available, and retain a textual
+    ``out_time`` fallback for older or unusual builds.
+    """
+
+    for field in ("out_time_us", "out_time_ms"):
+        value = _parse_int(values.get(field))
+        if value is not None:
+            converted = _microseconds_to_milliseconds(value)
+            if converted is not None:
+                return converted
+    return _parse_timestamp_ms(values.get("out_time"))
+
+
+def _microseconds_to_milliseconds(value: int) -> int | None:
+    if value < 0:
+        return None
+    return value // 1_000
+
+
+_OUT_TIME_PATTERN = re.compile(
+    r"^(?P<hours>\d+):(?P<minutes>[0-5]\d):(?P<seconds>[0-5]\d)"
+    r"(?:\.(?P<fraction>\d{1,6}))?$"
+)
+
+
+def _parse_timestamp_ms(value: str | None) -> int | None:
+    """Parse FFmpeg's ``HH:MM:SS[.fraction]`` timestamp defensively."""
+
+    if value is None or len(value) > 48:
+        return None
+    match = _OUT_TIME_PATTERN.fullmatch(value.strip())
+    if match is None:
+        return None
+    hours = _parse_int(match.group("hours"))
+    minutes = _parse_int(match.group("minutes"))
+    seconds = _parse_int(match.group("seconds"))
+    if hours is None or minutes is None or seconds is None:
+        return None
+    fraction = (match.group("fraction") or "").ljust(6, "0")
+    microseconds = _parse_int(fraction) or 0
+    return ((hours * 3_600 + minutes * 60 + seconds) * 1_000) + microseconds // 1_000
 
 
 def compute_proxy_dimensions(

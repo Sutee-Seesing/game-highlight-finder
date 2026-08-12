@@ -10,14 +10,32 @@ from typing import Any
 
 import pytest
 
-from game_highlight_finder.config import AppConfig, LoggingConfig, StorageConfig, ToolsConfig
+import game_highlight_finder as package
+import game_highlight_finder.storage.sessions as sessions
+from game_highlight_finder.config import (
+    AppConfig,
+    LoggingConfig,
+    MediaConfig,
+    ProxyConfig,
+    SignalsConfig,
+    StorageConfig,
+    ToolsConfig,
+)
 from game_highlight_finder.domain.models import SourceAsset, VideoStream
 from game_highlight_finder.errors import StorageError, ValidationError
 from game_highlight_finder.storage.lock import SessionLock
 from game_highlight_finder.storage.sessions import (
+    INGEST_CACHE_VERSION,
+    LOCAL_SIGNALS_CACHE_VERSION,
+    PROXY_CACHE_VERSION,
     compute_ingest_cache_key,
+    compute_local_signals_cache_key,
+    compute_proxy_cache_key,
+    ingest_cache_payload,
     ingest_config_fingerprint,
+    local_signals_cache_payload,
     make_session_id,
+    proxy_cache_payload,
     session_paths,
     source_path_key,
 )
@@ -88,6 +106,101 @@ def test_ingest_fingerprint_changes_for_configured_probe_executable(tmp_path: Pa
 
     assert ingest_config_fingerprint(base) != ingest_config_fingerprint(changed_probe)
     assert compute_ingest_cache_key(source, base) != compute_ingest_cache_key(source, changed_probe)
+
+
+def test_stage_cache_payloads_use_explicit_stage_versions_not_app_version(
+    tmp_path: Path,
+) -> None:
+    source = _asset(tmp_path / "recording.mp4")
+    config = AppConfig(storage=StorageConfig(data_dir=tmp_path / "data"))
+
+    ingest_payload = ingest_cache_payload(source, config)
+    proxy_payload = proxy_cache_payload(source, config)
+    signals_payload = local_signals_cache_payload(source, config, proxy_artifact_sha256="b" * 64)
+
+    assert ingest_payload["cache_version"] == INGEST_CACHE_VERSION
+    assert proxy_payload["cache_version"] == PROXY_CACHE_VERSION
+    assert signals_payload["cache_version"] == LOCAL_SIGNALS_CACHE_VERSION
+    assert "producer_version" not in ingest_payload
+    assert "producer_version" not in proxy_payload
+    assert "producer_version" not in signals_payload
+
+
+def test_global_app_version_bump_does_not_invalidate_stage_caches(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    source = _asset(tmp_path / "recording.mp4")
+    config = AppConfig(storage=StorageConfig(data_dir=tmp_path / "data"))
+    before = (
+        compute_ingest_cache_key(source, config),
+        compute_proxy_cache_key(source, config),
+        compute_local_signals_cache_key(source, config, proxy_artifact_sha256="b" * 64),
+    )
+
+    monkeypatch.setattr(package, "__version__", "99.99.99")
+
+    after = (
+        compute_ingest_cache_key(source, config),
+        compute_proxy_cache_key(source, config),
+        compute_local_signals_cache_key(source, config, proxy_artifact_sha256="b" * 64),
+    )
+    assert after == before
+
+
+def test_stage_cache_version_increment_invalidates_only_that_stage(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    source = _asset(tmp_path / "recording.mp4")
+    config = AppConfig(storage=StorageConfig(data_dir=tmp_path / "data"))
+    before_proxy = compute_proxy_cache_key(source, config)
+    before_signals = compute_local_signals_cache_key(source, config, proxy_artifact_sha256="b" * 64)
+
+    monkeypatch.setattr(sessions, "PROXY_CACHE_VERSION", PROXY_CACHE_VERSION + 1)
+
+    assert compute_proxy_cache_key(source, config) != before_proxy
+    assert (
+        compute_local_signals_cache_key(source, config, proxy_artifact_sha256="b" * 64)
+        == before_signals
+    )
+
+
+def test_proxy_and_signal_config_changes_invalidate_their_stage_keys(tmp_path: Path) -> None:
+    source = _asset(tmp_path / "recording.mp4")
+    base = AppConfig(storage=StorageConfig(data_dir=tmp_path / "data"))
+    changed_proxy = base.model_copy(
+        update={
+            "media": MediaConfig(proxy=ProxyConfig(video_bitrate_kbps=900), audio=base.media.audio)
+        }
+    )
+    changed_signals = base.model_copy(
+        update={
+            "signals": SignalsConfig(
+                silence=base.signals.silence,
+                loudness=base.signals.loudness.model_copy(update={"interval_ms": 1000}),
+            )
+        }
+    )
+
+    assert compute_proxy_cache_key(source, base) != compute_proxy_cache_key(source, changed_proxy)
+    assert compute_local_signals_cache_key(
+        source, base, proxy_artifact_sha256="b" * 64
+    ) != compute_local_signals_cache_key(source, changed_signals, proxy_artifact_sha256="b" * 64)
+
+
+def test_ingest_cache_remains_independent_of_m2_settings(tmp_path: Path) -> None:
+    source = _asset(tmp_path / "recording.mp4")
+    base = AppConfig(storage=StorageConfig(data_dir=tmp_path / "data"))
+    changed_m2 = base.model_copy(
+        update={
+            "media": MediaConfig(proxy=ProxyConfig(video_bitrate_kbps=900), audio=base.media.audio),
+            "signals": SignalsConfig(
+                silence=base.signals.silence,
+                loudness=base.signals.loudness.model_copy(update={"interval_ms": 1000}),
+            ),
+        }
+    )
+
+    assert compute_ingest_cache_key(source, base) == compute_ingest_cache_key(source, changed_m2)
 
 
 def test_session_id_rejects_path_traversal(tmp_path: Path) -> None:
