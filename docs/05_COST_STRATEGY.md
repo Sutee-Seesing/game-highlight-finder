@@ -4,6 +4,12 @@
 
 Default monthly hard limit: **100 THB**. The system must refuse a potentially billable request before dispatch when the conservative projected monthly total would exceed that limit. Cost checks are application-level safety controls, not a replacement for provider billing limits.
 
+M4 implements this boundary locally with integer micro-THB accounting and a
+SQLite ledger at `data/cost/ledger.sqlite3`. The default budget timezone is
+`Asia/Bangkok`; all pricing and FX inputs are explicit local snapshots. M4 has
+no production Gemini price entry and never fetches pricing or exchange rates
+from the network.
+
 The application tracks two useful numbers:
 
 - **Cash estimate:** best estimate of what the provider will actually charge under the configured tier.
@@ -123,4 +129,3 @@ Create a small annotated evaluation set and record per model/config:
 - cost per useful candidate and, later, published clip.
 
 Do not choose the cheapest model solely on token price. A model that floods the user with weak candidates increases review cost and may miss the product goal.
-

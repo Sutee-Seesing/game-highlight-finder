@@ -1,6 +1,6 @@
 # Game Highlight Finder — Start Here
 
-Status: Milestone 3 canonical domain and deterministic Fake Scout implemented
+Status: Milestone 4 cost gate and provider contract implemented
 Plan date: 2026-08-11  
 Working project path: `C:\Data\Works\Personal_Projects\Active_Products\game-highlight-finder`
 
@@ -98,10 +98,20 @@ M3 adds bounded Pydantic Scout contracts, canonical `Session -> Match -> Candida
 - [05_COST_STRATEGY.md](05_COST_STRATEGY.md): estimation, ledger, reservations, exchange rate, and hard-budget algorithm.
 - [06_IMPLEMENTATION_PLAN.md](06_IMPLEMENTATION_PLAN.md): milestones, tests, validation experiments, risks, and decisions.
 
+## Implemented M4 cost boundary
+
+M4 adds provider-neutral capabilities/registry contracts, exact versioned pricing
+and FX snapshot models, Decimal-based conservative quotes, and a durable SQLite
+ledger at `data/cost/ledger.sqlite3`. The default hard cap is ฿100.00 per month
+using the configured `Asia/Bangkok` budget timezone. Reservations use integer
+micro-THB values and `BEGIN IMMEDIATE`; ambiguous calls remain counted until
+explicit reconciliation. M4 performs no provider, AI, or network calls and does
+not include production Gemini pricing.
+
 ## Approval gate
 
-M3 is implemented and accepted. M4 and later work remain approval-gated, especially these decisions:
+M4 is implemented and accepted. M5 and later work remain approval-gated, especially these decisions:
 
 - Whether cloud-uploaded proxy data is acceptable under the chosen Gemini account/tier and data-use terms (future M5).
-- Provider/cost contract and validated price entry (future M4).
+- Exact production Gemini model, provider adapter, and validated official price entry (future M5).
 - Default extraction mode: accurate high-quality re-encode versus faster keyframe-aligned stream copy.

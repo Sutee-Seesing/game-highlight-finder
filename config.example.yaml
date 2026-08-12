@@ -42,9 +42,21 @@ signals:
     interval_ms: 500
 
 scout:
-  # M3 is offline and deterministic. Real providers are future M4/M5 work.
+  # M3 remains offline and deterministic. Real providers are future M5 work.
   backend: fake
   fixture_path: null
   response_max_bytes: 1048576
   schema_version: 1
   canonicalization_version: m3-canonical-v1
+
+cost:
+  # M4 is provider-neutral and does not ship production prices.
+  monthly_budget_thb: "100.00"
+  budget_timezone: Asia/Bangkok
+  hard_limit: true
+  estimate_safety_factor: "1.20"
+  pricing_max_age_days: 30
+  fx_max_age_days: 30
+  ledger_path: null
+  pricing_catalog_path: null
+  fx_snapshot_path: null

@@ -1,10 +1,10 @@
 # Game Highlight Finder
 
-Game Highlight Finder is a local-first CLI for turning long gameplay recordings into a reviewable highlight library. The repository currently implements **Milestone 3: Canonical Domain + Fake Scout**.
+Game Highlight Finder is a local-first CLI for turning long gameplay recordings into a reviewable highlight library. The repository currently implements **Milestone 4: Cost Gate + Provider Contract**.
 
 M3 keeps the M2 source/proxy/signal foundation and adds a versioned `Session -> Match -> Candidate` domain map. A deterministic Fake Scout produces bounded offline response fixtures, preserves raw Scout bytes separately from canonical data, and validates hostile output before assigning local deterministic IDs. Canonical timestamps are integer milliseconds with half-open intervals `[start_ms, end_ms)`.
 
-M3 does not call a real AI provider, use network access, require an API key, extract clips, or publish anything. Gemini/provider contracts and cost controls remain future M4/M5 work.
+M3 remains offline and deterministic. M4 adds provider-neutral contracts and a fail-closed cost boundary, but still makes zero real AI/provider/network calls. Gemini Scout remains approval-gated M5 work.
 
 ## Windows setup
 
@@ -57,6 +57,9 @@ uv run highlight analyze "D:\Recordings\game.mp4" --stop-after proxy
 uv run highlight analyze "D:\Recordings\game.mp4" --stop-after local-signals
 uv run highlight analyze "D:\Recordings\game.mp4" --stop-after scout
 uv run highlight status <session-id>
+uv run highlight cost status
+uv run highlight cost report
+uv run highlight cost calls
 ```
 
 Global overrides must appear before the subcommand:
@@ -116,6 +119,15 @@ Integration tests generate tiny videos with the locally resolved FFmpeg. No larg
 - Match hierarchy supports zero candidates, one candidate, or many candidates, including an unknown/unsegmented session.
 - M3 canonicalization stores every valid candidate without selecting a best-of list; `best_of_candidate_ids` remains empty for later presentation stages.
 
+## M4 cost gate and provider contract
+
+- The default hard budget is **฿100.00 per month** in the configured `Asia/Bangkok` timezone.
+- Quotes use explicit local pricing and FX snapshots, integer micro-THB accounting, and conservative upward rounding.
+- Reservations are transactional in `data/cost/ledger.sqlite3`; `RESERVED`, `IN_FLIGHT`, `SETTLED`, `RELEASED`, and `AMBIGUOUS` states are persisted for audit and recovery.
+- Unknown providers/models/modes, missing or stale prices/FX, unsupported usage dimensions, ledger failures, and budget overages fail closed.
+- An ambiguous post-send outcome remains budget exposure until explicit settlement or evidence-backed release; it is never silently retried.
+- M4 has no provider SDK, API key, cloud upload, or automatic internet pricing/FX refresh. Production Gemini pricing is intentionally absent until M5 verifies an exact official entry.
+
 ## Known M3 limitations
 
 - Local signals are intentionally lightweight: silence intervals, bounded RMS/loudness activity buckets, and an integrated loudness summary. There is no transcription or computer-vision detector yet.
@@ -123,7 +135,7 @@ Integration tests generate tiny videos with the locally resolved FFmpeg. No larg
 - Moving a source after ingest is reported as missing; a relink command is future work.
 - Cache identity uses a fast path/size/mtime check and a stored authoritative SHA-256. A changed source creates a new session.
 - Lock recovery handles dead processes on the same host conservatively; unreadable or remote-host locks require manual inspection.
-- Real provider calls, cost accounting, long-session reconciliation, candidate extraction, reports, and reviewer/ranking workflows are future work.
+- Real provider calls, Gemini integration, long-session reconciliation, candidate extraction, reports, and reviewer/ranking workflows are future work.
 - JSON schema migrations and force-stage controls are future work.
 
 See [docs/00_START_HERE.md](docs/00_START_HERE.md) for the full product plan.

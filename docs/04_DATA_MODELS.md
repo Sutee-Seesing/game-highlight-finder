@@ -220,7 +220,7 @@ stage
 provider
 model
 request_fingerprint
-status                    # RESERVED, COMMITTED, RELEASED, RECONCILE_REQUIRED
+status                    # RESERVED, IN_FLIGHT, SETTLED, RELEASED, AMBIGUOUS
 estimated_usage_json
 actual_usage_json
 rate_snapshot_json
@@ -231,6 +231,11 @@ provider_request_id
 ```
 
 Rates and FX are snapshots so old totals do not change when configuration changes.
+
+The implemented M4 ledger uses `RESERVED`, `IN_FLIGHT`, `SETTLED`, `RELEASED`,
+and `AMBIGUOUS`. Active, in-flight, and ambiguous reservations remain budget
+exposure until settlement or evidence-backed release; pricing and FX snapshots
+are stored with each call.
 
 ## 5. Semantic validation pipeline
 

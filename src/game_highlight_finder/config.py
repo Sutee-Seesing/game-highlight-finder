@@ -6,15 +6,17 @@ import hashlib
 import json
 import os
 from collections.abc import Mapping
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any, Literal
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from pydantic import ValidationError as PydanticValidationError
 
 from game_highlight_finder.errors import ConfigError
 from game_highlight_finder.redaction import redact_data
+from game_highlight_finder.timezones import configured_timezone
 
 
 class StrictModel(BaseModel):
@@ -89,6 +91,45 @@ class ScoutConfig(StrictModel):
     canonicalization_version: str = Field(default="m3-canonical-v1", min_length=1, max_length=64)
 
 
+class CostConfig(StrictModel):
+    """Provider-neutral hard-budget settings; no provider is enabled by default."""
+
+    monthly_budget_thb: Decimal = Decimal("100.00")
+    budget_timezone: str = "Asia/Bangkok"
+    hard_limit: bool = True
+    estimate_safety_factor: Decimal = Decimal("1.20")
+    pricing_max_age_days: int = Field(default=30, ge=0, le=3650)
+    fx_max_age_days: int = Field(default=30, ge=0, le=3650)
+    ledger_path: Path | None = None
+    pricing_catalog_path: Path | None = None
+    fx_snapshot_path: Path | None = None
+
+    @field_validator("monthly_budget_thb", "estimate_safety_factor", mode="before")
+    @classmethod
+    def strict_decimal(cls, value: object) -> Decimal:
+        if isinstance(value, bool) or not isinstance(value, (str, int, float, Decimal)):
+            raise ValueError("cost decimal values must be numeric")
+        try:
+            converted = Decimal(str(value))
+        except (InvalidOperation, ValueError) as exc:
+            raise ValueError("cost decimal values must be valid decimals") from exc
+        if not converted.is_finite():
+            raise ValueError("cost decimal values must be finite")
+        return converted
+
+    @model_validator(mode="after")
+    def validate_budget_policy(self) -> CostConfig:
+        if self.monthly_budget_thb < 0:
+            raise ValueError("monthly budget cannot be negative")
+        if self.estimate_safety_factor < 1:
+            raise ValueError("estimate safety factor must be at least 1")
+        try:
+            configured_timezone(self.budget_timezone)
+        except Exception as exc:
+            raise ValueError("budget timezone must be an installed IANA timezone") from exc
+        return self
+
+
 class AppConfig(StrictModel):
     schema_version: Literal[1] = 1
     storage: StorageConfig = StorageConfig()
@@ -98,6 +139,7 @@ class AppConfig(StrictModel):
     disk: DiskConfig = DiskConfig()
     signals: SignalsConfig = SignalsConfig()
     scout: ScoutConfig = ScoutConfig()
+    cost: CostConfig = CostConfig()
 
 
 class ConfigResult(StrictModel):
@@ -112,6 +154,8 @@ ENV_OVERRIDES: dict[str, tuple[str, ...]] = {
     "GHF_FFMPEG_PATH": ("tools", "ffmpeg_path"),
     "GHF_FFPROBE_PATH": ("tools", "ffprobe_path"),
     "GHF_LOG_LEVEL": ("logging", "level"),
+    "GHF_MONTHLY_BUDGET_THB": ("cost", "monthly_budget_thb"),
+    "GHF_BUDGET_TIMEZONE": ("cost", "budget_timezone"),
 }
 
 
@@ -205,11 +249,21 @@ def load_config(
     scout = config.scout.model_copy(
         update={"fixture_path": _resolve_optional_path(config.scout.fixture_path, working_dir)}
     )
+    cost = config.cost.model_copy(
+        update={
+            "ledger_path": _resolve_optional_path(config.cost.ledger_path, working_dir),
+            "pricing_catalog_path": _resolve_optional_path(
+                config.cost.pricing_catalog_path, working_dir
+            ),
+            "fx_snapshot_path": _resolve_optional_path(config.cost.fx_snapshot_path, working_dir),
+        }
+    )
     config = config.model_copy(
         update={
             "storage": config.storage.model_copy(update={"data_dir": data_dir}),
             "tools": tools,
             "scout": scout,
+            "cost": cost,
         }
     )
     return ConfigResult(

@@ -1,4 +1,4 @@
-"""Typer command-line interface for the local M3 pipeline."""
+"""Typer command-line interface for the local-first pipeline and M4 cost gate."""
 
 from __future__ import annotations
 
@@ -18,19 +18,23 @@ from game_highlight_finder.config import (
     config_payload,
     load_config,
 )
+from game_highlight_finder.cost import CostService, Money
 from game_highlight_finder.doctor import run_doctor
 from game_highlight_finder.errors import AppError, ConfigError, ErrorCategory
 from game_highlight_finder.pipeline.runner import analyze_source
+from game_highlight_finder.providers import ProviderRegistry
 from game_highlight_finder.status import get_session_status
 
 app = typer.Typer(
     name="highlight",
-    help="Local-first gameplay recording analysis (M3: canonical domain + Fake Scout).",
+    help="Local-first gameplay recording analysis (M4: cost gate + provider contract).",
     no_args_is_help=True,
     pretty_exceptions_enable=False,
 )
 config_app = typer.Typer(help="Inspect and validate configuration.", no_args_is_help=True)
+cost_app = typer.Typer(help="Inspect the local hard-budget cost ledger.", no_args_is_help=True)
 app.add_typer(config_app, name="config")
+app.add_typer(cost_app, name="cost")
 
 
 @dataclass(frozen=True)
@@ -91,12 +95,94 @@ def config_check(ctx: typer.Context) -> None:
     _execute(ctx, _config_check)
 
 
+@cost_app.command("status")
+def cost_status(ctx: typer.Context) -> None:
+    """Show the current configured monthly budget exposure."""
+    _execute(ctx, lambda options: _cost_status(options, None))
+
+
+@cost_app.command("report")
+def cost_report(
+    ctx: typer.Context,
+    month: Annotated[
+        str | None,
+        typer.Option(
+            "--month", help="Budget period in YYYY-MM; defaults to the configured local month."
+        ),
+    ] = None,
+) -> None:
+    """Show a compact monthly cost report grouped by provider/model/stage."""
+    _execute(ctx, lambda options: _cost_status(options, month))
+
+
+@cost_app.command("calls")
+def cost_calls(ctx: typer.Context) -> None:
+    """List current-month cost calls and lifecycle states."""
+    _execute(ctx, _cost_calls)
+
+
 def _config_check(options: RuntimeOptions) -> None:
     result = _load(options)
     typer.echo("[PASS] configuration is valid")
     typer.echo(f"source: {result.source_file or 'safe defaults'}")
     typer.echo(f"config hash: {config_hash(result.config)}")
     typer.echo(json.dumps(config_payload(result.config), indent=2, ensure_ascii=False))
+
+
+def _cost_service(options: RuntimeOptions) -> CostService:
+    config = _load(options).config
+    # M4 ships no production provider/pricing entries. Status/report commands only
+    # inspect the ledger; paid quote operations require an explicitly supplied catalog.
+    return CostService.from_config(config, registry=ProviderRegistry())
+
+
+def _format_micro_thb(value: int) -> str:
+    return Money(micro_thb=value).display()
+
+
+def _cost_status(options: RuntimeOptions, month: str | None) -> None:
+    service = _cost_service(options)
+    summary = service.summary()
+    if month is not None:
+        if len(month) != 7 or month[4] != "-" or not month.replace("-", "").isdigit():
+            raise ConfigError("Cost report month must use YYYY-MM format.")
+        summary = service.ledger.summary(month)
+    typer.echo(f"Budget period: {summary.budget_period} ({service.config.cost.budget_timezone})")
+    typer.echo(f"Monthly hard cap: {_format_micro_thb(summary.budget_micro_thb)}")
+    typer.echo(f"Settled: {_format_micro_thb(summary.settled_micro_thb)}")
+    typer.echo(f"Reserved: {_format_micro_thb(summary.reserved_micro_thb)}")
+    typer.echo(f"In-flight: {_format_micro_thb(summary.in_flight_micro_thb)}")
+    typer.echo(f"Ambiguous: {_format_micro_thb(summary.ambiguous_micro_thb)}")
+    typer.echo(f"Available: {_format_micro_thb(summary.available_micro_thb)}")
+    typer.echo("Currency: THB (integer micro-THB ledger)")
+    typer.echo(f"Unreconciled calls: {summary.unreconciled_calls}")
+    if month is not None:
+        grouped: dict[tuple[str, str, str], int] = {}
+        for call in service.ledger.list_calls(budget_period=month):
+            key = (call.provider, call.model, call.stage)
+            grouped[key] = grouped.get(key, 0) + call.exposure_micro_thb
+        if grouped:
+            typer.echo("By provider/model/stage:")
+            for (provider, model, stage), amount in sorted(grouped.items()):
+                typer.echo(f"  {provider}/{model} [{stage}]: {_format_micro_thb(amount)}")
+
+
+def _cost_calls(options: RuntimeOptions) -> None:
+    service = _cost_service(options)
+    calls = service.calls()
+    if not calls:
+        typer.echo("No cost calls for the current budget period.")
+        return
+    for call in calls:
+        amount = (
+            call.settled_cost_micro_thb
+            if call.status.value == "SETTLED"
+            else call.reserved_cost_micro_thb
+        )
+        typer.echo(
+            f"{call.call_id} {call.status} {call.provider}/{call.model}/{call.billing_mode} "
+            f"{_format_micro_thb(amount or 0)} stage={call.stage}"
+        )
 
 
 @app.command()

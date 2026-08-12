@@ -113,7 +113,7 @@ game-highlight-finder/
     golden/
   data/                 # ignored by Git; configurable outside repository
     sessions/
-    cost/cost.sqlite3
+    cost/ledger.sqlite3
 ```
 
 Game-specific profiles initially provide hints and thresholds, not hard-coded perfect detectors. The generic profile must always work.
@@ -211,11 +211,15 @@ scout:
   max_candidates_per_match: null
 reviewer: {enabled: false, provider: "gemini", model: "reviewer-quality"}
 cost:
-  monthly_budget_thb: 100
+  monthly_budget_thb: 100.00
+  budget_timezone: "Asia/Bangkok"
   hard_limit: true
-  usd_to_thb: 36.0
   estimate_safety_factor: 1.20
   pricing_max_age_days: 30
+  fx_max_age_days: 30
+  ledger_path: null
+  pricing_catalog_path: null
+  fx_snapshot_path: null
 transcription: {enabled: false, backend: "faster-whisper", model: "small"}
 ```
 

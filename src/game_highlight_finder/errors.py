@@ -11,6 +11,9 @@ class ErrorCategory(StrEnum):
     SOURCE = "source/input"
     VALIDATION = "validation"
     STORAGE = "storage"
+    COST = "cost"
+    BUDGET = "budget"
+    PROVIDER = "provider"
     INTERNAL = "internal"
 
 
@@ -55,3 +58,35 @@ class ValidationError(AppError):
 class StorageError(AppError):
     def __init__(self, message: str, *, hint: str | None = None) -> None:
         super().__init__(ErrorCategory.STORAGE, message, hint=hint)
+
+
+class CostGateError(AppError):
+    """A paid-call cost or provider contract check failed closed."""
+
+    def __init__(self, message: str, *, hint: str | None = None) -> None:
+        super().__init__(ErrorCategory.COST, message, hint=hint)
+
+
+class BudgetExceededError(CostGateError):
+    """The hard monthly budget cannot safely accommodate a reservation."""
+
+    def __init__(
+        self,
+        message: str = "Monthly hard budget would be exceeded.",
+        *,
+        hint: str | None = None,
+    ) -> None:
+        super().__init__(message, hint=hint)
+        self.category = ErrorCategory.BUDGET
+
+
+class CostIntegrityError(CostGateError):
+    """Persisted actual billing exceeded the conservative reservation."""
+
+
+class ProviderContractError(CostGateError):
+    """A provider-neutral contract or exact registry lookup failed."""
+
+    def __init__(self, message: str, *, hint: str | None = None) -> None:
+        super().__init__(message, hint=hint)
+        self.category = ErrorCategory.PROVIDER
