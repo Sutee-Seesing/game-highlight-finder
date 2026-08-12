@@ -276,12 +276,13 @@ def test_gemini_preflight_requires_fx_and_makes_no_transport_calls(
     ingest = ingest_source(tiny_video, config)
     proxy = generate_proxy(ingest.source, config)
     signals = generate_local_signals(ingest.source, proxy, config)
+    service = _service(config)
     result = preflight_gemini_scout(
         ingest.source,
         proxy,
         signals,
         config,
-        cost_service=_service(config),
+        cost_service=service,
     )
     assert result.proxy_only is True
     assert result.quote.reserved_cost_micro_thb >= result.quote.base_cost_micro_thb
