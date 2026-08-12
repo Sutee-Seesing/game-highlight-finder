@@ -55,11 +55,24 @@ and an offline Fake Provider contract fixture.
 Production provider SDKs, pricing, API keys, and network calls are intentionally
 absent. The complete automated suite is **131 passed / 0 failed / 0 skipped**.
 
-### M5 — Gemini Scout integration (approval-gated; not started)
+### M5 — Gemini Scout integration (implementation complete; live acceptance opt-in)
 
-- Implement Files API lifecycle, low media-resolution requests, structured output, usage capture, bounded retries, remote deletion, window checkpointing, and request fingerprints.
-- Verify the concrete current model ID and pricing at implementation time; initially benchmark a GA Flash-Lite-class model.
-- Exit: one short opted-in proxy succeeds; cached rerun makes no generation call; all logs/artifacts are redacted.
+- Implement the exact stable `gemini-3.5-flash-lite` adapter through the official
+  `google-genai` SDK, with Files API upload/readiness/deletion lifecycle,
+  `Interactions` `store=false`, low media resolution, structured JSON output,
+  usage capture including thinking tokens, and no thought-step persistence.
+- Reserve through the M4 cost gate before upload, persist request/cache identity,
+  preserve `RESERVED -> IN_FLIGHT -> SETTLED/AMBIGUOUS`, and retry only remote
+  cleanup on resume. Upload validation accepts only the committed session
+  `analysis_proxy.mp4`, never the RAW source.
+- Verify the dated Standard pricing entry (USD 0.30/M input and USD 2.50/M
+  output including thinking) and require an explicit FX snapshot.
+- The one-window implementation is bounded to 900 seconds by default. Long
+  session windowing/checkpoint reconciliation is intentionally deferred to M6.
+- Offline exit evidence: deterministic prompt/schema/estimate, privacy boundary,
+  preflight without transport calls, fake upload/generation/delete lifecycle,
+  verified paid cache hit, ambiguous no-retry, and source immutability. Live
+  Gemini acceptance remains opt-in and was not run.
 
 ### M6 — Long-session reconciliation and extraction
 
@@ -86,7 +99,7 @@ absent. The complete automated suite is **131 passed / 0 failed / 0 skipped**.
 - Add keep/maybe/reject/merge suggestions without destructive rewrites.
 - Exit: measured improvement in shortlist precision justifies incremental cost; otherwise leave disabled.
 
-The original milestone order is adjusted so schemas/fake AI and budget controls precede real API integration. Cache/resume is foundational from M1 rather than added late, preventing paid-stage rework. M5 remains approval-gated and is not part of M4.
+The original milestone order is adjusted so schemas/fake AI and budget controls precede real API integration. Cache/resume is foundational from M1 rather than added late, preventing paid-stage rework. M6 remains the next milestone and is not part of M5.
 
 ## 3. Test strategy
 
@@ -168,6 +181,6 @@ Create a private annotation format for matches and candidate intervals. Evaluate
 
 V1 is done only after a representative 1–4 hour recording completes through report generation, an interrupted run resumes without repeating paid completed work, the original hash remains unchanged, the cost ledger stays within the hard limit, all candidates are traceable to validated evidence and source intervals, and the owner can find useful clips by reviewing a small fraction of the VOD.
 
-## 7. Exact next action after approval
+## 7. Exact next action after M5 publication
 
-M4 is implemented and accepted. The next milestone is **M5 — Gemini Scout**. M5 remains approval-gated; do not add provider SDKs, Gemini integration, or later-milestone work as part of M4.
+M5 implementation is complete and publishable under the current owner authorization. The next milestone is **M6 — Long-session reconciliation and extraction**; do not begin it as part of this handoff.

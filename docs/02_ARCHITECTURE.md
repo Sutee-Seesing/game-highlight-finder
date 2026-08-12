@@ -182,13 +182,13 @@ The application owns prompts, canonical schemas, retries, cost approval, and nor
 
 Model IDs are configuration values resolved through a model catalog, not conditionals in pipeline code. The catalog records provider, model ID, capabilities, pricing version/effective date, context constraints, supported media resolution, and deprecation state. Friendly aliases such as `scout-cheap` may resolve to a concrete ID at run start; the resolved ID is then frozen in session artifacts.
 
-For Gemini V1:
+For the implemented M5 Gemini Scout:
 
-- Use the Files API for long proxy uploads; remote objects are temporary and must not be treated as cache artifacts.
-- Save the remote ID and expiry, reuse it only while valid, and attempt deletion when the stage completes or is abandoned.
-- Use provider-supported structured output, then still apply local semantic validation.
-- One video per Scout request.
-- Use low media resolution and bounded overlapping windows.
+- Use the Files API for the bounded proxy upload; remote objects are temporary and must not be treated as cache artifacts.
+- Save only redacted remote name/state/expiry/deletion metadata, reuse no remote object across requests, and attempt deletion when the stage completes or fails.
+- Use `Interactions` with `store=false` and provider-supported structured output, then still apply local semantic validation.
+- One video per M5 Scout request, low media resolution, and a 900-second default duration bound. Overlapping windows belong to M6.
+- Reserve through the local ledger before any upload and preserve ambiguous outcomes rather than blindly retrying.
 
 ## 7. Configuration and secrets
 
@@ -223,7 +223,7 @@ cost:
 transcription: {enabled: false, backend: "faster-whisper", model: "small"}
 ```
 
-Exact media/model defaults require real fixture validation. API keys live in `.env`, which is ignored; `.env.example` contains names only. Logs, request snapshots, errors, and reports must redact values matching known secret keys.
+M5 fixes the exact model to `gemini-3.5-flash-lite`, Standard billing, low media resolution, and an explicit `GEMINI_API_KEY` environment variable name. API keys live in `.env`, which is ignored; `.env.example` contains names only. Logs, request snapshots, errors, and reports must redact values matching known secret keys. Live acceptance remains opt-in.
 
 ## 8. Security and privacy boundaries
 
@@ -238,7 +238,14 @@ Exact media/model defaults require real fixture validation. API keys live in `.e
 
 ## 9. Current external facts to revalidate at implementation
 
-As checked on 2026-08-11, Google's official documentation says Gemini video processing is about 300 tokens/second at default media resolution or 100 tokens/second at low resolution, 1M-context models handle up to about one hour default or three hours low resolution, and default visual sampling is 1 FPS. The Files API documentation says uploaded files are automatically deleted after 48 hours. These are volatile provider facts and belong in a dated catalog/compatibility test, not hard-coded assumptions:
+As verified on 2026-08-13 (Asia/Bangkok), Google's official documentation lists
+`gemini-3.5-flash-lite` as stable with text/image/video/audio inputs, structured
+outputs, and thinking support. Low-resolution video uses about 66 vision tokens
+per second plus 32 audio tokens per second; the Files API samples at 1 FPS and
+keeps uploads temporarily. Interactions supports stateless `store=false`, while
+video metadata/custom FPS and Batch are not available on that surface. These are
+volatile provider facts and belong in a dated catalog/compatibility test, not
+silent assumptions:
 
 - [Gemini video understanding](https://ai.google.dev/gemini-api/docs/video-understanding)
 - [Gemini Files API](https://ai.google.dev/gemini-api/docs/files)

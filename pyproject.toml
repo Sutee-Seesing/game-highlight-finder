@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "game-highlight-finder"
 version = "0.3.0"
-description = "Local-first gameplay canonical domain and deterministic Scout"
+description = "Local-first gameplay analysis with deterministic and opt-in Gemini Scout backends"
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
 license = { text = "Proprietary" }
@@ -14,6 +14,11 @@ dependencies = [
   "pydantic>=2.12,<3",
   "PyYAML>=6.0.2,<7",
   "typer>=0.16,<1",
+]
+
+[project.optional-dependencies]
+gemini = [
+  "google-genai>=2.3,<3",
 ]
 
 [project.scripts]
@@ -36,6 +41,7 @@ addopts = "-ra --strict-markers -p no:cacheprovider"
 testpaths = ["tests"]
 markers = [
   "integration: tests that invoke local media binaries",
+  "live_gemini: explicitly opt-in tests that may call the Gemini API",
 ]
 
 [tool.ruff]

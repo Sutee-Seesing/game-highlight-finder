@@ -82,13 +82,45 @@ class SignalsConfig(StrictModel):
 
 
 class ScoutConfig(StrictModel):
-    """M3-only deterministic Scout settings; real providers arrive in M5."""
+    """Offline Fake Scout defaults plus explicitly opt-in Gemini settings.
 
-    backend: Literal["fake"] = "fake"
+    No credential is represented here.  The Google SDK reads ``GEMINI_API_KEY``
+    (or the configured environment variable) at the provider boundary, so the
+    resolved configuration and session artifacts remain safe to persist.
+    """
+
+    backend: Literal["fake", "gemini"] = "fake"
     fixture_path: Path | None = None
     response_max_bytes: int = Field(default=1_048_576, ge=4_096, le=16 * 1024 * 1024)
     schema_version: Literal[1] = 1
     canonicalization_version: str = Field(default="m3-canonical-v1", min_length=1, max_length=64)
+    model: str = Field(default="gemini-3.5-flash-lite", min_length=1, max_length=256)
+    billing_mode: Literal["standard"] = "standard"
+    allow_remote_upload: bool = False
+    api_key_env: str = Field(default="GEMINI_API_KEY", min_length=3, max_length=64)
+    media_resolution: Literal["low"] = "low"
+    max_duration_seconds: int = Field(default=900, ge=1, le=10_800)
+    max_output_tokens: int = Field(default=2_048, ge=1, le=65_536)
+    max_thinking_tokens: int = Field(default=1_024, ge=0, le=10_000_000)
+    prompt_version: str = Field(default="gemini-scout-v1", min_length=1, max_length=64)
+    readiness_timeout_seconds: float = Field(default=120.0, gt=0, le=3_600)
+    readiness_poll_initial_seconds: float = Field(default=1.0, gt=0, le=60)
+    readiness_poll_max_seconds: float = Field(default=8.0, gt=0, le=120)
+    cleanup_retry_limit: int = Field(default=3, ge=0, le=10)
+
+    @field_validator("api_key_env")
+    @classmethod
+    def validate_api_key_env(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized or not normalized.replace("_", "").isalnum() or not normalized.isupper():
+            raise ValueError("api_key_env must be an uppercase environment variable name")
+        return normalized
+
+    @model_validator(mode="after")
+    def validate_polling(self) -> ScoutConfig:
+        if self.readiness_poll_max_seconds < self.readiness_poll_initial_seconds:
+            raise ValueError("readiness poll max must be at least the initial delay")
+        return self
 
 
 class CostConfig(StrictModel):

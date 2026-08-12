@@ -175,6 +175,14 @@ candidate_fragments[]
 
 Provider output should use a flatter bounded schema than the final domain model. Local code supplies IDs, absolute transforms, clip boundaries, and ranking; the model does not.
 
+For M5's single Gemini request, the provider artifacts are
+`scout/raw/gemini_response.json`, `gemini_request_meta.json`, and
+`gemini_remote_file.json`. The response is a sanitized final-output envelope:
+interaction ID, exact model/status, structured output text, bounded usage
+(including visible and thinking tokens), finish/safety state, and safe remote
+file name/deletion state. Signed URIs and thought steps are never persisted.
+`scout/cost.json` is a derived display artifact; SQLite remains authoritative.
+
 ### M3 canonical domain
 
 The implemented M3 runtime models are `Session`, `Match`, `Candidate`, `Evidence`,
@@ -238,6 +246,10 @@ snapshot, the quote fails closed instead of treating output as free. When
 settlement proves actual cost exceeded its reservation, the SQLite ledger
 persists a global safety hold and blocks new reservations until an explicit
 acknowledgement/reconciliation is recorded.
+
+Gemini's billable output dimension is `visible output tokens + thinking tokens`;
+both raw fields remain separately auditable while M4 arithmetic uses their
+bounded sum.
 
 The implemented M4 ledger uses `RESERVED`, `IN_FLIGHT`, `SETTLED`, `RELEASED`,
 and `AMBIGUOUS`. Active, in-flight, and ambiguous reservations remain budget

@@ -1,6 +1,6 @@
 # Game Highlight Finder — Start Here
 
-Status: Milestone 4 cost gate and provider contract implemented
+Status: Milestone 5 Gemini Scout implementation complete; live provider acceptance remains opt-in
 Plan date: 2026-08-11  
 Working project path: `C:\Data\Works\Personal_Projects\Active_Products\game-highlight-finder`
 
@@ -107,15 +107,32 @@ using the configured `Asia/Bangkok` budget timezone. Reservations use integer
 micro-THB values and `BEGIN IMMEDIATE`; ambiguous calls remain counted until
 explicit reconciliation. Untrusted usage counts are bounded, missing output
 rates fail closed, and a settled overage opens a persisted global safety hold
-until explicit acknowledgement. M4 performs no provider, AI, or network calls
-and does not include production Gemini pricing.
+until explicit acknowledgement. M4 performs no provider, AI, or network calls.
+M5 adds the exact production Gemini pricing snapshot only inside the explicitly
+selected Gemini pipeline.
 
-## Approval gate
+## Implemented M5 Gemini Scout foundation
 
-M4 implementation and safety hardening are complete in the current worktree;
-owner acceptance is still required before publication or M5. M5 and later work
-remain approval-gated, especially these decisions:
+M5 adds one bounded, explicitly opt-in Gemini request after the local ingest,
+proxy, and signal stages. The exact model is `gemini-3.5-flash-lite` on Google's
+Standard tier. The adapter uploads only the committed session analysis proxy,
+uses low media resolution and structured JSON output through `store=false`
+Interactions, captures visible/thinking usage, reserves before upload, and
+persists the complete cost lifecycle. Remote file metadata excludes the URI;
+deletion is retried without regenerating a paid request. Completed paid responses
+are cacheable by a semantic provider fingerprint, while ambiguous outcomes remain
+unresolved until explicit ledger reconciliation. M5 intentionally does not add
+long-session windows, candidate extraction, or any M6 work. Live Gemini acceptance
+was not run because no live opt-in/API key was supplied.
 
-- Whether cloud-uploaded proxy data is acceptable under the chosen Gemini account/tier and data-use terms (future M5).
-- Exact production Gemini model, provider adapter, and validated official price entry (future M5).
-- Default extraction mode: accurate high-quality re-encode versus faster keyframe-aligned stream copy.
+## Current publication and acceptance gate
+
+M1–M5 implementation is publishable only under the owner-approved commit. The
+offline suite does not authorize a live provider call. Before an owner chooses to
+run one, confirm:
+
+- Whether cloud-uploaded proxy data is acceptable under the chosen Gemini account/tier and data-use terms.
+- A valid user-managed `GEMINI_API_KEY` and an explicit FX snapshot.
+- A short, synthetic/non-private proxy and the configured M5 duration/budget limits.
+
+M6 remains not started and must not be inferred from the M5 implementation.

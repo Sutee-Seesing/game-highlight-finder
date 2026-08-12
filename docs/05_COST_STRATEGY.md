@@ -6,9 +6,9 @@ Default monthly hard limit: **100 THB**. The system must refuse a potentially bi
 
 M4 implements this boundary locally with integer micro-THB accounting and a
 SQLite ledger at `data/cost/ledger.sqlite3`. The default budget timezone is
-`Asia/Bangkok`; all pricing and FX inputs are explicit local snapshots. M4 has
-no production Gemini price entry and never fetches pricing or exchange rates
-from the network.
+`Asia/Bangkok`; all pricing and FX inputs are explicit local snapshots. M5 adds
+one dated Gemini production entry but still never fetches pricing or exchange
+rates from the network.
 
 The application tracks two useful numbers:
 
@@ -27,7 +27,11 @@ Pricing is data, not code. Commit a versioned catalog containing provider/model/
 - require an explicit catalog update when a provider changes pricing;
 - never scrape live exchange rates automatically in V1.
 
-As checked 2026-08-11, Google's official pricing page lists `gemini-3.5-flash-lite` as a GA cost-efficient model at USD 0.30/M input tokens and USD 2.50/M output tokens for standard paid usage, with cheaper batch rates. This is a planning reference, not a permanent hard-coded default: [Gemini API pricing](https://ai.google.dev/gemini-api/docs/pricing).
+As verified 2026-08-13 (Asia/Bangkok), Google's official pricing page lists the
+stable `gemini-3.5-flash-lite` Standard tier at USD 0.30/M input tokens for
+text/image/video/audio and USD 2.50/M output tokens including thinking. M5 stores
+that dated source URL and exact model in a versioned local catalog; it does not
+enable Batch pricing or silently fall back to another model: [Gemini API pricing](https://ai.google.dev/gemini-api/docs/pricing) and [model page](https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash-lite).
 
 ## 3. Conservative preflight estimate
 
@@ -42,17 +46,22 @@ Before upload/generation, calculate estimated usage from:
 
 Prefer a provider token-count endpoint after upload when available, but do not rely on it as the only preflight mechanism. Use the greater of provider count and local estimate. Apply `estimate_safety_factor` (initial proposal 1.20) and round up to a small THB unit.
 
-Current official Gemini guidance estimates roughly 100 tokens/second for video at low media resolution and 300 tokens/second at default resolution. Therefore duration and low-resolution API configuration matter materially. A 45-minute low-resolution window is roughly 270,000 video tokens before prompt/output; a four-hour VOD should be windowed and cannot be assumed safe as one request. Revalidate these rates before implementation: [Gemini video understanding](https://ai.google.dev/gemini-api/docs/video-understanding).
+Current official Gemini guidance estimates roughly 66 vision tokens/second plus
+32 audio tokens/second for low media resolution (about 100 combined tokens per
+second). M5 uses those rates for conservative preflight, plus bounded prompt,
+schema, visible-output, and thinking ceilings. A 45-minute low-resolution window
+would be roughly 178,200 vision + 86,400 audio tokens before prompt/output; a
+four-hour VOD must wait for M6 windowing: [Gemini video understanding](https://ai.google.dev/gemini-api/docs/video-understanding).
 
-Illustrative math only, using the 2026-08-11 cited rates and 36 THB/USD:
+Illustrative math only, using the M5 rates and 36 THB/USD:
 
 ```text
-45 min * 60 sec * 100 video tokens/sec = 270,000 input tokens
-input: 0.270M * $0.30 = $0.081
+45 min * 60 sec * (66 vision + 32 audio tokens/sec) = 264,600 input tokens
+input: 0.2646M * $0.30 = $0.07938
 reserved output: 4,000 / 1M * $2.50 = $0.010
-subtotal: $0.091
-20% safety: $0.1092
-THB at 36/USD: about 3.94 THB per window
+subtotal: $0.08938
+20% safety: $0.107256
+THB at 36/USD: about 3.87 THB per window
 ```
 
 This example is deliberately conservative and does not promise an actual bill. Batch pricing may lower cost but adds asynchronous operational complexity; benchmark it after synchronous correctness.

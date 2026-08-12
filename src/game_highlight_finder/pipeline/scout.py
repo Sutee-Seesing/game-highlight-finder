@@ -62,7 +62,12 @@ def generate_scout(
     local_signals: LocalSignalsResult,
     config: AppConfig,
 ) -> ScoutResult:
-    """Run the deterministic Fake Scout with the same persistence boundary as M5."""
+    """Run the configured Scout backend behind one persistence boundary."""
+
+    if config.scout.backend == "gemini":
+        from game_highlight_finder.pipeline.gemini_scout import generate_gemini_scout
+
+        return generate_gemini_scout(source, proxy, local_signals, config)
 
     expected_session_id = source_session_id(source)
     if proxy.session_id != expected_session_id or local_signals.session_id != expected_session_id:

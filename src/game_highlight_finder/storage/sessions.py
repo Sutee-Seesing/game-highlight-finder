@@ -34,6 +34,7 @@ LOCAL_SIGNALS_CACHE_VERSION = 1
 LOCAL_SIGNALS_CONFIG_FINGERPRINT_VERSION = 1
 SCOUT_CACHE_VERSION = 1
 SCOUT_CONFIG_FINGERPRINT_VERSION = 1
+GEMINI_PROVIDER_CACHE_VERSION = 1
 
 
 @dataclass(frozen=True)
@@ -291,7 +292,7 @@ def local_signals_cache_payload(
 
 
 def scout_config_fingerprint(config: AppConfig, *, fixture_sha256: str | None = None) -> str:
-    """Hash only deterministic Scout inputs; unrelated config never invalidates M3."""
+    """Hash semantic Scout inputs; unrelated logging/UI settings never invalidate work."""
 
     payload = {
         "fingerprint_version": SCOUT_CONFIG_FINGERPRINT_VERSION,
@@ -300,6 +301,13 @@ def scout_config_fingerprint(config: AppConfig, *, fixture_sha256: str | None = 
         "canonicalization_version": config.scout.canonicalization_version,
         "response_max_bytes": config.scout.response_max_bytes,
         "fixture_sha256": fixture_sha256 or "builtin-deterministic",
+        "model": config.scout.model,
+        "billing_mode": config.scout.billing_mode,
+        "media_resolution": config.scout.media_resolution,
+        "max_duration_seconds": config.scout.max_duration_seconds,
+        "max_output_tokens": config.scout.max_output_tokens,
+        "max_thinking_tokens": config.scout.max_thinking_tokens,
+        "prompt_version": config.scout.prompt_version,
     }
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()
@@ -339,6 +347,67 @@ def compute_scout_cache_key(
             proxy_artifact_sha256=proxy_artifact_sha256,
             local_signals_artifact_sha256=local_signals_artifact_sha256,
             fixture_sha256=fixture_sha256,
+        ),
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def gemini_provider_cache_payload(
+    source: SourceAsset,
+    config: AppConfig,
+    *,
+    proxy_artifact_sha256: str,
+    local_signals_summary_hash: str,
+    prompt_hash: str,
+    schema_hash: str,
+) -> dict[str, object]:
+    """Semantic identity for a paid Gemini request only.
+
+    Canonicalization and report/UI settings deliberately do not participate;
+    a valid paid provider response can therefore be reused after local parser
+    changes without another billable call.
+    """
+
+    return {
+        "cache_version": GEMINI_PROVIDER_CACHE_VERSION,
+        "source_sha256": source.sha256,
+        "source_duration_ms": source.duration_ms,
+        "proxy_artifact_sha256": proxy_artifact_sha256,
+        "local_signals_summary_hash": local_signals_summary_hash,
+        "provider": "gemini",
+        "model": config.scout.model,
+        "billing_mode": config.scout.billing_mode,
+        "media_resolution": config.scout.media_resolution,
+        "prompt_version": config.scout.prompt_version,
+        "prompt_hash": prompt_hash,
+        "schema_version": config.scout.schema_version,
+        "schema_hash": schema_hash,
+        "response_max_bytes": config.scout.response_max_bytes,
+        "max_duration_seconds": config.scout.max_duration_seconds,
+        "max_output_tokens": config.scout.max_output_tokens,
+        "max_thinking_tokens": config.scout.max_thinking_tokens,
+    }
+
+
+def compute_gemini_provider_cache_key(
+    source: SourceAsset,
+    config: AppConfig,
+    *,
+    proxy_artifact_sha256: str,
+    local_signals_summary_hash: str,
+    prompt_hash: str,
+    schema_hash: str,
+) -> str:
+    encoded = json.dumps(
+        gemini_provider_cache_payload(
+            source,
+            config,
+            proxy_artifact_sha256=proxy_artifact_sha256,
+            local_signals_summary_hash=local_signals_summary_hash,
+            prompt_hash=prompt_hash,
+            schema_hash=schema_hash,
         ),
         sort_keys=True,
         separators=(",", ":"),

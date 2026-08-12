@@ -32,6 +32,10 @@ class ProviderUsageEstimate(ProviderContractModel):
     input_audio_tokens: int = Field(default=0, ge=0, le=MAX_USAGE_TOKENS_PER_DIMENSION)
     cached_input_tokens: int = Field(default=0, ge=0, le=MAX_USAGE_TOKENS_PER_DIMENSION)
     output_tokens: int = Field(default=0, ge=0, le=MAX_USAGE_TOKENS_PER_DIMENSION)
+    # Gemini exposes visible output and thinking usage separately.  The cost
+    # calculator treats both as billable output while this raw field remains
+    # available for audit and redacted provider metadata.
+    thinking_tokens: int = Field(default=0, ge=0, le=MAX_USAGE_TOKENS_PER_DIMENSION)
 
     @field_validator(
         "input_text_tokens",
@@ -40,6 +44,7 @@ class ProviderUsageEstimate(ProviderContractModel):
         "input_audio_tokens",
         "cached_input_tokens",
         "output_tokens",
+        "thinking_tokens",
         mode="before",
     )
     @classmethod
@@ -48,6 +53,12 @@ class ProviderUsageEstimate(ProviderContractModel):
             raise ValueError("usage counts must be integer values")
         return value
 
+    @model_validator(mode="after")
+    def billable_output_is_bounded(self) -> ProviderUsageEstimate:
+        if self.output_tokens + self.thinking_tokens > MAX_USAGE_TOKENS_PER_DIMENSION:
+            raise ValueError("combined output and thinking usage exceeds the safety bound")
+        return self
+
     def as_dimensions(self) -> dict[str, int]:
         return {
             "input_text_tokens": self.input_text_tokens,
@@ -55,8 +66,12 @@ class ProviderUsageEstimate(ProviderContractModel):
             "input_video_tokens": self.input_video_tokens,
             "input_audio_tokens": self.input_audio_tokens,
             "cached_input_tokens": self.cached_input_tokens,
-            "output_tokens": self.output_tokens,
+            "output_tokens": self.output_tokens + self.thinking_tokens,
         }
+
+    @property
+    def billable_output_tokens(self) -> int:
+        return self.output_tokens + self.thinking_tokens
 
 
 class ProviderUsageActual(ProviderUsageEstimate):

@@ -42,15 +42,28 @@ signals:
     interval_ms: 500
 
 scout:
-  # M3 remains offline and deterministic. Real providers are future M5 work.
+  # Fake is the safe default. Gemini requires explicit remote-upload opt-in.
   backend: fake
   fixture_path: null
   response_max_bytes: 1048576
   schema_version: 1
   canonicalization_version: m3-canonical-v1
+  model: gemini-3.5-flash-lite
+  billing_mode: standard
+  allow_remote_upload: false
+  api_key_env: GEMINI_API_KEY
+  media_resolution: low
+  max_duration_seconds: 900
+  max_output_tokens: 2048
+  max_thinking_tokens: 1024
+  prompt_version: gemini-scout-v1
+  readiness_timeout_seconds: 120
+  readiness_poll_initial_seconds: 1
+  readiness_poll_max_seconds: 8
+  cleanup_retry_limit: 3
 
 cost:
-  # M4 is provider-neutral and does not ship production prices.
+  # Production Gemini quotes still require an explicit FX snapshot.
   monthly_budget_thb: "100.00"
   budget_timezone: Asia/Bangkok
   hard_limit: true

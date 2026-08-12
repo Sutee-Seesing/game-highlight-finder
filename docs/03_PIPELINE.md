@@ -24,7 +24,7 @@ Ranking and reporting are local. Reviewer is not a dependency for extraction or 
 | `ingest` | No | `source.json`, environment snapshot | readable source, ffprobe |
 | `proxy` | No | `proxy/analysis_proxy.mp4`, proxy metadata | ingest, FFmpeg |
 | `local_signals` | No | activity/silence/scene metadata; optional transcript | ingest; proxy/audio as configured |
-| `scout` | No in M3 | raw Fake Scout response, validated canonical result, and `session_map.json` | proxy, signals; deterministic offline fixture |
+| `scout` | No in M3; yes when Gemini is explicitly enabled | raw provider response, validated canonical result, and `session_map.json` | proxy, signals; Fake fixture or one bounded Gemini request |
 | `reconcile` | No | canonical `session_map.json`, `scout_results.json` | completed Scout windows |
 | `extract` | No | candidate media + extraction manifest | reconcile, source present and verified |
 | `reviewer` | Potentially | validated candidate reviews | extract, reviewer enabled, budget approval |
@@ -41,6 +41,16 @@ The stage cache includes only source/proxy/signal identities and Scout fixture/
 schema inputs; logging or storage settings do not invalidate M3.
 M3 canonicalization does not rank candidates or populate `best_of_candidate_ids`;
 presentation ranking remains a later stage.
+
+With `scout.backend: gemini`, M5 keeps the same canonical boundary but replaces
+the fixture with one explicitly authorized provider call. The local cost gate
+quotes and reserves before the Files API upload; the adapter marks the ledger
+`IN_FLIGHT` immediately before generation, settles visible/thinking usage on a
+completed response, and marks a post-send failure `AMBIGUOUS`. Only the committed
+analysis proxy is uploadable. The M5 cache key covers source/proxy/signal summary,
+prompt/schema, model, billing mode, media resolution, and token ceilings; a
+verified cache hit performs no upload or generation. Long-session window planning
+and reconciliation are M6 work.
 
 ## 3. Stage state machine
 
@@ -124,7 +134,8 @@ reviewer: disabled
 rank/report: stale
 ```
 
-`--dry-run` performs no writes beyond optional read-only provider token counting only if explicitly allowed; preferably it uses local conservative estimation.
+`--dry-run` performs local conservative Gemini estimation and quoting only; it
+does not upload, instantiate the SDK, reserve a ledger call, or generate.
 
 ## 7. Long-video Scout strategy
 

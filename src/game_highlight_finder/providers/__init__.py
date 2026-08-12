@@ -1,4 +1,4 @@
-"""Provider-neutral contracts and exact model registry for future paid stages."""
+"""Provider-neutral contracts and optional Gemini Scout adapter."""
 
 from game_highlight_finder.providers.base import (
     MAX_USAGE_TOKENS_PER_DIMENSION,
@@ -12,9 +12,36 @@ from game_highlight_finder.providers.base import (
     ProviderUsageActual,
     ProviderUsageEstimate,
 )
+from game_highlight_finder.providers.gemini import (
+    FakeGeminiTransport,
+    GeminiCleanupError,
+    GeminiConfigurationError,
+    GeminiDispatchError,
+    GeminiInteractionEnvelope,
+    GeminiMissingUsageError,
+    GeminiPrivacyError,
+    GeminiProvider,
+    GeminiProviderError,
+    GeminiRemoteFile,
+    GeminiTransport,
+    GenAITransport,
+    gemini_provider_descriptor,
+)
 
 __all__ = [
     "MAX_USAGE_TOKENS_PER_DIMENSION",
+    "FakeGeminiTransport",
+    "GeminiCleanupError",
+    "GeminiConfigurationError",
+    "GeminiDispatchError",
+    "GeminiInteractionEnvelope",
+    "GeminiMissingUsageError",
+    "GeminiPrivacyError",
+    "GeminiProvider",
+    "GeminiProviderError",
+    "GeminiRemoteFile",
+    "GeminiTransport",
+    "GenAITransport",
     "ProviderAdapter",
     "ProviderCallResult",
     "ProviderCapabilities",
@@ -24,4 +51,5 @@ __all__ = [
     "ProviderRequest",
     "ProviderUsageActual",
     "ProviderUsageEstimate",
+    "gemini_provider_descriptor",
 ]

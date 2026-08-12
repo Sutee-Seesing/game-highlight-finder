@@ -21,13 +21,17 @@ from game_highlight_finder.config import (
 from game_highlight_finder.cost import CostService, Money
 from game_highlight_finder.doctor import run_doctor
 from game_highlight_finder.errors import AppError, ConfigError, ErrorCategory
-from game_highlight_finder.pipeline.runner import analyze_source
+from game_highlight_finder.pipeline.gemini_scout import (
+    generate_gemini_scout,
+    preflight_gemini_scout,
+)
+from game_highlight_finder.pipeline.runner import AnalysisResult, analyze_source
 from game_highlight_finder.providers import ProviderRegistry
 from game_highlight_finder.status import get_session_status
 
 app = typer.Typer(
     name="highlight",
-    help="Local-first gameplay recording analysis (M4: cost gate + provider contract).",
+    help="Local-first gameplay recording analysis (M5: opt-in Gemini Scout).",
     no_args_is_help=True,
     pretty_exceptions_enable=False,
 )
@@ -200,13 +204,109 @@ def analyze(
             help="Stop after ingest, proxy, local-signals, or scout (default: scout).",
         ),
     ] = "scout",
+    scout_backend: Annotated[
+        str | None,
+        typer.Option(
+            "--scout-backend",
+            help="Override the Scout backend for this run (fake or gemini).",
+        ),
+    ] = None,
+    allow_remote_upload: Annotated[
+        bool,
+        typer.Option(
+            "--allow-remote-upload",
+            help="Explicitly authorize uploading the analysis proxy to Gemini.",
+        ),
+    ] = False,
+    dry_run: Annotated[
+        bool,
+        typer.Option(
+            "--dry-run",
+            help="Gemini preflight only: quote locally and make no upload or provider call.",
+        ),
+    ] = False,
 ) -> None:
-    """Run local stages and deterministic Fake Scout without modifying the source."""
-    _execute(ctx, lambda options: _analyze(options, video, stop_after))
+    """Run local stages and the configured Scout without modifying the source."""
+    _execute(
+        ctx,
+        lambda options: _analyze(
+            options,
+            video,
+            stop_after,
+            scout_backend=scout_backend,
+            allow_remote_upload=allow_remote_upload,
+            dry_run=dry_run,
+        ),
+    )
 
 
-def _analyze(options: RuntimeOptions, video: Path, stop_after: str) -> None:
-    result = analyze_source(video, _load(options).config, stop_after=stop_after)
+def _analyze(
+    options: RuntimeOptions,
+    video: Path,
+    stop_after: str,
+    *,
+    scout_backend: str | None = None,
+    allow_remote_upload: bool = False,
+    dry_run: bool = False,
+) -> None:
+    config = _load(options).config
+    if scout_backend is not None:
+        normalized_backend = scout_backend.strip().lower()
+        if normalized_backend not in {"fake", "gemini"}:
+            raise ConfigError("Scout backend must be fake or gemini.")
+        config = config.model_copy(
+            update={"scout": config.scout.model_copy(update={"backend": normalized_backend})}
+        )
+    if allow_remote_upload:
+        config = config.model_copy(
+            update={"scout": config.scout.model_copy(update={"allow_remote_upload": True})}
+        )
+    if dry_run:
+        if config.scout.backend != "gemini":
+            raise ConfigError("--dry-run is only available with the Gemini Scout backend.")
+        local = analyze_source(video, config, stop_after="local-signals")
+        assert local.proxy is not None and local.local_signals is not None
+        preflight = preflight_gemini_scout(
+            local.ingest.source, local.proxy, local.local_signals, config
+        )
+        typer.echo("[PASS] Gemini preflight: no provider call or upload performed")
+        typer.echo("Provider: Gemini")
+        typer.echo(f"Model: {preflight.model}")
+        typer.echo("Input: analysis proxy only")
+        typer.echo(f"Media resolution: {preflight.media_resolution}")
+        typer.echo(
+            f"Maximum reserved cost: {_format_micro_thb(preflight.quote.reserved_cost_micro_thb)}"
+        )
+        typer.echo(f"Monthly available budget: {_format_micro_thb(preflight.available_micro_thb)}")
+        return
+
+    normalized_stop = stop_after.strip().lower().replace("-", "_")
+    if config.scout.backend == "gemini" and normalized_stop == "scout":
+        local = analyze_source(video, config, stop_after="local-signals")
+        assert local.proxy is not None and local.local_signals is not None
+        typer.echo("Scout backend: Gemini")
+        typer.echo("Uploading analysis proxy only")
+        typer.echo("Original source will NOT be uploaded")
+        typer.echo(f"Model: {config.scout.model}")
+        typer.echo(f"Media resolution: {config.scout.media_resolution}")
+        preflight = preflight_gemini_scout(
+            local.ingest.source, local.proxy, local.local_signals, config
+        )
+        typer.echo(
+            f"Maximum reserved cost: {_format_micro_thb(preflight.quote.reserved_cost_micro_thb)}"
+        )
+        typer.echo(f"Monthly available budget: {_format_micro_thb(preflight.available_micro_thb)}")
+        result = AnalysisResult(
+            ingest=local.ingest,
+            proxy=local.proxy,
+            local_signals=local.local_signals,
+            scout=generate_gemini_scout(
+                local.ingest.source, local.proxy, local.local_signals, config
+            ),
+            stop_after="scout",
+        )
+    else:
+        result = analyze_source(video, config, stop_after=stop_after)
     ingest_outcome = "CACHE HIT" if result.ingest.cache_hit else "COMPLETED"
     typer.echo(f"[PASS] ingest: {ingest_outcome}")
     if result.proxy is not None:
@@ -221,7 +321,10 @@ def _analyze(options: RuntimeOptions, video: Path, stop_after: str) -> None:
     if result.scout is not None:
         scout_outcome = "CACHE HIT" if result.scout.cache_hit else "COMPLETED"
         typer.echo(f"[PASS] scout: {scout_outcome}")
-        typer.echo("Scout backend: fake (offline; no AI/API call)")
+        if result.scout.backend == "fake":
+            typer.echo("Scout backend: fake (offline; no AI/API call)")
+        else:
+            typer.echo("Scout backend: Gemini (analysis proxy only)")
         typer.echo(f"candidates: {len(result.scout.session_map.candidates)}")
         typer.echo(f"session map: {result.scout.session_map_path}")
     typer.echo(f"session ID: {result.ingest.session_id}")
