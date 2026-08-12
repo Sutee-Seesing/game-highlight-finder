@@ -42,11 +42,11 @@ def test_analyze_missing_file_has_expected_error(tmp_path: Path) -> None:
     assert "Traceback" not in result.output
 
 
-def test_analyze_rejects_later_stage(tmp_path: Path) -> None:
+def test_analyze_reports_missing_source_for_m2_stop_boundary(tmp_path: Path) -> None:
     result = runner.invoke(
         app,
         ["analyze", str(tmp_path / "video.mp4"), "--stop-after", "proxy"],
     )
 
     assert result.exit_code == 2
-    assert "M1 can stop only after the ingest stage" in result.output
+    assert "[FAIL] source/input" in result.output

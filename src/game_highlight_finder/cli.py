@@ -1,4 +1,4 @@
-"""Typer command-line interface for M1."""
+"""Typer command-line interface for the local M2 pipeline."""
 
 from __future__ import annotations
 
@@ -20,12 +20,12 @@ from game_highlight_finder.config import (
 )
 from game_highlight_finder.doctor import run_doctor
 from game_highlight_finder.errors import AppError, ConfigError, ErrorCategory
-from game_highlight_finder.pipeline.ingest import ingest_source
+from game_highlight_finder.pipeline.runner import analyze_source
 from game_highlight_finder.status import get_session_status
 
 app = typer.Typer(
     name="highlight",
-    help="Local-first gameplay recording analysis foundation (M1: ingest only).",
+    help="Local-first gameplay recording analysis (M2: proxy and local signals).",
     no_args_is_help=True,
     pretty_exceptions_enable=False,
 )
@@ -104,31 +104,35 @@ def analyze(
     ctx: typer.Context,
     video: Annotated[Path, typer.Argument(help="Local source gameplay recording.")],
     stop_after: Annotated[
-        str, typer.Option("--stop-after", help="M1 supports only 'ingest'.")
-    ] = "ingest",
+        str,
+        typer.Option(
+            "--stop-after",
+            help="Stop after ingest, proxy, or local-signals (default: local-signals).",
+        ),
+    ] = "local-signals",
 ) -> None:
-    """Ingest and validate a source recording without copying or modifying it."""
-    if stop_after.lower() != "ingest":
-        _render_error(
-            AppError(
-                ErrorCategory.CONFIGURATION,
-                "M1 can stop only after the ingest stage.",
-                hint="Use --stop-after ingest.",
-            )
-        )
-        raise typer.Exit(2)
-    _execute(ctx, lambda options: _analyze(options, video))
+    """Run local ingest, proxy, and signal stages without modifying the source."""
+    _execute(ctx, lambda options: _analyze(options, video, stop_after))
 
 
-def _analyze(options: RuntimeOptions, video: Path) -> None:
-    result = ingest_source(video, _load(options).config)
-    outcome = "CACHE HIT" if result.cache_hit else "COMPLETED"
-    typer.echo(f"[PASS] ingest: {outcome}")
-    typer.echo(f"session ID: {result.session_id}")
-    typer.echo(f"source: {result.source.path}")
-    typer.echo(f"duration_ms: {result.source.duration_ms}")
-    typer.echo(f"sha256: {result.source.sha256}")
-    typer.echo(f"session directory: {result.session_dir}")
+def _analyze(options: RuntimeOptions, video: Path, stop_after: str) -> None:
+    result = analyze_source(video, _load(options).config, stop_after=stop_after)
+    ingest_outcome = "CACHE HIT" if result.ingest.cache_hit else "COMPLETED"
+    typer.echo(f"[PASS] ingest: {ingest_outcome}")
+    if result.proxy is not None:
+        proxy_outcome = "CACHE HIT" if result.proxy.cache_hit else "COMPLETED"
+        typer.echo(f"[PASS] proxy: {proxy_outcome}")
+    if result.local_signals is not None:
+        signal_outcome = "CACHE HIT" if result.local_signals.cache_hit else "COMPLETED"
+        typer.echo(f"[PASS] local_signals: {signal_outcome}")
+        if result.local_signals.signals.warnings:
+            for warning in result.local_signals.signals.warnings:
+                typer.echo(f"[WARN] local_signals: {warning}")
+    typer.echo(f"session ID: {result.ingest.session_id}")
+    typer.echo(f"source: {result.ingest.source.path}")
+    typer.echo(f"duration_ms: {result.ingest.source.duration_ms}")
+    typer.echo(f"sha256: {result.ingest.source.sha256}")
+    typer.echo(f"session directory: {result.ingest.session_dir}")
 
 
 @app.command()
@@ -136,7 +140,7 @@ def status(
     ctx: typer.Context,
     session_id: Annotated[str, typer.Argument(help="Stable session identifier.")],
 ) -> None:
-    """Show the current ingest and cache state for a session."""
+    """Show all implemented stage states, cache details, artifacts, and warnings."""
     _execute(ctx, lambda options: _status(options, session_id))
 
 
@@ -146,7 +150,10 @@ def _status(options: RuntimeOptions, session_id: str) -> None:
     typer.echo(f"source: {result.source.path}")
     typer.echo(f"duration: {result.duration_text} ({result.source.duration_ms} ms)")
     typer.echo(f"source hash: {result.source.sha256[:12]}")
-    typer.echo(f"ingest status: {result.ingest_status}")
+    for stage_name, stage_status in result.stages.items():
+        detail = result.stage_details.get(stage_name, "")
+        suffix = f"  {detail}" if detail else ""
+        typer.echo(f"{stage_name:14} {stage_status}{suffix}")
     typer.echo(f"cache state: {result.cache_state} ({result.cache_detail})")
     if result.source.warnings:
         typer.echo("warnings:")

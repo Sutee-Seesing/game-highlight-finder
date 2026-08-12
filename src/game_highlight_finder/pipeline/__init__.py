@@ -1,1 +1,1 @@
-"""M1 ingest pipeline."""
+"""Local ingest, proxy, and signal pipeline."""

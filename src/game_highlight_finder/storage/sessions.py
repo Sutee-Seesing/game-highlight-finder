@@ -29,6 +29,10 @@ from game_highlight_finder.storage.hashing import hash_file
 SESSION_ID_PATTERN = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}_unknown_[0-9a-f]{12}$")
 INGEST_CACHE_VERSION = 2
 INGEST_CONFIG_FINGERPRINT_VERSION = 1
+PROXY_CACHE_VERSION = 1
+PROXY_CONFIG_FINGERPRINT_VERSION = 1
+LOCAL_SIGNALS_CACHE_VERSION = 1
+LOCAL_SIGNALS_CONFIG_FINGERPRINT_VERSION = 1
 
 
 @dataclass(frozen=True)
@@ -40,6 +44,10 @@ class SessionPaths:
     manifest: Path
     logs: Path
     lock: Path
+    proxy_dir: Path
+    audio_dir: Path
+    signals_dir: Path
+    tmp_dir: Path
 
 
 def session_paths(data_dir: Path, session_id: str) -> SessionPaths:
@@ -54,6 +62,10 @@ def session_paths(data_dir: Path, session_id: str) -> SessionPaths:
         manifest=root / "manifest.json",
         logs=root / "logs",
         lock=root / ".session.lock",
+        proxy_dir=root / "proxy",
+        audio_dir=root / "audio",
+        signals_dir=root / "signals",
+        tmp_dir=root / "tmp",
     )
 
 
@@ -130,8 +142,99 @@ def compute_ingest_cache_key(source: SourceAsset, config: AppConfig) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
+def _identity_payload(identity: object | None) -> str:
+    if identity is None:
+        return "unresolved"
+    payload = getattr(identity, "cache_payload", None)
+    if callable(payload):
+        return json.dumps(payload(), sort_keys=True, separators=(",", ":"))
+    return str(identity)
+
+
+def proxy_config_fingerprint(
+    config: AppConfig,
+    *,
+    ffmpeg_identity: object | None = None,
+    ffprobe_identity: object | None = None,
+) -> str:
+    """Hash only settings and tool identities that can change proxy bytes/validation."""
+
+    payload = {
+        "fingerprint_version": PROXY_CONFIG_FINGERPRINT_VERSION,
+        "proxy": config.media.proxy.model_dump(mode="json"),
+        "audio": config.media.audio.model_dump(mode="json"),
+        "ffmpeg": _identity_payload(ffmpeg_identity),
+        "ffprobe": _identity_payload(ffprobe_identity),
+    }
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def local_signals_config_fingerprint(
+    config: AppConfig,
+    *,
+    ffmpeg_identity: object | None = None,
+    ffprobe_identity: object | None = None,
+) -> str:
+    """Hash only signal settings and the tools used to produce them."""
+
+    payload = {
+        "fingerprint_version": LOCAL_SIGNALS_CONFIG_FINGERPRINT_VERSION,
+        "silence": config.signals.silence.model_dump(mode="json"),
+        "loudness": config.signals.loudness.model_dump(mode="json"),
+        "ffmpeg": _identity_payload(ffmpeg_identity),
+        "ffprobe": _identity_payload(ffprobe_identity),
+    }
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def compute_proxy_cache_key(
+    source: SourceAsset,
+    config: AppConfig,
+    *,
+    ffmpeg_identity: object | None = None,
+    ffprobe_identity: object | None = None,
+) -> str:
+    payload = {
+        "cache_version": PROXY_CACHE_VERSION,
+        "producer_version": __version__,
+        "source_sha256": source.sha256,
+        "source_duration_ms": source.duration_ms,
+        "source_timestamp_origin_ms": source.timestamp_origin_ms,
+        "proxy_config_fingerprint": proxy_config_fingerprint(
+            config, ffmpeg_identity=ffmpeg_identity, ffprobe_identity=ffprobe_identity
+        ),
+    }
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def compute_local_signals_cache_key(
+    source: SourceAsset,
+    config: AppConfig,
+    *,
+    proxy_artifact_sha256: str,
+    ffmpeg_identity: object | None = None,
+    ffprobe_identity: object | None = None,
+) -> str:
+    payload = {
+        "cache_version": LOCAL_SIGNALS_CACHE_VERSION,
+        "producer_version": __version__,
+        "source_sha256": source.sha256,
+        "proxy_artifact_sha256": proxy_artifact_sha256,
+        "local_signals_config_fingerprint": local_signals_config_fingerprint(
+            config, ffmpeg_identity=ffmpeg_identity, ffprobe_identity=ffprobe_identity
+        ),
+    }
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
 def artifact_identity(path: Path, *, relative_to: Path | None = None) -> ArtifactIdentity:
     display = str(path.relative_to(relative_to)) if relative_to is not None else str(path)
+    if relative_to is not None:
+        display = display.replace("\\", "/")
     return ArtifactIdentity(path=display, sha256=hash_file(path), size_bytes=path.stat().st_size)
 
 
@@ -141,9 +244,23 @@ def completed_cache_is_valid(
     *,
     expected_cache_key: str,
 ) -> tuple[bool, str]:
-    stage = manifest.stages["ingest"]
+    return completed_stage_cache_is_valid(
+        paths, manifest, stage_name="ingest", expected_cache_key=expected_cache_key
+    )
+
+
+def completed_stage_cache_is_valid(
+    paths: SessionPaths,
+    manifest: Manifest,
+    *,
+    stage_name: str,
+    expected_cache_key: str,
+) -> tuple[bool, str]:
+    stage = manifest.stages.get(stage_name)
+    if stage is None:
+        return False, f"{stage_name} state is missing"
     if stage.status is not StageStatus.COMPLETED:
-        return False, f"ingest state is {stage.status}"
+        return False, f"{stage_name} state is {stage.status}"
     if stage.cache_key != expected_cache_key:
         return False, "cache key changed"
     for artifact in stage.output_artifacts:

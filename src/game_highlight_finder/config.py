@@ -29,10 +29,54 @@ class ToolsConfig(StrictModel):
     ffmpeg_path: Path | None = None
     ffprobe_path: Path | None = None
     probe_timeout_seconds: int = Field(default=120, ge=1, le=3600)
+    ffmpeg_timeout_seconds: int = Field(default=7200, ge=1, le=86_400)
+    termination_grace_seconds: float = Field(default=5.0, gt=0, le=60)
 
 
 class LoggingConfig(StrictModel):
     level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
+
+
+class ProxyConfig(StrictModel):
+    max_height: int = Field(default=480, ge=144, le=2160)
+    max_width: int = Field(default=854, ge=256, le=3840)
+    video_bitrate_kbps: int = Field(default=600, ge=100, le=20_000)
+    audio_bitrate_kbps: int = Field(default=64, ge=16, le=512)
+    fps: float = Field(default=30.0, gt=0, le=120)
+    video_codec: Literal["libx264"] = "libx264"
+    audio_codec: Literal["aac"] = "aac"
+    preset: Literal["ultrafast", "superfast", "veryfast", "faster", "fast", "medium"] = "veryfast"
+
+
+class AudioConfig(StrictModel):
+    sample_rate_hz: int = Field(default=16_000, ge=8_000, le=96_000)
+    channels: Literal[1] = 1
+    bitrate_kbps: int = Field(default=64, ge=16, le=512)
+    codec: Literal["aac"] = "aac"
+
+
+class MediaConfig(StrictModel):
+    proxy: ProxyConfig = ProxyConfig()
+    audio: AudioConfig = AudioConfig()
+
+
+class DiskConfig(StrictModel):
+    safety_factor: float = Field(default=1.5, ge=1.0, le=10.0)
+    minimum_free_bytes: int = Field(default=0, ge=0)
+
+
+class SilenceConfig(StrictModel):
+    noise_db: float = Field(default=-35.0, ge=-100, le=0)
+    min_duration_seconds: float = Field(default=0.25, gt=0, le=30)
+
+
+class LoudnessConfig(StrictModel):
+    interval_ms: int = Field(default=500, ge=100, le=10_000)
+
+
+class SignalsConfig(StrictModel):
+    silence: SilenceConfig = SilenceConfig()
+    loudness: LoudnessConfig = LoudnessConfig()
 
 
 class AppConfig(StrictModel):
@@ -40,6 +84,9 @@ class AppConfig(StrictModel):
     storage: StorageConfig = StorageConfig()
     tools: ToolsConfig = ToolsConfig()
     logging: LoggingConfig = LoggingConfig()
+    media: MediaConfig = MediaConfig()
+    disk: DiskConfig = DiskConfig()
+    signals: SignalsConfig = SignalsConfig()
 
 
 class ConfigResult(StrictModel):

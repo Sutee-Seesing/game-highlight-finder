@@ -1,4 +1,4 @@
-"""Validated M1 source, session, and manifest models."""
+"""Validated source, media-derivative, and stage-manifest models."""
 
 from __future__ import annotations
 
@@ -88,6 +88,84 @@ class SourceAsset(PersistedModel):
         return self
 
 
+class TimestampMapping(PersistedModel):
+    """The lossless integer-millisecond transform between source and proxy time."""
+
+    schema_version: Literal[1] = 1
+    mapping_version: str = Field(default="source-offset-v1", min_length=1, max_length=100)
+    source_start_ms: int
+    proxy_start_ms: int = Field(ge=0)
+    source_duration_ms: int = Field(gt=0)
+    proxy_duration_ms: int = Field(gt=0)
+
+    @model_validator(mode="after")
+    def durations_are_sane(self) -> TimestampMapping:
+        if self.proxy_start_ms + self.proxy_duration_ms <= self.proxy_start_ms:
+            raise ValueError("proxy duration must be positive")
+        if self.source_duration_ms <= 0:
+            raise ValueError("source duration must be positive")
+        return self
+
+    def source_to_proxy_ms(self, source_ms: int) -> int:
+        return source_ms - self.source_start_ms + self.proxy_start_ms
+
+    def proxy_to_source_ms(self, proxy_ms: int) -> int:
+        return proxy_ms - self.proxy_start_ms + self.source_start_ms
+
+
+class ProxyMetadata(PersistedModel):
+    """Validated metadata for the analysis-only proxy and its source transform."""
+
+    schema_version: Literal[1] = 1
+    created_at: datetime
+    producer_version: str
+    proxy_path: str
+    duration_ms: int = Field(gt=0)
+    width: int = Field(gt=0)
+    height: int = Field(gt=0)
+    video_codec: str = Field(min_length=1, max_length=100)
+    audio_present: bool
+    audio_codec: str | None = Field(default=None, max_length=100)
+    audio_sample_rate_hz: int | None = Field(default=None, gt=0)
+    audio_channels: int | None = Field(default=None, gt=0)
+    timestamp_mapping: TimestampMapping
+    warnings: list[str] = Field(default_factory=list, max_length=100)
+    tool_identities: dict[str, str] = Field(default_factory=dict, max_length=20)
+
+
+class TimeInterval(PersistedModel):
+    start_ms: int = Field(ge=0)
+    end_ms: int = Field(gt=0)
+
+    @model_validator(mode="after")
+    def ordered(self) -> TimeInterval:
+        if self.end_ms <= self.start_ms:
+            raise ValueError("interval end must be greater than start")
+        return self
+
+
+class AudioActivityInterval(TimeInterval):
+    mean_db: float | None = Field(default=None, ge=-200, le=20)
+    peak_db: float | None = Field(default=None, ge=-200, le=20)
+    active: bool = True
+
+
+class LocalSignalsArtifact(PersistedModel):
+    """Versioned, bounded, source-relative local activity signals."""
+
+    schema_version: Literal[1] = 1
+    created_at: datetime
+    producer_version: str
+    source_duration_ms: int = Field(gt=0)
+    audio_present: bool
+    silence_intervals: list[TimeInterval] = Field(default_factory=list, max_length=20_000)
+    audio_activity: list[AudioActivityInterval] = Field(default_factory=list, max_length=20_000)
+    scene_activity: list[TimeInterval] = Field(default_factory=list, max_length=20_000)
+    overall_loudness_lufs: float | None = Field(default=None, ge=-200, le=20)
+    warnings: list[str] = Field(default_factory=list, max_length=100)
+    tool_identities: dict[str, str] = Field(default_factory=dict, max_length=20)
+
+
 class StageStatus(StrEnum):
     PENDING = "PENDING"
     RUNNING = "RUNNING"
@@ -120,7 +198,8 @@ class AttemptRecord(PersistedModel):
 
 
 class StageRecord(PersistedModel):
-    stage: Literal["ingest"] = "ingest"
+    # Keep this a string so manifests written by future milestones remain readable.
+    stage: str = Field(default="ingest", min_length=1, max_length=100)
     status: StageStatus = StageStatus.PENDING
     cache_key: str | None = None
     started_at: datetime | None = None
@@ -128,6 +207,7 @@ class StageRecord(PersistedModel):
     attempts: list[AttemptRecord] = Field(default_factory=list)
     input_artifacts: list[ArtifactIdentity] = Field(default_factory=list)
     output_artifacts: list[ArtifactIdentity] = Field(default_factory=list)
+    item_states: dict[str, str] = Field(default_factory=dict, max_length=10_000)
     error: ErrorRecord | None = None
     reason: str | None = None
 
@@ -138,7 +218,8 @@ class Manifest(PersistedModel):
     updated_at: datetime
     producer_version: str
     session_id: str
-    stages: dict[Literal["ingest"], StageRecord]
+    # M1 manifests contain only ``ingest``. M2 adds stages additively when loaded.
+    stages: dict[str, StageRecord]
 
 
 class SessionRecord(PersistedModel):

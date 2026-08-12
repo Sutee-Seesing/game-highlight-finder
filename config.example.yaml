@@ -8,6 +8,35 @@ tools:
   ffmpeg_path: null
   ffprobe_path: null
   probe_timeout_seconds: 120
+  ffmpeg_timeout_seconds: 7200
+  termination_grace_seconds: 5
 
 logging:
   level: INFO
+
+media:
+  proxy:
+    max_height: 480
+    max_width: 854
+    video_bitrate_kbps: 600
+    audio_bitrate_kbps: 64
+    fps: 30
+    video_codec: libx264
+    audio_codec: aac
+    preset: veryfast
+  audio:
+    sample_rate_hz: 16000
+    channels: 1
+    bitrate_kbps: 64
+    codec: aac
+
+disk:
+  safety_factor: 1.5
+  minimum_free_bytes: 0
+
+signals:
+  silence:
+    noise_db: -35
+    min_duration_seconds: 0.25
+  loudness:
+    interval_ms: 500

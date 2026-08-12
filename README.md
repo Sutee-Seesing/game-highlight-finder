@@ -1,16 +1,16 @@
 # Game Highlight Finder
 
-Game Highlight Finder is a local-first CLI for turning long gameplay recordings into a reviewable highlight library. The repository currently implements **Milestone 1: Foundation and Ingest** only.
+Game Highlight Finder is a local-first CLI for turning long gameplay recordings into a reviewable highlight library. The repository currently implements **Milestone 2: Proxy and Local Signals Foundation**.
 
-M1 validates a source recording, reads metadata with ffprobe, computes a streaming SHA-256, records validated source/session artifacts, and resumes from a verified cache. It does not copy or modify the source video.
+M2 validates a source recording, reads metadata with ffprobe, computes a streaming SHA-256, creates a timestamp-mapped analysis proxy and audio derivative with FFmpeg, and writes bounded local silence/loudness signals. The original source is never copied or modified.
 
-Not implemented yet: proxy generation, local signals/transcription, AI integration, cost accounting, highlight detection, candidate extraction, reports, publishing, or a GUI.
+Not implemented yet: transcription, AI integration, cost accounting, highlight detection, candidate extraction, reports, publishing, or a GUI.
 
 ## Windows setup
 
 Requirements:
 
-- Windows 11 (Windows is the supported M1 platform)
+- Windows 11 (Windows is the supported M2 platform)
 - [uv](https://docs.astral.sh/uv/) for Python and dependency management
 - Python 3.12 managed by uv
 - FFmpeg and ffprobe
@@ -37,7 +37,7 @@ Precedence is:
 safe defaults < config file < approved GHF_* environment overrides < CLI overrides
 ```
 
-Approved M1 environment variables are listed in `.env.example`. The application deliberately does not auto-load `.env` in M1; use your shell or secret manager to load it.
+Approved environment variables are listed in `.env.example`. The application deliberately does not auto-load `.env`; use your shell or secret manager to load it.
 
 Unknown YAML keys fail validation.
 
@@ -47,7 +47,10 @@ Unknown YAML keys fail validation.
 uv run highlight --help
 uv run highlight doctor
 uv run highlight config check
+uv run highlight analyze "D:\Recordings\game.mp4"
 uv run highlight analyze "D:\Recordings\game.mp4" --stop-after ingest
+uv run highlight analyze "D:\Recordings\game.mp4" --stop-after proxy
+uv run highlight analyze "D:\Recordings\game.mp4" --stop-after local-signals
 uv run highlight status <session-id>
 ```
 
@@ -67,10 +70,21 @@ data/sessions/<session-id>/
   config.resolved.json
   environment.json
   manifest.json
+  proxy/
+    analysis_proxy.mp4
+    metadata.json
+  audio/
+    analysis_audio.m4a       # omitted when the source has no audio
+  signals/
+    activity.json
   logs/
 ```
 
-The original recording remains at its original path and is never copied into the session directory.
+The proxy is an analysis derivative (maximum 854x480 by default, aspect-ratio preserving, H.264/AAC mono), not a publishing clip. `metadata.json` stores the integer-millisecond source/proxy timestamp transform. FFmpeg writes to a temporary run directory, re-probes output, hashes it, and only then commits it. A conservative disk-space check runs before encoding.
+
+M2 is entirely local: it makes no cloud uploads, paid requests, or AI calls. A source with no audio still completes proxy and local-signal stages with a warning and empty audio signals.
+
+Completed stages are cache-verified and resumable. Changing proxy settings invalidates proxy and dependent local signals while keeping ingest cached; changing logging does not invalidate any semantic stage.
 
 ## Development and tests
 
@@ -84,9 +98,9 @@ uv run pytest
 
 Integration tests generate tiny videos with the locally resolved FFmpeg. No large binary fixtures are committed.
 
-## Known M1 limitations
+## Known M2 limitations
 
-- Only the `ingest` stage exists; `--stop-after` accepts only `ingest`.
+- Local signals are intentionally lightweight: silence intervals, bounded RMS/loudness activity buckets, and an integrated loudness summary. There is no transcription or computer-vision detector yet.
 - The game profile is `unknown`; game-specific identification starts in a later milestone.
 - Moving a source after ingest is reported as missing; a relink command is future work.
 - Cache identity uses a fast path/size/mtime check and a stored authoritative SHA-256. A changed source creates a new session.

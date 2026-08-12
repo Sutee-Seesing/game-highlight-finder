@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "game-highlight-finder"
-version = "0.1.0"
-description = "Local-first gameplay recording ingest foundation"
+version = "0.2.0"
+description = "Local-first gameplay recording proxy and signals foundation"
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
 license = { text = "Proprietary" }

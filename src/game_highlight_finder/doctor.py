@@ -1,4 +1,4 @@
-"""Local readiness checks for M1."""
+"""Local readiness checks for the M2 media pipeline."""
 
 from __future__ import annotations
 

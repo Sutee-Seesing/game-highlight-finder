@@ -1,6 +1,6 @@
 # Game Highlight Finder — Start Here
 
-Status: Milestone 1 foundation and ingest implemented
+Status: Milestone 2 proxy and local signals foundation implemented
 Plan date: 2026-08-11  
 Working project path: `C:\Data\Works\Personal_Projects\Active_Products\game-highlight-finder`
 
@@ -63,7 +63,20 @@ highlight status <session-id>
 highlight config check
 ```
 
-This slice proves Windows/Unicode paths, dependency discovery, immutable source handling, stable session IDs, validated metadata, hashing, atomic writes, locking, cache hits, interrupted-run recovery, and status reporting. M2 remains approval-gated; no proxy, local-signal, AI, cost-ledger, or candidate logic is present.
+This slice proves Windows/Unicode paths, dependency discovery, immutable source handling, stable session IDs, validated metadata, hashing, atomic writes, locking, cache hits, interrupted-run recovery, and status reporting.
+
+## Implemented M2 local foundation
+
+The current CLI extends the accepted M1 ingest with local-only proxy and signal stages:
+
+```text
+highlight analyze <video> --stop-after ingest
+highlight analyze <video> --stop-after proxy
+highlight analyze <video> --stop-after local-signals
+highlight status <session-id>
+```
+
+M2 generates an aspect-ratio-preserving analysis proxy, optional mono analysis audio, a versioned source/proxy timestamp mapping, and bounded silence/RMS/loudness metadata. Outputs are re-probed, hashed, atomically committed, and cached by stage-specific configuration plus external-tool identity. Existing M1 manifests are upgraded additively when an M2 command opens them. No cloud upload, AI provider, transcription, candidate detection, or cost-ledger code is part of M2.
 
 ## Documentation map
 
@@ -76,7 +89,7 @@ This slice proves Windows/Unicode paths, dependency discovery, immutable source 
 
 ## Approval gate
 
-M2 and later work must not begin until the owner approves it, especially these decisions:
+M3 and later work remain approval-gated, especially these decisions:
 
 - Whether cloud-uploaded proxy data is acceptable under the chosen Gemini account/tier and data-use terms.
 - Initial Scout model alias and validated price entry at implementation time.
