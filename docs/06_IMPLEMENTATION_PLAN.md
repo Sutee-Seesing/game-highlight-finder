@@ -155,4 +155,4 @@ V1 is done only after a representative 1–4 hour recording completes through re
 
 ## 7. Exact next action after approval
 
-Create M1 only. Install/choose Python 3.12 and FFmpeg, then scaffold the repository and implement `doctor`, validated configuration, source ingest, atomic manifest, and tests. Use a locally generated 10–30 second fixture. Stop at `--stop-after ingest` until the foundation is accepted; do not make an AI call in M1.
+M1 is implemented and accepted. The next milestone is **M2 — Proxy and local signals foundation**. M2 remains approval-gated and must not begin automatically as part of this maintenance task. Until it is approved, keep the current CLI limited to reliable source ingest and do not add proxy generation, local signals, transcription, or AI calls.

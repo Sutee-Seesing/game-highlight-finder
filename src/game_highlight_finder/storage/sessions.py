@@ -13,7 +13,7 @@ from pathlib import Path
 from pydantic import ValidationError as PydanticValidationError
 
 from game_highlight_finder import __version__
-from game_highlight_finder.config import AppConfig, config_hash
+from game_highlight_finder.config import AppConfig
 from game_highlight_finder.domain.models import (
     ArtifactIdentity,
     Manifest,
@@ -27,7 +27,8 @@ from game_highlight_finder.storage.atomic import atomic_write_json, read_json
 from game_highlight_finder.storage.hashing import hash_file
 
 SESSION_ID_PATTERN = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}_unknown_[0-9a-f]{12}$")
-INGEST_CACHE_VERSION = 1
+INGEST_CACHE_VERSION = 2
+INGEST_CONFIG_FINGERPRINT_VERSION = 1
 
 
 @dataclass(frozen=True)
@@ -95,6 +96,27 @@ def write_manifest(path: Path, manifest: Manifest) -> None:
     atomic_write_json(path, model_json(manifest))
 
 
+def ingest_config_fingerprint(config: AppConfig) -> str:
+    """Hash only configuration that can change ingest's external probe tool.
+
+    M1 has no semantic ingest tuning knobs. The configured ffprobe executable is
+    included because swapping it can change parsed metadata. Storage location,
+    probe timeout, logging, and all future non-ingest sections are intentionally
+    excluded; add a field here only when it materially changes ingest output or
+    validity.
+    """
+    configured_path = config.tools.ffprobe_path
+    probe_identity = (
+        str(configured_path.expanduser().resolve()) if configured_path is not None else "PATH"
+    )
+    payload = {
+        "fingerprint_version": INGEST_CONFIG_FINGERPRINT_VERSION,
+        "ffprobe_path": probe_identity,
+    }
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
 def compute_ingest_cache_key(source: SourceAsset, config: AppConfig) -> str:
     payload = {
         "cache_version": INGEST_CACHE_VERSION,
@@ -102,7 +124,7 @@ def compute_ingest_cache_key(source: SourceAsset, config: AppConfig) -> str:
         "source_sha256": source.sha256,
         "source_size_bytes": source.size_bytes,
         "source_mtime_ns": source.mtime_ns,
-        "config_hash": config_hash(config),
+        "ingest_config_fingerprint": ingest_config_fingerprint(config),
     }
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()

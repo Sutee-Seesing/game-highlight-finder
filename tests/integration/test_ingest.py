@@ -82,6 +82,35 @@ def test_content_modification_invalidates_cache_and_creates_new_identity(
     assert second.session_id != first.session_id
 
 
+def test_unrelated_logging_change_keeps_ingest_cache_hit(
+    tiny_video: Path,
+    ffmpeg_path: Path,
+    ffprobe_path: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    data_dir = tmp_path / "library"
+    config = _config(data_dir, ffmpeg_path, ffprobe_path)
+    first = ingest_source(tiny_video, config)
+    changed_logging = config.model_copy(
+        update={"logging": config.logging.model_copy(update={"level": "DEBUG"})}
+    )
+
+    def fail_if_expensive_work_runs(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("unrelated config changes must use the completed ingest cache")
+
+    monkeypatch.setattr(
+        "game_highlight_finder.pipeline.ingest.run_ffprobe", fail_if_expensive_work_runs
+    )
+    monkeypatch.setattr(
+        "game_highlight_finder.pipeline.ingest.hash_file", fail_if_expensive_work_runs
+    )
+    second = ingest_source(tiny_video, changed_logging)
+
+    assert first.session_id == second.session_id
+    assert second.cache_hit is True
+
+
 def test_interrupted_running_ingest_is_recovered_and_retried(
     tiny_video: Path,
     ffmpeg_path: Path,
