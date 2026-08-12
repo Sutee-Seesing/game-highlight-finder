@@ -285,13 +285,22 @@ def canonicalize_scout_response(
 
     fragments: list[tuple[ScoutCandidateFragment, str | None, int]] = []
     for match_index, match_fragment in enumerate(response.matches):
-        match_id = match_indexes[match_index]
-        fragments.extend(
-            (candidate, match_id, match_index) for candidate in match_fragment.candidates
-        )
+        containing_match_id = match_indexes[match_index]
+        for candidate_fragment in match_fragment.candidates:
+            resolved_match_id = _candidate_match_id(
+                candidate_fragment,
+                provider_match_ids,
+                match_indexes,
+                containing_match_id=containing_match_id,
+            )
+            fragments.append((candidate_fragment, resolved_match_id, match_index))
     fragments.extend(
-        (candidate, _candidate_match_id(candidate, provider_match_ids, match_indexes), -1)
-        for candidate in response.candidates
+        (
+            candidate_fragment,
+            _candidate_match_id(candidate_fragment, provider_match_ids, match_indexes),
+            -1,
+        )
+        for candidate_fragment in response.candidates
     )
 
     canonical_candidates: list[Candidate] = []
@@ -353,7 +362,7 @@ def canonicalize_scout_response(
         if provider_candidate_id:
             candidate_actions.append("ignored provider-supplied candidate ID")
         try:
-            candidate = Candidate(
+            canonical_candidate = Candidate(
                 candidate_id=candidate_id,
                 match_id=candidate_match_id,
                 category=category,
@@ -380,13 +389,16 @@ def canonicalize_scout_response(
                 f"Candidate fragment {candidate_number} failed canonical validation.",
                 hint=str(exc),
             ) from exc
-        canonical_candidates.append(candidate)
+        canonical_candidates.append(canonical_candidate)
 
     match_by_id = {match.match_id: match for match in canonical_matches}
-    for candidate in canonical_candidates:
-        if candidate.match_id in match_by_id:
-            match = match_by_id[candidate.match_id]
-            match.candidate_ids.append(candidate.candidate_id)
+    for canonical_candidate in canonical_candidates:
+        candidate_match_id = canonical_candidate.match_id
+        if candidate_match_id is None:
+            continue
+        matched_match = match_by_id.get(candidate_match_id)
+        if matched_match is not None:
+            matched_match.candidate_ids.append(canonical_candidate.candidate_id)
 
     try:
         session_map = SessionMap(
@@ -399,17 +411,7 @@ def canonicalize_scout_response(
             game_profile=game_profile,
             matches=canonical_matches,
             candidates=canonical_candidates,
-            best_of_candidate_ids=[
-                candidate.candidate_id
-                for candidate in sorted(
-                    canonical_candidates,
-                    key=lambda candidate: (
-                        -candidate.score,
-                        -candidate.confidence,
-                        candidate.candidate_id,
-                    ),
-                )[:100]
-            ],
+            best_of_candidate_ids=[],
             statistics={
                 "match_count": len(canonical_matches),
                 "candidate_count": len(canonical_candidates),
@@ -430,12 +432,33 @@ def _candidate_match_id(
     candidate: ScoutCandidateFragment,
     provider_match_ids: Mapping[str, str],
     match_indexes: Mapping[int, str],
+    *,
+    containing_match_id: str | None = None,
 ) -> str | None:
+    resolved_by_index: str | None = None
+    resolved_by_id: str | None = None
     if candidate.match_index is not None:
-        return match_indexes.get(candidate.match_index)
+        resolved_by_index = match_indexes.get(candidate.match_index)
+        if resolved_by_index is None:
+            raise ValidationError(
+                f"Candidate references unknown match index {candidate.match_index}"
+            )
     if candidate.match_id is not None:
-        return provider_match_ids.get(candidate.match_id)
-    return None
+        resolved_by_id = provider_match_ids.get(candidate.match_id)
+        if resolved_by_id is None:
+            raise ValidationError(
+                f"Candidate references unknown provider match ID {candidate.match_id!r}"
+            )
+    if (
+        resolved_by_index is not None
+        and resolved_by_id is not None
+        and resolved_by_index != resolved_by_id
+    ):
+        raise ValidationError("Candidate match_id and match_index resolve to different matches")
+    resolved = resolved_by_index or resolved_by_id
+    if containing_match_id is not None and resolved is not None and resolved != containing_match_id:
+        raise ValidationError("Candidate match reference conflicts with its containing match")
+    return containing_match_id or resolved
 
 
 def _optional_timestamp(

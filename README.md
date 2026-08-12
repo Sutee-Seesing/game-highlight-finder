@@ -114,6 +114,7 @@ Integration tests generate tiny videos with the locally resolved FFmpeg. No larg
 - Provider IDs are advisory. Canonical `match_...` and `cand_...` IDs are locally derived from semantic inputs and are stable across identical runs.
 - Generic and bounded game-profile categories are validated; arbitrary unknown strings are rejected.
 - Match hierarchy supports zero candidates, one candidate, or many candidates, including an unknown/unsegmented session.
+- M3 canonicalization stores every valid candidate without selecting a best-of list; `best_of_candidate_ids` remains empty for later presentation stages.
 
 ## Known M3 limitations
 

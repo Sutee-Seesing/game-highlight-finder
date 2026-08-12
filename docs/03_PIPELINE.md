@@ -39,6 +39,8 @@ canonical `scout/canonical/scout_result.json` plus `session_map.json`. A malform
 response fails the stage while retaining the raw bytes for parser-only recovery.
 The stage cache includes only source/proxy/signal identities and Scout fixture/
 schema inputs; logging or storage settings do not invalidate M3.
+M3 canonicalization does not rank candidates or populate `best_of_candidate_ids`;
+presentation ranking remains a later stage.
 
 ## 3. Stage state machine
 

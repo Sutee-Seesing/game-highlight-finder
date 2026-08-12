@@ -182,6 +182,8 @@ The implemented M3 runtime models are `Session`, `Match`, `Candidate`, `Evidence
 and `confidence` (`0..1`) values, compact bounded evidence, and source-relative
 integer-millisecond event/clip intervals. `Match.candidate_ids` preserves the
 hierarchy while `SessionMap.candidates` remains a complete, quota-free library.
+M3 canonicalization leaves `best_of_candidate_ids` empty; later presentation
+stages may populate that reference list without changing canonical storage.
 Raw Scout/provider IDs are never authoritative; canonical IDs use deterministic
 semantic hashes. The generic taxonomy plus bounded `GAME_<PROFILE>_<CATEGORY>`
 extension form rejects arbitrary unknown categories without requiring a global
@@ -267,7 +269,9 @@ V1 should favor under-merging over creating long, incoherent clips. Manual futur
 
 Ranking is deterministic and explainable. Initial ranking can combine normalized Scout score, confidence, Reviewer score when present, standalone clarity, and penalties for duplication or excessive duration. Missing Reviewer results must not become zero; use a Scout-only formula and label the ranking basis.
 
-Store ranking configuration/version and component scores. `best_of_candidate_ids` has a configurable maximum for presentation, while the library retains all qualifying candidates.
+Store ranking configuration/version and component scores. `best_of_candidate_ids`
+is reserved for later presentation ranking; M3 leaves it empty while the library
+retains all qualifying candidates.
 
 ## 8. Schema evolution
 

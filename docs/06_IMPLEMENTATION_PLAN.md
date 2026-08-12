@@ -37,7 +37,7 @@ Implemented on 2026-08-12 with CPU-safe FFmpeg command adapters, machine-readabl
 - Drive the pipeline end-to-end with malformed and golden fake responses before network access.
 - Exit: all required malformed JSON/timestamp/overlap tests pass and a fake session map is deterministic.
 
-Implemented on 2026-08-12 as the local-only canonical contract slice. The runtime now has bounded Pydantic Match/Candidate/Evidence/SessionMap models, controlled generic and game-profile categories, distinct score/confidence validation, half-open integer-millisecond normalization, deterministic local IDs, immutable raw Fake Scout artifacts, canonical session-map persistence, M3 cache identity, additive manifest migration, CLI `--stop-after scout`, and hostile-response validation. The complete automated suite is **94 passed / 0 failed / 0 skipped**.
+Implemented on 2026-08-12 as the local-only canonical contract slice. The runtime now has bounded Pydantic Match/Candidate/Evidence/SessionMap models, controlled generic and game-profile categories, distinct score/confidence validation, half-open integer-millisecond normalization, deterministic local IDs, immutable raw Fake Scout artifacts, canonical session-map persistence, M3 cache identity, additive manifest migration, CLI `--stop-after scout`, and hostile-response validation. The complete automated suite is **106 passed / 0 failed / 0 skipped**.
 
 ### M4 — Cost gate and provider contract (approval-gated; not started)
 

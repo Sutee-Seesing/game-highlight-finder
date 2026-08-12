@@ -167,6 +167,99 @@ def test_canonicalization_replaces_provider_ids_and_preserves_zero_match() -> No
     assert "ignored provider-supplied candidate ID" in result.candidates[0].normalization_actions
 
 
+def _top_level_candidate_payload() -> tuple[dict[str, object], dict[str, Any]]:
+    payload = _response(duration_ms=10_000)
+    matches = cast(list[Any], payload["matches"])
+    first_match = cast(dict[str, Any], matches[0])
+    candidates = cast(list[Any], first_match["candidates"])
+    candidate = cast(dict[str, Any], candidates[0])
+    first_match["candidates"] = []
+    payload["candidates"] = [candidate]
+    return payload, candidate
+
+
+def _two_match_payload() -> tuple[dict[str, object], dict[str, Any]]:
+    payload, candidate = _top_level_candidate_payload()
+    matches = cast(list[Any], payload["matches"])
+    first_match = cast(dict[str, Any], matches[0])
+    first_match["end_ms"] = 5_000
+    first_match["provider_id"] = "provider-match-a"
+    matches.append(
+        {
+            "start_ms": 5_000,
+            "end_ms": 10_000,
+            "confidence": 0.7,
+            "provider_id": "provider-match-b",
+            "ordinal": 1,
+            "candidates": [],
+        }
+    )
+    return payload, candidate
+
+
+def test_unknown_match_index_fails_closed() -> None:
+    payload, candidate = _top_level_candidate_payload()
+    candidate["match_index"] = 123
+    with pytest.raises(ValidationError, match="unknown match index 123"):
+        canonicalize_scout_response(
+            payload,
+            session_id="session",
+            source_id="src_" + "a" * 16,
+            source_duration_ms=10_000,
+        )
+
+
+def test_unknown_provider_match_id_fails_closed() -> None:
+    payload, candidate = _top_level_candidate_payload()
+    candidate["match_id"] = "missing-provider-round"
+    with pytest.raises(ValidationError, match="missing-provider-round"):
+        canonicalize_scout_response(
+            payload,
+            session_id="session",
+            source_id="src_" + "a" * 16,
+            source_duration_ms=10_000,
+        )
+
+
+def test_candidate_without_match_reference_remains_unsegmented() -> None:
+    payload, candidate = _top_level_candidate_payload()
+    result = canonicalize_scout_response(
+        payload,
+        session_id="session",
+        source_id="src_" + "a" * 16,
+        source_duration_ms=10_000,
+    )
+    assert candidate.get("match_index") is None
+    assert candidate.get("match_id") is None
+    assert result.candidates[0].match_id is None
+
+
+def test_conflicting_match_references_fail_closed() -> None:
+    payload, candidate = _two_match_payload()
+    candidate["match_index"] = 0
+    candidate["match_id"] = "provider-match-b"
+    with pytest.raises(ValidationError, match="resolve to different matches"):
+        canonicalize_scout_response(
+            payload,
+            session_id="session",
+            source_id="src_" + "a" * 16,
+            source_duration_ms=10_000,
+        )
+
+
+def test_matching_dual_match_references_are_accepted() -> None:
+    payload, candidate = _two_match_payload()
+    candidate["match_index"] = 0
+    candidate["match_id"] = "provider-match-a"
+    result = canonicalize_scout_response(
+        payload,
+        session_id="session",
+        source_id="src_" + "a" * 16,
+        source_duration_ms=10_000,
+    )
+    assert result.candidates[0].match_id == result.matches[0].match_id
+
+
 def test_window_relative_timestamps_are_normalized_once() -> None:
     payload = _response(duration_ms=10_000)
     payload["time_basis"] = "window_relative"
@@ -289,6 +382,67 @@ def test_canonical_storage_does_not_apply_a_product_candidate_quota() -> None:
         source_duration_ms=20_000,
     )
     assert len(result.candidates) == 100
+    assert result.best_of_candidate_ids == []
+
+
+def _session_map_with_candidate(**candidate_overrides: int) -> SessionMap:
+    candidate_id = "cand_" + "a" * 16
+    match_id = "match_" + "b" * 16
+    candidate_values: dict[str, object] = {
+        "candidate_id": candidate_id,
+        "match_id": match_id,
+        "category": "OTHER",
+        "event_start_ms": 2_000,
+        "event_end_ms": 3_000,
+        "score": 5.0,
+        "confidence": 0.5,
+        "reason": "A valid candidate.",
+    }
+    candidate_values.update(candidate_overrides)
+    candidate = Candidate(**candidate_values)  # type: ignore[arg-type]
+    match = Match(
+        match_id=match_id,
+        start_ms=1_000,
+        end_ms=5_000,
+        confidence=0.5,
+        candidate_ids=[candidate_id],
+    )
+    return SessionMap(
+        created_at=datetime(2026, 8, 12, tzinfo=UTC),
+        producer_version="0.3.0",
+        canonicalization_version="m3-canonical-v1",
+        session_id="session",
+        source_id="src_" + "a" * 16,
+        duration_ms=6_000,
+        matches=[match],
+        candidates=[candidate],
+    )
+
+
+@pytest.mark.parametrize(
+    "candidate_overrides",
+    [
+        {"event_start_ms": 900, "event_end_ms": 2_000},
+        {"event_start_ms": 2_000, "event_end_ms": 5_100},
+        {"setup_start_ms": 900},
+        {"payoff_end_ms": 5_100},
+        {"clip_start_ms": 900, "clip_end_ms": 3_000},
+        {"clip_start_ms": 2_000, "clip_end_ms": 5_100},
+    ],
+)
+def test_persisted_session_map_rejects_candidate_context_outside_match(
+    candidate_overrides: dict[str, int],
+) -> None:
+    with pytest.raises(PydanticValidationError, match="candidate interval/context"):
+        _session_map_with_candidate(**candidate_overrides)
+
+
+def test_persisted_session_map_accepts_candidate_at_exact_match_boundaries() -> None:
+    session_map = _session_map_with_candidate(event_start_ms=1_000, event_end_ms=5_000)
+    assert (session_map.candidates[0].event_start_ms, session_map.candidates[0].event_end_ms) == (
+        1_000,
+        5_000,
+    )
 
 
 def test_duplicate_provider_ids_are_rejected_at_the_trust_boundary() -> None:

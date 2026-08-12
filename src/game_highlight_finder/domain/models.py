@@ -677,6 +677,28 @@ class SessionMap(PersistedModel):
                 match = next(item for item in self.matches if item.match_id == candidate.match_id)
                 if candidate.candidate_id not in match.candidate_ids:
                     raise ValueError("candidate is not listed by its match")
+                effective_start = min(
+                    value
+                    for value in (
+                        candidate.event_start_ms,
+                        candidate.setup_start_ms,
+                        candidate.clip_start_ms,
+                    )
+                    if value is not None
+                )
+                effective_end = max(
+                    value
+                    for value in (
+                        candidate.event_end_ms,
+                        candidate.payoff_end_ms,
+                        candidate.clip_end_ms,
+                    )
+                    if value is not None
+                )
+                if effective_start < match.start_ms or effective_end > match.end_ms:
+                    raise ValueError(
+                        "candidate interval/context must fit within its assigned match"
+                    )
         if not set(self.best_of_candidate_ids).issubset(candidate_ids):
             raise ValueError("best-of list references an unknown candidate")
         if len(set(self.best_of_candidate_ids)) != len(self.best_of_candidate_ids):
