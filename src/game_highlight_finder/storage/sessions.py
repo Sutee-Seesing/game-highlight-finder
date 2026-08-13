@@ -59,6 +59,10 @@ class SessionPaths:
     candidates_dir: Path
     thumbnails_dir: Path
     extraction_manifest: Path
+    reports_dir: Path
+    ranking_path: Path
+    report_path: Path
+    report_meta_path: Path
 
 
 def session_paths(data_dir: Path, session_id: str) -> SessionPaths:
@@ -86,6 +90,10 @@ def session_paths(data_dir: Path, session_id: str) -> SessionPaths:
         candidates_dir=root / "candidates",
         thumbnails_dir=root / "thumbnails",
         extraction_manifest=root / "extraction_manifest.json",
+        reports_dir=root / "reports",
+        ranking_path=root / "reports" / "ranking.json",
+        report_path=root / "reports" / "index.html",
+        report_meta_path=root / "reports" / "report.meta.json",
     )
 
 

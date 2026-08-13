@@ -35,6 +35,8 @@ def new_manifest(session_id: str, *, now: datetime | None = None) -> Manifest:
             "scout": StageRecord(stage="scout"),
             "reconcile": StageRecord(stage="reconcile"),
             "extract": StageRecord(stage="extract"),
+            "rank": StageRecord(stage="rank"),
+            "report": StageRecord(stage="report"),
         },
     )
 
@@ -42,6 +44,7 @@ def new_manifest(session_id: str, *, now: datetime | None = None) -> Manifest:
 M2_STAGE_NAMES = ("proxy", "local_signals")
 M3_STAGE_NAMES = ("scout",)
 M6_STAGE_NAMES = ("reconcile", "extract")
+M7_STAGE_NAMES = ("rank", "report")
 
 
 def ensure_m2_stages(manifest: Manifest, *, now: datetime | None = None) -> bool:
@@ -77,6 +80,51 @@ def ensure_m6_stages(manifest: Manifest, *, now: datetime | None = None) -> bool
     for name in M6_STAGE_NAMES:
         if name not in manifest.stages:
             manifest.stages[name] = StageRecord(stage=name)
+            changed = True
+    if changed:
+        manifest.updated_at = now or utc_now()
+    return changed
+
+
+def ensure_m7_stages(manifest: Manifest, *, now: datetime | None = None) -> bool:
+    """Add local presentation records to any accepted M1-M6 manifest."""
+
+    changed = ensure_m6_stages(manifest, now=now)
+    for name in M7_STAGE_NAMES:
+        if name not in manifest.stages:
+            manifest.stages[name] = StageRecord(stage=name)
+            changed = True
+    if changed:
+        manifest.updated_at = now or utc_now()
+    return changed
+
+
+STAGE_DEPENDENCIES = (
+    "ingest",
+    "proxy",
+    "local_signals",
+    "scout",
+    "reconcile",
+    "extract",
+    "rank",
+    "report",
+)
+
+
+def invalidate_from(manifest: Manifest, stage_name: str, *, now: datetime | None = None) -> bool:
+    """Mark a stage and downstream stages stale without deleting artifacts."""
+
+    normalized = stage_name.strip().lower().replace("-", "_")
+    if normalized == "windows":
+        normalized = "scout"
+    if normalized not in STAGE_DEPENDENCIES:
+        raise ValidationError(f"Unknown force stage: {stage_name}")
+    changed = False
+    for name in STAGE_DEPENDENCIES[STAGE_DEPENDENCIES.index(normalized) :]:
+        stage = manifest.stages.get(name)
+        if stage is not None and stage.status in {StageStatus.COMPLETED, StageStatus.RUNNING}:
+            stage.status = StageStatus.STALE
+            stage.reason = f"forced {normalized} stage"
             changed = True
     if changed:
         manifest.updated_at = now or utc_now()

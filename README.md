@@ -1,6 +1,6 @@
 # Game Highlight Finder
 
-Game Highlight Finder is a local-first CLI for turning long gameplay recordings into a reviewable highlight library. The repository currently implements **Milestone 6: long-session windowed reconciliation and extraction** on top of the accepted M1–M5 foundation.
+Game Highlight Finder is a local-first CLI for turning long gameplay recordings into a reviewable highlight library. The repository implements **Milestone 7: a usable offline V1 report journey** on top of the accepted M1–M6 foundation.
 
 M3 keeps the M2 source/proxy/signal foundation and adds a versioned `Session -> Match -> Candidate` domain map. A deterministic Fake Scout produces bounded offline response fixtures, preserves raw Scout bytes separately from canonical data, and validates hostile output before assigning local deterministic IDs. Canonical timestamps are integer milliseconds with half-open intervals `[start_ms, end_ms)`.
 
@@ -158,8 +158,33 @@ proxies crossed the provider boundary; W0 and W1 were `SETTLED`, both remote
 files were deleted, and the cache-only rerun made zero new generations or
 reservations. List-rate-equivalent reservations were W0 THB 0.331454 and W1
 THB 0.331478 (total THB 0.662932); settlements were W0 THB 0.022785 and W1
-THB 0.022761 (total THB 0.045546). The 173-test offline suite passed; M7 is
-not started.
+THB 0.022761 (total THB 0.045546). The 173-test offline suite passed; M7 adds
+deterministic local ranking and a self-contained HTML report. M7 validation
+performs zero real Gemini calls.
+
+## M7 usable V1 journey
+
+The default `highlight analyze <video>` command uses Fake Scout and completes
+the local windowed pipeline through `reports/index.html`. Presentation is local
+only: `reports/ranking.json` uses `m7-ranking-v1` (score descending, confidence
+descending, event time ascending, candidate ID lexical tie-break) and keeps a
+best-of shortlist of up to three candidates without modifying `session_map.json`.
+
+```powershell
+uv run highlight analyze "D:\Recordings\game.mp4"
+uv run highlight resume <session-id>
+uv run highlight report <session-id>
+uv run highlight report <session-id> --open
+uv run highlight candidates <session-id> --json
+uv run highlight cost session <session-id>
+uv run highlight analyze "D:\Recordings\game.mp4" --force-stage report
+```
+
+Reports are atomic, cache-keyed, and usable directly from disk with inline CSS
+and escaped untrusted text. Thumbnails are hash-checked before optional
+embedding; candidate MP4s remain local relative links. A report never invokes
+Scout or silently authorizes paid Gemini work. `resume` requires a fresh
+`--allow-remote-upload` only when a missing Gemini window needs provider work.
 
 ## Development and tests
 
@@ -217,8 +242,8 @@ resume. Raw provider response, redacted request metadata, remote deletion state,
 canonical output, and a derived `cost.json` are stored under the session. A paid
 result is reused on a verified cache hit; ambiguous outcomes are never retried
 automatically. M6 windowing/reconciliation/extraction is local-first with an
-accepted bounded Gemini window smoke. M7 reporting and later milestones remain
-unimplemented.
+accepted bounded Gemini window smoke. M7 reporting is implemented locally;
+later milestones remain unimplemented.
 
 ## Known M3 limitations
 

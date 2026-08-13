@@ -182,6 +182,8 @@ def prepare_scout_windows(
     proxy: ProxyResult,
     local_signals: LocalSignalsResult,
     config: AppConfig,
+    *,
+    force: bool = False,
 ) -> WindowPreparationResult:
     """Create/reuse bounded window proxies from the committed analysis proxy."""
 
@@ -222,7 +224,8 @@ def prepare_scout_windows(
             except Exception:
                 existing = None
         if (
-            existing is not None
+            not force
+            and existing is not None
             and existing.parent_proxy_sha256 == parent_sha
             and existing.proxy_sha256 == hash_file(window_proxy)
             and existing.signal_summary_hash == expected_summary_hash
@@ -484,6 +487,7 @@ def run_windowed_scout(
     fake_provider: FakeWindowScout | None = None,
     gemini_transport: Any | None = None,
     cost_service: CostService | None = None,
+    force: bool = False,
 ) -> WindowedScoutRun:
     """Run each window through Fake or the fully ledger-backed Gemini path."""
 
@@ -541,7 +545,12 @@ def run_windowed_scout(
             json.dumps(request_payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
         )
         valid_cache = False
-        if raw_path.is_file() and canonical_path.is_file() and request_meta_path.is_file():
+        if (
+            not force
+            and raw_path.is_file()
+            and canonical_path.is_file()
+            and request_meta_path.is_file()
+        ):
             try:
                 meta = read_json(request_meta_path)
                 valid_cache = meta.get("cache_key") == cache_key
@@ -634,8 +643,6 @@ def _run_gemini_windowed_scout(
     canonicalized locally rather than regenerated; unresolved calls fail
     closed before upload or generation.
     """
-    if not config.scout.allow_remote_upload:
-        raise ValidationError("M6 Gemini Scout requires explicit remote-upload opt-in.")
     paths = session_paths(config.storage.data_dir, preparation.plan.session_id)
     parent_proxy = paths.proxy_dir / "analysis_proxy.mp4"
     if not parent_proxy.is_file():
@@ -705,6 +712,10 @@ def _run_gemini_windowed_scout(
             # canonicalization must be rerun.  It must not enter preflight as
             # a new billable window.
             cached_ids.add(window.window_id)
+    if not config.scout.allow_remote_upload and len(cached_ids) < len(preparation.windows):
+        raise ValidationError(
+            "M6 Gemini Scout requires fresh explicit remote-upload opt-in for missing work."
+        )
     preflight = aggregate_window_preflight(
         source,
         preparation.windows,

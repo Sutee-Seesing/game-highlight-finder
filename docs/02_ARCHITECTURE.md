@@ -284,4 +284,7 @@ which must hash back to `window.json` and a committed parent analysis-proxy
 hash. The original source is used only by the local extraction boundary. A
 bounded synthetic M6 Gemini window acceptance completed on 2026-08-13 using
 two 6-second windows with 2-second overlap; Fake Scout remains the default and
-Gemini remains explicitly opt-in. M7 components are absent.
+Gemini remains explicitly opt-in. M7 presentation is local-only: deterministic
+ranking is a separate artifact and the self-contained HTML report has no CDN,
+remote assets, secrets, or provider calls. Its cache identity includes the
+session-specific cost view but excludes unrelated pricing/logging settings.

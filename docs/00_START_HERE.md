@@ -169,4 +169,6 @@ list-rate-equivalent reservations were W0 THB 0.331454 and W1 THB 0.331478
 (total THB 0.045546). Both remote files were deleted. The identical cache rerun made
 zero new generation calls or reservations; reconciliation and empty-set
 accurate extraction passed. The full suite is 173 passed / 0 failed / 0 skipped.
-M7 is not started.
+M7 is implemented: the default Fake Scout journey ends at a local ranked
+`reports/index.html`. Use `resume`, `report`, `candidates`, and `cost session`
+for persisted follow-up; M7 validation made zero real Gemini calls.

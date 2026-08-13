@@ -104,7 +104,15 @@ files, and the identical cache rerun made zero new generations or reservations.
 List-rate-equivalent reservations were W0 THB 0.331454 and W1 THB 0.331478
 (total THB 0.662932); settlements were W0 THB 0.022785 and W1 THB 0.022761
 (total THB 0.045546). The full offline suite is 173 passed / 0 failed / 0
-skipped. M7 remains not started.
+skipped. M7 is implemented locally; validation adds ranking/report coverage and
+still makes zero real Gemini calls.
+
+M7 implementation includes deterministic `m7-ranking-v1` ranking (default
+best-of 3), atomic escaped offline HTML, cost/stage/warning diagnostics,
+resume/report/candidates/cost-session commands, and safe force-stage invalidation.
+Zero-candidate reports are valid; no AI Reviewer, publishing integration, or
+M8 work is included. Validation: 178 passed / 0 failed / 0 skipped, Ruff and
+mypy clean.
 
 ### M7 — Report and usable V1
 
@@ -125,7 +133,7 @@ skipped. M7 remains not started.
 - Add keep/maybe/reject/merge suggestions without destructive rewrites.
 - Exit: measured improvement in shortlist precision justifies incremental cost; otherwise leave disabled.
 
-The original milestone order is adjusted so schemas/fake AI and budget controls precede real API integration. Cache/resume is foundational from M1 rather than added late, preventing paid-stage rework. M6 is complete; M7 remains a separate future milestone.
+The original milestone order is adjusted so schemas/fake AI and budget controls precede real API integration. Cache/resume is foundational from M1 rather than added late, preventing paid-stage rework. M6 and M7 are complete; M8 remains a separate future milestone.
 
 ## 3. Test strategy
 

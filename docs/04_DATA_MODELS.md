@@ -2,6 +2,11 @@
 
 ## 1. Modeling conventions
 
+M7 presentation artifacts remain separate from the authoritative `SessionMap`:
+`reports/ranking.json` stores the ranking version, ordered candidate IDs,
+best-of IDs, and compact entries; `reports/index.html` is a derived local view.
+Legacy manifests gain `rank` and `report` records additively on load.
+
 - Pydantic models are the runtime source of truth; JSON Schema snapshots are versioned for fixtures and provider structured output.
 - Every persisted document has `schema_version`, `created_at`, and producer version.
 - Time is an integer number of milliseconds from the original source timeline. Use half-open intervals `[start_ms, end_ms)`.

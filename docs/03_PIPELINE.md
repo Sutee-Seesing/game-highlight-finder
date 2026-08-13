@@ -10,9 +10,8 @@ source (read-only)
   -> Scout windows
   -> reconcile session/matches/candidates/stories
   -> extract candidates from source
-  -> optional Reviewer batches
-  -> rank
-  -> report
+  -> rank (local deterministic M7)
+  -> report (local self-contained HTML)
 ```
 
 Ranking and reporting are local. Reviewer is not a dependency for extraction or a valid report.
@@ -28,10 +27,16 @@ Ranking and reporting are local. Reviewer is not a dependency for extraction or 
 | `reconcile` | No | canonical `session_map.json`, `scout_results.json` | completed Scout windows |
 | `extract` | No | candidate media + extraction manifest | reconcile, source present and verified |
 | `reviewer` | Potentially | validated candidate reviews | extract, reviewer enabled, budget approval |
-| `rank` | No | ranking fields / best-of manifest | reconcile; reviewer optional |
-| `report` | No | `reports/report.html` and thumbnails | rank, extraction metadata |
+| `rank` | No | `reports/ranking.json` | canonical session map |
+| `report` | No | `reports/index.html` and cache metadata | rank, extraction metadata, session cost |
 
 If Scout is disabled or budget-blocked, the run stops successfully-with-attention at that boundary; it must not claim full analysis completion.
+
+M7 ranking and reporting are local-only. Ranking uses stable score/confidence/
+event-time/ID ordering and a best-of limit of three while retaining every
+candidate. Reports are atomic offline HTML with escaped text, hash-verified
+thumbnails, relative clip links, stage/warning diagnostics, and session-specific
+ledger cost. Zero-candidate sessions are valid.
 
 In M3 the `scout` stage is deliberately offline. It persists the exact Fake Scout
 response under `scout/raw/`, validates it as hostile input, and writes the

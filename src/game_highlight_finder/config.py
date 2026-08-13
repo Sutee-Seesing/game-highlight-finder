@@ -168,6 +168,14 @@ class ScoutConfig(StrictModel):
         return self
 
 
+class ReportConfig(StrictModel):
+    """Small, deterministic local presentation policy for M7."""
+
+    best_of_limit: int = Field(default=3, ge=1, le=3)
+    embed_thumbnails: bool = True
+    open_after_generate: bool = False
+
+
 class CostConfig(StrictModel):
     """Provider-neutral hard-budget settings; no provider is enabled by default."""
 
@@ -216,6 +224,7 @@ class AppConfig(StrictModel):
     disk: DiskConfig = DiskConfig()
     signals: SignalsConfig = SignalsConfig()
     scout: ScoutConfig = ScoutConfig()
+    report: ReportConfig = ReportConfig()
     cost: CostConfig = CostConfig()
 
 

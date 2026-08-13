@@ -1,4 +1,6 @@
-"""Vertical local pipeline runner: M1-M5 plus the offline M6 window flow."""
+"""Vertical local pipeline runner: accepted M1-M6 plus local M7 presentation."""
+
+# ruff: noqa: E501
 
 from __future__ import annotations
 
@@ -19,11 +21,15 @@ from game_highlight_finder.pipeline.local_signals import LocalSignalsResult, gen
 from game_highlight_finder.pipeline.manifest import (
     complete_stage,
     ensure_m6_stages,
+    ensure_m7_stages,
     fail_stage,
+    invalidate_from,
     recover_interrupted,
     start_stage,
 )
 from game_highlight_finder.pipeline.proxy import ProxyResult, generate_proxy
+from game_highlight_finder.pipeline.ranking import RankingArtifact, load_or_create_ranking
+from game_highlight_finder.pipeline.report import ReportResult, render_report
 from game_highlight_finder.pipeline.scout import ScoutResult, generate_scout
 from game_highlight_finder.pipeline.windowed_scout import (
     WindowedScoutRun,
@@ -44,6 +50,9 @@ from game_highlight_finder.storage.sessions import (
 StopAfter = Literal["ingest", "proxy", "local_signals", "scout"]
 M6StopAfter = Literal[
     "ingest", "proxy", "local_signals", "windows", "scout", "reconcile", "extract"
+]
+V1StopAfter = Literal[
+    "ingest", "proxy", "local_signals", "windows", "scout", "reconcile", "extract", "rank", "report"
 ]
 
 
@@ -66,6 +75,14 @@ class M6AnalysisResult(BaseModel):
     session_map: SessionMap | None = None
     extraction: ExtractionResult | None = None
     stop_after: M6StopAfter
+
+
+class V1AnalysisResult(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, arbitrary_types_allowed=True)
+    m6: M6AnalysisResult
+    ranking: RankingArtifact | None = None
+    report: ReportResult | None = None
+    stop_after: V1StopAfter
 
 
 def normalize_stop_after(value: str) -> StopAfter:
@@ -133,6 +150,7 @@ def analyze_m6_source(
     config: AppConfig,
     *,
     stop_after: str = "extract",
+    force_stage: str | None = None,
 ) -> M6AnalysisResult:
     """Run M6 windows, reconciliation, and extraction.
 
@@ -140,6 +158,9 @@ def analyze_m6_source(
     then owns an independent paid lifecycle in ``run_windowed_scout``.
     """
     boundary = normalize_m6_stop_after(stop_after)
+    normalized_force = (
+        force_stage.strip().lower().replace("-", "_") if force_stage is not None else None
+    )
     local = analyze_source(video, config, stop_after="local-signals")
     if boundary == "ingest":
         return M6AnalysisResult(ingest=local.ingest, stop_after=boundary)
@@ -153,7 +174,13 @@ def analyze_m6_source(
             stop_after=boundary,
         )
     assert local.proxy is not None and local.local_signals is not None
-    windows = prepare_scout_windows(local.ingest.source, local.proxy, local.local_signals, config)
+    windows = prepare_scout_windows(
+        local.ingest.source,
+        local.proxy,
+        local.local_signals,
+        config,
+        force=normalized_force == "windows",
+    )
     if boundary == "windows":
         return M6AnalysisResult(
             ingest=local.ingest,
@@ -162,7 +189,13 @@ def analyze_m6_source(
             windows=windows,
             stop_after=boundary,
         )
-    scout = run_windowed_scout(local.ingest.source, windows, local.local_signals, config)
+    scout = run_windowed_scout(
+        local.ingest.source,
+        windows,
+        local.local_signals,
+        config,
+        force=normalized_force == "scout" and config.scout.backend == "fake",
+    )
     scout_outputs = [
         path
         for result in scout.results
@@ -185,6 +218,7 @@ def analyze_m6_source(
         outputs=scout_outputs,
         item_states={result.window.window_id: "COMPLETED" for result in scout.results},
     )
+
     if boundary == "scout":
         return M6AnalysisResult(
             ingest=local.ingest,
@@ -295,6 +329,113 @@ def analyze_m6_source(
     )
 
 
+def normalize_v1_stop_after(value: str) -> V1StopAfter:
+    normalized = value.strip().lower().replace("-", "_")
+    if normalized not in {
+        "ingest",
+        "proxy",
+        "local_signals",
+        "windows",
+        "scout",
+        "reconcile",
+        "extract",
+        "rank",
+        "report",
+    }:
+        raise ConfigError(
+            "Unknown V1 stop-after stage.",
+            hint="Use ingest, proxy, local-signals, windows, scout, reconcile, extract, rank, or report.",
+        )
+    return normalized  # type: ignore[return-value]
+
+
+def analyze_v1_source(
+    video: Path,
+    config: AppConfig,
+    *,
+    stop_after: str = "report",
+    force_stage: str | None = None,
+) -> V1AnalysisResult:
+    """Run the standard offline-first V1 journey through ranking and report."""
+
+    boundary = normalize_v1_stop_after(stop_after)
+    normalized_force = (
+        force_stage.strip().lower().replace("-", "_") if force_stage is not None else None
+    )
+    if force_stage is not None:
+        paths = session_paths(config.storage.data_dir, _session_id_for_video(video, config))
+        if paths.manifest.is_file():
+            with SessionLock(paths.lock):
+                manifest = load_manifest(paths.manifest)
+                ensure_m7_stages(manifest)
+                invalidate_from(manifest, force_stage)
+                write_manifest(paths.manifest, manifest)
+    local_stages = {"ingest", "proxy", "local_signals", "windows", "scout", "reconcile", "extract"}
+    m6_boundary = boundary if boundary in local_stages else "extract"
+    m6 = analyze_m6_source(
+        video,
+        config,
+        stop_after=m6_boundary,
+        force_stage=normalized_force,
+    )
+    if boundary in local_stages:
+        return V1AnalysisResult(m6=m6, stop_after=boundary)
+    if m6.session_map is None:
+        raise ConfigError(
+            "Ranking requires a completed reconciled session map.",
+            hint="Run: highlight resume " + m6.ingest.session_id,
+        )
+    paths = session_paths(config.storage.data_dir, m6.ingest.session_id)
+    ranking, _ranking_hit = load_or_create_ranking(
+        paths, m6.session_map, config, force=normalized_force == "rank"
+    )
+    _record_presentation_stage(
+        config,
+        m6.ingest.session_id,
+        "rank",
+        {"version": ranking.ranking_version, "ranking_cache_key": ranking.cache_key},
+        inputs=[paths.session_map],
+        outputs=[paths.ranking_path],
+    )
+    if boundary == "rank":
+        return V1AnalysisResult(m6=m6, ranking=ranking, stop_after=boundary)
+    force_report = normalized_force in {
+        "report",
+        "rank",
+        "extract",
+        "reconcile",
+        "scout",
+        "windows",
+        "local_signals",
+        "proxy",
+        "ingest",
+    }
+    report = render_report(
+        paths,
+        m6.ingest.source,
+        m6.session_map,
+        ranking,
+        load_manifest(paths.manifest),
+        config,
+        force=force_report,
+    )
+    _record_presentation_stage(
+        config,
+        m6.ingest.session_id,
+        "report",
+        {"version": "m7-report-v1", "report_cache_key": report.cache_key},
+        inputs=[paths.session_map, paths.ranking_path, paths.extraction_manifest],
+        outputs=[paths.report_path, paths.report_meta_path],
+    )
+    return V1AnalysisResult(m6=m6, ranking=ranking, report=report, stop_after="report")
+
+
+def _session_id_for_video(video: Path, config: AppConfig) -> str:
+    from game_highlight_finder.pipeline.ingest import ingest_source
+
+    return ingest_source(video, config).session_id
+
+
 def _file_hash(path: Path) -> str:
     from game_highlight_finder.storage.hashing import hash_file
 
@@ -373,4 +514,47 @@ def _record_incomplete_stage(
             ),
         )
         manifest.stages[stage_name].item_states = item_states
+        write_manifest(paths.manifest, manifest)
+
+
+def _record_presentation_stage(
+    config: AppConfig,
+    session_id: str,
+    stage_name: str,
+    cache_payload: object,
+    *,
+    inputs: list[Path],
+    outputs: list[Path],
+) -> None:
+    """Record rank/report only after their complete atomic artifacts exist."""
+
+    paths = session_paths(config.storage.data_dir, session_id)
+    encoded = json.dumps(cache_payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    cache_key = hashlib.sha256(encoded).hexdigest()
+    with SessionLock(paths.lock):
+        manifest = load_manifest(paths.manifest)
+        ensure_m7_stages(manifest)
+        recover_interrupted(manifest)
+        valid, _ = completed_stage_cache_is_valid(
+            paths, manifest, stage_name=stage_name, expected_cache_key=cache_key
+        )
+        if valid:
+            return
+        stage = manifest.stages[stage_name]
+        if stage.status in {StageStatus.COMPLETED, StageStatus.RUNNING}:
+            stage.status = StageStatus.STALE
+            stage.reason = "M7 presentation inputs or outputs changed"
+        start_stage(manifest, stage_name, cache_key)
+        write_manifest(paths.manifest, manifest)
+        input_identities = [
+            artifact_identity(path, relative_to=paths.root) for path in inputs if path.is_file()
+        ]
+        output_identities = [artifact_identity(path, relative_to=paths.root) for path in outputs]
+        complete_stage(
+            manifest,
+            stage_name,
+            inputs=input_identities,
+            outputs=output_identities,
+            item_states={stage_name: "COMPLETED"},
+        )
         write_manifest(paths.manifest, manifest)
