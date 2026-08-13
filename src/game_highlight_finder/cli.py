@@ -274,6 +274,8 @@ def _analyze(
         typer.echo(f"Model: {preflight.model}")
         typer.echo("Input: analysis proxy only")
         typer.echo(f"Media resolution: {preflight.media_resolution}")
+        typer.echo(f"Thinking level: {preflight.thinking_level}")
+        typer.echo(f"Reserved thinking allowance: {preflight.reserved_thinking_tokens} tokens")
         typer.echo(
             f"Maximum reserved cost: {_format_micro_thb(preflight.quote.reserved_cost_micro_thb)}"
         )
@@ -289,6 +291,8 @@ def _analyze(
         typer.echo("Original source will NOT be uploaded")
         typer.echo(f"Model: {config.scout.model}")
         typer.echo(f"Media resolution: {config.scout.media_resolution}")
+        typer.echo(f"Thinking level: {config.scout.thinking_level}")
+        typer.echo(f"Reserved thinking allowance: {config.scout.reserved_thinking_tokens} tokens")
         preflight = preflight_gemini_scout(
             local.ingest.source, local.proxy, local.local_signals, config
         )

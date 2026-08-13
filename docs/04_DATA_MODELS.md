@@ -178,8 +178,9 @@ Provider output should use a flatter bounded schema than the final domain model.
 For M5's single Gemini request, the provider artifacts are
 `scout/raw/gemini_response.json`, `gemini_request_meta.json`, and
 `gemini_remote_file.json`. The response is a sanitized final-output envelope:
-interaction ID, exact model/status, structured output text, bounded usage
-(including visible and thinking tokens), finish/safety state, and safe remote
+interaction ID, exact model/status, structured output text, bounded current
+Interactions usage totals/modality breakdown, and separate visible/thinking
+tokens, finish/safety state, and safe remote
 file name/deletion state. Signed URIs and thought steps are never persisted.
 `scout/cost.json` is a derived display artifact; SQLite remains authoritative.
 

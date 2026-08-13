@@ -18,8 +18,13 @@ from game_highlight_finder.config import (
 )
 from game_highlight_finder.cost.fx import FxSnapshot
 from game_highlight_finder.cost.production import production_pricing_catalog
-from game_highlight_finder.cost.service import CostService
-from game_highlight_finder.errors import CostGateError, ValidationError
+from game_highlight_finder.cost.service import CostRequest, CostService
+from game_highlight_finder.errors import (
+    CostGateError,
+    CostIntegrityError,
+    CostSafetyHoldError,
+    ValidationError,
+)
 from game_highlight_finder.pipeline.gemini_contract import (
     build_gemini_prompt,
     gemini_scout_schema,
@@ -34,9 +39,10 @@ from game_highlight_finder.pipeline.gemini_scout import (
 from game_highlight_finder.pipeline.ingest import ingest_source
 from game_highlight_finder.pipeline.local_signals import generate_local_signals
 from game_highlight_finder.pipeline.proxy import generate_proxy
-from game_highlight_finder.providers.base import ProviderUsageEstimate
+from game_highlight_finder.providers.base import ProviderUsageActual, ProviderUsageEstimate
 from game_highlight_finder.providers.gemini import (
     FakeGeminiTransport,
+    GeminiConfigurationError,
     GeminiInteractionEnvelope,
     GeminiMissingUsageError,
     GeminiPrivacyError,
@@ -46,6 +52,7 @@ from game_highlight_finder.providers.gemini import (
     usage_from_envelope,
     validate_proxy_upload,
 )
+from game_highlight_finder.storage.sessions import compute_gemini_provider_cache_key
 
 NOW = datetime(2026, 8, 12, 12, 0, tzinfo=UTC)
 
@@ -126,7 +133,7 @@ def test_prompt_and_schema_are_deterministic_and_non_quota() -> None:
         response_schema=gemini_scout_schema(),
         audio_present=True,
         max_output_tokens=100,
-        max_thinking_tokens=50,
+        reserved_thinking_tokens=50,
     )
     assert usage.input_video_tokens == 660
     assert usage.input_audio_tokens == 320
@@ -186,6 +193,115 @@ def test_usage_mapping_requires_authoritative_counts_and_bounds_thinking() -> No
             GeminiInteractionEnvelope(
                 status="completed",
                 usage={"candidates_token_count": 10_000_000, "thoughts_token_count": 1},
+            )
+        )
+
+
+def test_interactions_usage_totals_are_authoritative_and_keep_thinking_separate() -> None:
+    actual = usage_from_envelope(
+        GeminiInteractionEnvelope(
+            status="completed",
+            usage={
+                "total_input_tokens": 1_000,
+                "total_output_tokens": 200,
+                "total_thought_tokens": 50,
+            },
+        )
+    )
+    assert actual.input_text_tokens == 1_000
+    assert actual.input_image_tokens == 0
+    assert actual.input_video_tokens == 0
+    assert actual.input_audio_tokens == 0
+    assert actual.output_tokens == 200
+    assert actual.thinking_tokens == 50
+    assert actual.billable_output_tokens == 250
+
+
+def test_interactions_modality_breakdown_maps_once_without_double_counting() -> None:
+    actual = usage_from_envelope(
+        GeminiInteractionEnvelope(
+            status="completed",
+            usage={
+                "input_tokens_by_modality": [
+                    {"modality": "video", "tokens": 600},
+                    {"modality": "audio", "tokens": 300},
+                    {"modality": "text", "tokens": 100},
+                ],
+                "total_input_tokens": 1_000,
+                "total_output_tokens": 200,
+                "total_thought_tokens": 50,
+            },
+        )
+    )
+    assert actual.input_video_tokens == 600
+    assert actual.input_audio_tokens == 300
+    assert actual.input_text_tokens == 100
+    assert (
+        actual.input_text_tokens
+        + actual.input_image_tokens
+        + actual.input_video_tokens
+        + actual.input_audio_tokens
+        == 1_000
+    )
+
+
+def test_interactions_conflicting_usage_fails_closed() -> None:
+    with pytest.raises(GeminiMissingUsageError):
+        usage_from_envelope(
+            GeminiInteractionEnvelope(
+                status="completed",
+                usage={
+                    "total_input_tokens": 100,
+                    "total_output_tokens": 20,
+                    "total_thought_tokens": 0,
+                    "input_tokens_by_modality": [{"modality": "video", "tokens": 150}],
+                },
+            )
+        )
+    with pytest.raises(GeminiMissingUsageError):
+        usage_from_envelope(
+            GeminiInteractionEnvelope(
+                status="completed",
+                usage={
+                    "total_input_tokens": 100,
+                    "total_output_tokens": 20,
+                    "candidates_token_count": 19,
+                    "total_thought_tokens": 0,
+                },
+            )
+        )
+
+
+def test_interactions_cached_usage_requires_breakdown_and_is_not_double_charged() -> None:
+    actual = usage_from_envelope(
+        GeminiInteractionEnvelope(
+            status="completed",
+            usage={
+                "input_tokens_by_modality": [
+                    {"modality": "video", "tokens": 600},
+                    {"modality": "text", "tokens": 400},
+                ],
+                "cached_tokens_by_modality": [{"modality": "text", "tokens": 100}],
+                "total_cached_tokens": 100,
+                "total_input_tokens": 1_000,
+                "total_output_tokens": 1,
+                "total_thought_tokens": 0,
+            },
+        )
+    )
+    assert actual.input_video_tokens == 600
+    assert actual.input_text_tokens == 300
+    assert actual.cached_input_tokens == 100
+    with pytest.raises(GeminiMissingUsageError):
+        usage_from_envelope(
+            GeminiInteractionEnvelope(
+                status="completed",
+                usage={
+                    "total_cached_tokens": 1,
+                    "total_input_tokens": 10,
+                    "total_output_tokens": 1,
+                    "total_thought_tokens": 0,
+                },
             )
         )
 
@@ -256,6 +372,11 @@ def test_gemini_fake_transport_lifecycle_cache_and_cleanup(
     assert transport.upload_count == 1
     assert transport.generation_count == 1
     assert transport.delete_count == 1
+    assert transport.last_request is not None
+    assert transport.last_request["input"][0]["resolution"] == "low"
+    assert "media_resolution" not in transport.last_request["generation_config"]
+    assert transport.last_request["generation_config"]["thinking_level"] == "minimal"
+    assert transport.last_request["store"] is False
     second = generate_gemini_scout(
         ingest.source,
         proxy,
@@ -267,6 +388,74 @@ def test_gemini_fake_transport_lifecycle_cache_and_cleanup(
     assert second.cache_hit is True
     assert transport.upload_count == 1
     assert transport.generation_count == 1
+
+
+def test_gemini_paid_cache_identity_includes_thinking_configuration(
+    tiny_video: Path, ffmpeg_path: Path, ffprobe_path: Path, tmp_path: Path
+) -> None:
+    config = _config(tmp_path, ffmpeg_path, ffprobe_path)
+    ingest = ingest_source(tiny_video, config)
+    base = compute_gemini_provider_cache_key(
+        ingest.source,
+        config,
+        proxy_artifact_sha256="proxy",
+        local_signals_summary_hash="signals",
+        prompt_hash="prompt",
+        schema_hash="schema",
+    )
+    low_thinking = config.model_copy(
+        update={"scout": config.scout.model_copy(update={"thinking_level": "low"})}
+    )
+    changed_allowance = config.model_copy(
+        update={"scout": config.scout.model_copy(update={"reserved_thinking_tokens": 2_048})}
+    )
+    assert base != compute_gemini_provider_cache_key(
+        ingest.source,
+        low_thinking,
+        proxy_artifact_sha256="proxy",
+        local_signals_summary_hash="signals",
+        prompt_hash="prompt",
+        schema_hash="schema",
+    )
+    assert base != compute_gemini_provider_cache_key(
+        ingest.source,
+        changed_allowance,
+        proxy_artifact_sha256="proxy",
+        local_signals_summary_hash="signals",
+        prompt_hash="prompt",
+        schema_hash="schema",
+    )
+
+
+def test_reserved_thinking_allowance_settles_and_overage_holds_budget(
+    ffmpeg_path: Path, ffprobe_path: Path, tmp_path: Path
+) -> None:
+    config = _config(tmp_path, ffmpeg_path, ffprobe_path)
+    service = _service(config)
+    estimate = ProviderUsageEstimate(input_text_tokens=10, output_tokens=5, thinking_tokens=10)
+    request = CostRequest(
+        call_id="thinking-overage",
+        provider="gemini",
+        model="gemini-3.5-flash-lite",
+        billing_mode="standard",
+        stage="scout",
+        usage_estimate=estimate,
+        request_payload={"thinking_level": "minimal", "reserved_thinking_tokens": 10},
+    )
+    service.reserve(request)
+    service.mark_in_flight(request.call_id)
+    with pytest.raises(CostIntegrityError):
+        service.settle(
+            request.call_id,
+            ProviderUsageActual(input_text_tokens=10, output_tokens=5, thinking_tokens=1_000),
+        )
+    assert service.summary().safety_hold_active is True
+    with pytest.raises(CostSafetyHoldError):
+        service.reserve(
+            request.model_copy(
+                update={"call_id": "thinking-overage-next", "usage_estimate": estimate}
+            )
+        )
 
 
 def test_gemini_preflight_requires_fx_and_makes_no_transport_calls(
@@ -453,3 +642,31 @@ def test_provider_upload_rejects_raw_path(tmp_path: Path) -> None:
 
     with pytest.raises(GeminiProviderError):
         provider.execute(ProviderRequest.model_validate(request))
+
+
+def test_provider_rejects_resolution_fallback_before_upload(tmp_path: Path) -> None:
+    proxy_root = tmp_path / "proxy"
+    proxy_root.mkdir()
+    proxy_path = proxy_root / "analysis_proxy.mp4"
+    proxy_path.write_bytes(b"proxy")
+    from game_highlight_finder.providers.base import ProviderRequest
+
+    request = ProviderRequest(
+        call_id="resolution-call",
+        provider="gemini",
+        model_id="gemini-3.5-flash-lite",
+        billing_mode="standard",
+        stage="scout",
+        usage_estimate=ProviderUsageEstimate(input_text_tokens=1),
+        request_payload={"prompt": "x", "response_schema": {"type": "object"}},
+    )
+    transport = FakeGeminiTransport()
+    with pytest.raises(GeminiConfigurationError):
+        GeminiProvider(transport=transport).execute(
+            request,
+            proxy_path=proxy_path,
+            session_proxy_root=proxy_root,
+            media_resolution="high",
+            thinking_level="minimal",
+        )
+    assert transport.upload_count == 0

@@ -115,7 +115,7 @@ class GeminiInteractionEnvelope(BaseModel):
     model: str = GEMINI_MODEL_ID
     status: str = Field(min_length=1, max_length=64)
     output_text: str = ""
-    usage: dict[str, int] = Field(default_factory=dict)
+    usage: dict[str, Any] = Field(default_factory=dict)
     finish_reason: str | None = Field(default=None, max_length=256)
     safety_block_reason: str | None = Field(default=None, max_length=256)
     incomplete_reason: str | None = Field(default=None, max_length=256)
@@ -124,21 +124,8 @@ class GeminiInteractionEnvelope(BaseModel):
 
     @field_validator("usage", mode="before")
     @classmethod
-    def strict_usage_values(cls, value: object) -> dict[str, int]:
-        if not isinstance(value, Mapping):
-            raise ValueError("Gemini usage metadata must be an object")
-        normalized: dict[str, int] = {}
-        for key, count in value.items():
-            if (
-                not isinstance(key, str)
-                or isinstance(count, bool)
-                or not isinstance(count, int)
-                or count < 0
-                or count > MAX_USAGE_TOKENS_PER_DIMENSION
-            ):
-                raise ValueError("Gemini usage metadata contains an invalid count")
-            normalized[key] = count
-        return normalized
+    def strict_usage_values(cls, value: object) -> dict[str, Any]:
+        return _normalize_usage_metadata(value)
 
 
 class GeminiTransport(Protocol):
@@ -157,7 +144,7 @@ class GeminiTransport(Protocol):
         response_schema: Mapping[str, Any],
         media_resolution: str,
         max_output_tokens: int,
-        max_thinking_tokens: int,
+        thinking_level: str,
         store: bool,
     ) -> Any: ...
 
@@ -220,23 +207,32 @@ class GenAITransport:
         response_schema: Mapping[str, Any],
         media_resolution: str,
         max_output_tokens: int,
-        max_thinking_tokens: int,
+        thinking_level: str,
         store: bool,
     ) -> Any:
         # The SDK accepts the REST-shaped multimodal input.  We intentionally
         # pass one video followed by bounded text, as recommended by the
         # official video-understanding guide.
+        if media_resolution != "low":
+            raise GeminiConfigurationError(
+                "Gemini M5 requires the configured low media resolution; refusing fallback."
+            )
+        if thinking_level not in {"minimal", "low", "medium", "high"}:
+            raise GeminiConfigurationError(f"Unsupported Gemini thinking level: {thinking_level!r}")
         generation_config: dict[str, Any] = {
-            "media_resolution": media_resolution,
             "max_output_tokens": max_output_tokens,
+            "thinking_level": thinking_level,
         }
-        if max_thinking_tokens == 0:
-            generation_config["thinking_level"] = "minimal"
         try:
             return self._client.interactions.create(
                 model=model,
                 input=[
-                    {"type": "video", "uri": remote_uri, "mime_type": "video/mp4"},
+                    {
+                        "type": "video",
+                        "uri": remote_uri,
+                        "mime_type": "video/mp4",
+                        "resolution": media_resolution,
+                    },
                     {"type": "text", "text": prompt},
                 ],
                 response_format={
@@ -328,7 +324,7 @@ class GeminiProvider(ProviderAdapter):
         response_schema: Mapping[str, Any] | None = None,
         media_resolution: str = "low",
         max_output_tokens: int = 2_048,
-        max_thinking_tokens: int = 1_024,
+        thinking_level: str = "minimal",
         remote_metadata_path: Path | None = None,
         before_generation: Callable[[], None] | None = None,
     ) -> ProviderCallResult:
@@ -340,6 +336,12 @@ class GeminiProvider(ProviderAdapter):
             raise GeminiConfigurationError(
                 "Gemini M5 requires the exact stable model and Standard billing mode."
             )
+        if media_resolution != "low":
+            raise GeminiConfigurationError(
+                "Gemini M5 cost estimates require low media resolution; refusing fallback."
+            )
+        if thinking_level not in {"minimal", "low", "medium", "high"}:
+            raise GeminiConfigurationError(f"Unsupported Gemini thinking level: {thinking_level!r}")
         path = proxy_path or _payload_path(request.request_payload, "proxy_path")
         if path is None:
             raise GeminiPrivacyError("Gemini requires an analysis proxy path.")
@@ -384,7 +386,7 @@ class GeminiProvider(ProviderAdapter):
                     response_schema=response_schema,
                     media_resolution=media_resolution,
                     max_output_tokens=max_output_tokens,
-                    max_thinking_tokens=max_thinking_tokens,
+                    thinking_level=thinking_level,
                     store=False,
                 )
             except GeminiProviderError as exc:
@@ -541,7 +543,7 @@ class FakeGeminiTransport:
         self,
         *,
         response: Mapping[str, Any] | str | None = None,
-        usage: Mapping[str, int] | None = None,
+        usage: Mapping[str, Any] | None = None,
         upload_error: Exception | None = None,
         processing_states: Sequence[str] = ("ACTIVE",),
         generation_error: Exception | None = None,
@@ -565,6 +567,8 @@ class FakeGeminiTransport:
         self.generation_count = 0
         self.delete_count = 0
         self.uploaded_paths: list[Path] = []
+        self.request_calls: list[dict[str, Any]] = []
+        self.last_request: dict[str, Any] | None = None
         self.remote = GeminiRemoteFile(name="files/fake-proxy", uri="https://example.invalid/fake")
 
     def upload(self, path: Path, *, mime_type: str) -> GeminiRemoteFile:
@@ -585,6 +589,30 @@ class FakeGeminiTransport:
 
     def create_interaction(self, **kwargs: Any) -> Any:
         self.generation_count += 1
+        request = {
+            "model": kwargs.get("model"),
+            "input": [
+                {
+                    "type": "video",
+                    "uri": kwargs.get("remote_uri"),
+                    "mime_type": "video/mp4",
+                    "resolution": kwargs.get("media_resolution"),
+                },
+                {"type": "text", "text": kwargs.get("prompt", "")},
+            ],
+            "response_format": {
+                "type": "text",
+                "mime_type": "application/json",
+                "schema": dict(kwargs.get("response_schema", {})),
+            },
+            "generation_config": {
+                "max_output_tokens": kwargs.get("max_output_tokens"),
+                "thinking_level": kwargs.get("thinking_level"),
+            },
+            "store": kwargs.get("store"),
+        }
+        self.last_request = request
+        self.request_calls.append(request)
         if self.generation_error is not None:
             raise self.generation_error
         return self.response
@@ -725,65 +753,330 @@ def sanitize_interaction_response(
         ) from exc
 
 
+_USAGE_SCALAR_KEYS = {
+    "total_input_tokens",
+    "total_output_tokens",
+    "total_thought_tokens",
+    "total_cached_tokens",
+    "total_tokens",
+    "total_tool_use_tokens",
+    "prompt_token_count",
+    "input_tokens",
+    "input_token_count",
+    "candidates_token_count",
+    "output_tokens",
+    "visible_output_tokens",
+    "thoughts_token_count",
+    "thinking_tokens",
+    "video_token_count",
+    "input_video_tokens",
+    "audio_token_count",
+    "input_audio_tokens",
+    "image_token_count",
+    "input_image_tokens",
+    "cached_content_token_count",
+    "cached_input_tokens",
+}
+_USAGE_BREAKDOWN_KEYS = {
+    "input_tokens_by_modality",
+    "cached_tokens_by_modality",
+    "output_tokens_by_modality",
+    "tool_use_tokens_by_modality",
+}
+_USAGE_MODALITIES = {"text", "image", "video", "audio", "document"}
+
+
 def usage_from_envelope(envelope: GeminiInteractionEnvelope) -> ProviderUsageActual:
+    """Map current Interactions usage into the bounded M4 dimensions.
+
+    Interactions totals and modality breakdowns are authoritative.  When a
+    breakdown is present, its sum must not exceed ``total_input_tokens`` and
+    any safe residual is assigned to text exactly once.  Legacy aliases remain
+    supported only when they agree with current totals; conflicting duplicate
+    representations fail closed.
+    """
+
     usage = envelope.usage
-    prompt = _first_int(usage, "prompt_token_count", "input_tokens", "input_token_count")
-    video = _first_int(usage, "video_token_count", "input_video_tokens")
-    audio = _first_int(usage, "audio_token_count", "input_audio_tokens")
-    image = _first_int(usage, "image_token_count", "input_image_tokens")
-    cached = _first_int(usage, "cached_content_token_count", "cached_input_tokens")
-    output = _first_int(usage, "candidates_token_count", "output_tokens", "visible_output_tokens")
-    thinking = _first_int(usage, "thoughts_token_count", "thinking_tokens")
-    if not any(value is not None for value in (prompt, video, audio, image, output, thinking)):
-        raise GeminiMissingUsageError(
-            "Gemini returned a completed response without authoritative usage metadata.",
-            may_have_dispatched=True,
-            provider_request_id=envelope.interaction_id,
-            response=envelope.model_dump(mode="json"),
-        )
-    # Prompt token counts are text/context totals when modality-specific counts
-    # are not exposed.  That is conservative for billing and still bounded by
-    # the M4 usage model.
+    current_input = _first_int(usage, "total_input_tokens")
+    current_output = _first_int(usage, "total_output_tokens")
+    current_thinking = _first_int(usage, "total_thought_tokens")
+    current_cached = _first_int(usage, "total_cached_tokens")
+    current_shape = any(
+        key in usage
+        for key in {
+            "total_input_tokens",
+            "total_output_tokens",
+            "total_thought_tokens",
+            "total_cached_tokens",
+            "input_tokens_by_modality",
+            "cached_tokens_by_modality",
+        }
+    )
+    mapped: dict[str, int]
+    cached_count = 0
+    output_count = 0
+    thinking_count = 0
+
     try:
+        if current_shape:
+            if current_input is None or current_output is None:
+                raise ValueError(
+                    "Interactions usage must include total_input_tokens and total_output_tokens"
+                )
+            _reject_conflicting_alias(
+                usage,
+                current_input,
+                "total_input_tokens",
+                "prompt_token_count",
+                "input_tokens",
+                "input_token_count",
+            )
+            _reject_conflicting_alias(
+                usage,
+                current_output,
+                "total_output_tokens",
+                "candidates_token_count",
+                "output_tokens",
+                "visible_output_tokens",
+            )
+            if current_thinking is not None:
+                _reject_conflicting_alias(
+                    usage,
+                    current_thinking,
+                    "total_thought_tokens",
+                    "thoughts_token_count",
+                    "thinking_tokens",
+                )
+            if current_cached is not None:
+                _reject_conflicting_alias(
+                    usage,
+                    current_cached,
+                    "total_cached_tokens",
+                    "cached_content_token_count",
+                    "cached_input_tokens",
+                )
+            _reject_conflicting_modalities(usage)
+            mapped = _map_interactions_input(usage, current_input, current_cached or 0)
+            output_count = current_output
+            thinking_count = current_thinking or 0
+            cached_count = current_cached or 0
+        else:
+            # Legacy/fake fixtures use independent prompt and modality fields.
+            # Keep their historical semantics, but still bound every value.
+            prompt = _first_int(usage, "prompt_token_count", "input_tokens", "input_token_count")
+            video = _first_int(usage, "video_token_count", "input_video_tokens")
+            audio = _first_int(usage, "audio_token_count", "input_audio_tokens")
+            image = _first_int(usage, "image_token_count", "input_image_tokens")
+            cached = _first_int(usage, "cached_content_token_count", "cached_input_tokens")
+            output = _first_int(
+                usage, "candidates_token_count", "output_tokens", "visible_output_tokens"
+            )
+            thinking = _first_int(usage, "thoughts_token_count", "thinking_tokens")
+            if not any(
+                value is not None
+                for value in (prompt, video, audio, image, cached, output, thinking)
+            ):
+                raise ValueError("no authoritative usage metadata")
+            mapped = {
+                "input_text_tokens": prompt or 0,
+                "input_image_tokens": image or 0,
+                "input_video_tokens": video or 0,
+                "input_audio_tokens": audio or 0,
+            }
+            cached_count = cached or 0
+            output_count = output or 0
+            thinking_count = thinking or 0
+
         return ProviderUsageActual(
-            input_text_tokens=prompt or 0,
-            input_image_tokens=image or 0,
-            input_video_tokens=video or 0,
-            input_audio_tokens=audio or 0,
-            cached_input_tokens=cached or 0,
-            output_tokens=output or 0,
-            thinking_tokens=thinking or 0,
+            **mapped,
+            cached_input_tokens=cached_count,
+            output_tokens=output_count,
+            thinking_tokens=thinking_count,
             provider_request_id=envelope.interaction_id,
         )
-    except PydanticValidationError as exc:
+    except (PydanticValidationError, ValueError) as exc:
         raise GeminiMissingUsageError(
-            "Gemini returned usage metadata outside the M4 safety bounds.",
+            "Gemini returned missing, conflicting, or unsafe usage metadata.",
             may_have_dispatched=True,
             provider_request_id=envelope.interaction_id,
             response=envelope.model_dump(mode="json"),
         ) from exc
 
 
-def _usage_dict(response: Any) -> dict[str, int]:
+def _map_interactions_input(
+    usage: Mapping[str, Any], total_input: int, total_cached: int
+) -> dict[str, int]:
+    breakdown = usage.get("input_tokens_by_modality")
+    totals = {"text": 0, "image": 0, "video": 0, "audio": 0}
+    if breakdown is not None:
+        if not isinstance(breakdown, Sequence) or isinstance(breakdown, (str, bytes, bytearray)):
+            raise ValueError("input_tokens_by_modality must be an array")
+        for item in breakdown:
+            if not isinstance(item, Mapping):
+                raise ValueError("input_tokens_by_modality contains a malformed entry")
+            modality = item.get("modality")
+            tokens = item.get("tokens")
+            if not isinstance(modality, str) or modality not in _USAGE_MODALITIES:
+                raise ValueError("input_tokens_by_modality contains an unsupported modality")
+            if isinstance(tokens, bool) or not isinstance(tokens, int) or tokens < 0:
+                raise ValueError("input_tokens_by_modality contains an invalid token count")
+            if tokens > MAX_USAGE_TOKENS_PER_DIMENSION:
+                raise ValueError("input_tokens_by_modality exceeds the safety bound")
+            if modality == "document" and tokens:
+                raise ValueError("document input is not chargeable by the M4 Gemini dimensions")
+            if modality in totals:
+                if totals[modality] != 0:
+                    raise ValueError("input_tokens_by_modality contains duplicate modalities")
+                totals[modality] = tokens
+    breakdown_total = sum(totals.values())
+    if breakdown_total > total_input:
+        raise ValueError("input modality breakdown exceeds total_input_tokens")
+
+    cached_breakdown = usage.get("cached_tokens_by_modality")
+    if total_cached or cached_breakdown is not None:
+        if cached_breakdown is None:
+            raise ValueError(
+                "cached input requires cached_tokens_by_modality to avoid double charging"
+            )
+        cached_total = 0
+        if not isinstance(cached_breakdown, Sequence) or isinstance(
+            cached_breakdown, (str, bytes, bytearray)
+        ):
+            raise ValueError("cached_tokens_by_modality must be an array")
+        for item in cached_breakdown:
+            if not isinstance(item, Mapping):
+                raise ValueError("cached_tokens_by_modality contains a malformed entry")
+            modality = item.get("modality")
+            tokens = item.get("tokens")
+            if not isinstance(modality, str) or modality not in totals:
+                raise ValueError("cached_tokens_by_modality contains an unsupported modality")
+            if isinstance(tokens, bool) or not isinstance(tokens, int) or tokens < 0:
+                raise ValueError("cached_tokens_by_modality contains an invalid token count")
+            if totals[modality] < tokens:
+                raise ValueError("cached modality tokens exceed input modality tokens")
+            totals[modality] -= tokens
+            cached_total += tokens
+        if cached_total != total_cached:
+            raise ValueError("cached modality breakdown conflicts with total_cached_tokens")
+    residual = total_input - breakdown_total
+    totals["text"] += residual
+    return {
+        "input_text_tokens": totals["text"],
+        "input_image_tokens": totals["image"],
+        "input_video_tokens": totals["video"],
+        "input_audio_tokens": totals["audio"],
+    }
+
+
+def _reject_conflicting_alias(
+    usage: Mapping[str, Any], current: int, current_name: str, *aliases: str
+) -> None:
+    for alias in aliases:
+        legacy = usage.get(alias)
+        if legacy is not None and legacy != current:
+            raise ValueError(f"{current_name} conflicts with legacy usage field {alias}")
+
+
+def _reject_conflicting_modalities(usage: Mapping[str, Any]) -> None:
+    aliases = {
+        "video": ("video_token_count", "input_video_tokens"),
+        "audio": ("audio_token_count", "input_audio_tokens"),
+        "image": ("image_token_count", "input_image_tokens"),
+        "text": ("prompt_token_count", "input_tokens", "input_token_count"),
+    }
+    current_breakdown = usage.get("input_tokens_by_modality")
+    current_values: dict[str, int] = {}
+    if isinstance(current_breakdown, Sequence) and not isinstance(
+        current_breakdown, (str, bytes, bytearray)
+    ):
+        current_values = {
+            str(item["modality"]): int(item["tokens"])
+            for item in current_breakdown
+            if isinstance(item, Mapping)
+        }
+    for modality, names in aliases.items():
+        legacy = _first_int(usage, *names)
+        if legacy is None:
+            continue
+        if current_breakdown is None:
+            raise ValueError(
+                f"legacy {modality} usage cannot be combined with Interactions totals safely"
+            )
+        if current_values.get(modality, 0) != legacy:
+            raise ValueError(f"Interactions {modality} usage conflicts with a legacy alias")
+
+
+def _normalize_usage_metadata(value: object) -> dict[str, Any]:
+    if not isinstance(value, Mapping):
+        raise ValueError("Gemini usage metadata must be an object")
+    raw = _jsonable(value)
+    if not isinstance(raw, Mapping):
+        raise ValueError("Gemini usage metadata must be an object")
+    normalized: dict[str, Any] = {}
+    for raw_key, raw_value in raw.items():
+        key = _snake(str(raw_key))
+        if key in _USAGE_SCALAR_KEYS:
+            if (
+                isinstance(raw_value, bool)
+                or not isinstance(raw_value, int)
+                or raw_value < 0
+                or raw_value > MAX_USAGE_TOKENS_PER_DIMENSION
+            ):
+                raise ValueError("Gemini usage metadata contains an invalid count")
+            normalized[key] = raw_value
+        elif key in _USAGE_BREAKDOWN_KEYS:
+            normalized[key] = _normalize_modality_breakdown(raw_value)
+        # Unknown provider fields are intentionally excluded from the
+        # sanitized artifact.  They cannot influence authoritative billing.
+    return normalized
+
+
+def _normalize_modality_breakdown(value: object) -> list[dict[str, Any]]:
+    if not isinstance(value, Sequence) or isinstance(value, (str, bytes, bytearray)):
+        raise ValueError("Gemini modality token usage must be an array")
+    result: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for item in value:
+        if not isinstance(item, Mapping):
+            raise ValueError("Gemini modality token usage contains a malformed entry")
+        modality = item.get("modality")
+        tokens = item.get("tokens")
+        if not isinstance(modality, str):
+            raise ValueError("Gemini modality token usage has no modality")
+        modality = modality.lower()
+        if modality in seen:
+            raise ValueError("Gemini modality token usage contains duplicate modalities")
+        if modality not in _USAGE_MODALITIES:
+            raise ValueError("Gemini modality token usage contains an unsupported modality")
+        if (
+            isinstance(tokens, bool)
+            or not isinstance(tokens, int)
+            or tokens < 0
+            or tokens > MAX_USAGE_TOKENS_PER_DIMENSION
+        ):
+            raise ValueError("Gemini modality token usage contains an invalid count")
+        seen.add(modality)
+        result.append({"modality": modality, "tokens": tokens})
+    return result
+
+
+def _usage_dict(response: Any) -> dict[str, Any]:
     usage = _field(response, "usage", None) or _field(response, "usage_metadata", None)
     if usage is None:
         return {}
     raw = _jsonable(usage)
     if not isinstance(raw, Mapping):
         return {}
-    result: dict[str, int] = {}
-    for key, value in raw.items():
-        if isinstance(value, bool):
-            continue
-        if isinstance(value, int) and 0 <= value <= 10_000_000:
-            result[_snake(str(key))] = value
-    return result
+    return _normalize_usage_metadata(raw)
 
 
-def _first_int(values: Mapping[str, int], *names: str) -> int | None:
+def _first_int(values: Mapping[str, Any], *names: str) -> int | None:
     for name in names:
         if name in values:
-            return values[name]
+            value = values[name]
+            if isinstance(value, bool) or not isinstance(value, int):
+                raise ValueError(f"usage field {name} is not an integer")
+            return int(value)
     return None
 
 

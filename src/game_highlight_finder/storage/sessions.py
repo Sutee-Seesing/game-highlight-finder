@@ -34,7 +34,7 @@ LOCAL_SIGNALS_CACHE_VERSION = 1
 LOCAL_SIGNALS_CONFIG_FINGERPRINT_VERSION = 1
 SCOUT_CACHE_VERSION = 1
 SCOUT_CONFIG_FINGERPRINT_VERSION = 1
-GEMINI_PROVIDER_CACHE_VERSION = 1
+GEMINI_PROVIDER_CACHE_VERSION = 2
 
 
 @dataclass(frozen=True)
@@ -306,7 +306,8 @@ def scout_config_fingerprint(config: AppConfig, *, fixture_sha256: str | None = 
         "media_resolution": config.scout.media_resolution,
         "max_duration_seconds": config.scout.max_duration_seconds,
         "max_output_tokens": config.scout.max_output_tokens,
-        "max_thinking_tokens": config.scout.max_thinking_tokens,
+        "thinking_level": config.scout.thinking_level,
+        "reserved_thinking_tokens": config.scout.reserved_thinking_tokens,
         "prompt_version": config.scout.prompt_version,
     }
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
@@ -387,7 +388,8 @@ def gemini_provider_cache_payload(
         "response_max_bytes": config.scout.response_max_bytes,
         "max_duration_seconds": config.scout.max_duration_seconds,
         "max_output_tokens": config.scout.max_output_tokens,
-        "max_thinking_tokens": config.scout.max_thinking_tokens,
+        "thinking_level": config.scout.thinking_level,
+        "reserved_thinking_tokens": config.scout.reserved_thinking_tokens,
     }
 
 

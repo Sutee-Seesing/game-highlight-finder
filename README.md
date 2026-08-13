@@ -152,8 +152,13 @@ tokens including thinking, verified against Google's official pages on 2026-08-1
 (Asia/Bangkok): [pricing](https://ai.google.dev/gemini-api/docs/pricing) and
 [model](https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash-lite).
 The low-resolution estimate follows Google's video guidance of about 66 vision
-tokens/second plus 32 audio tokens/second; configured visible-output and thinking
-ceilings are reserved before the M4 reservation.
+tokens/second plus 32 audio tokens/second. The Interactions adapter places
+`resolution: "low"` on the video content item (not an unsupported generation-level
+`media_resolution` field), and fails closed rather than falling back. It parses
+current `total_input_tokens`, `total_output_tokens`, `total_thought_tokens`, and
+`input_tokens_by_modality` usage first, with strict conflict checks for legacy
+aliases. `thinking_level: minimal` is sent to Gemini; `reserved_thinking_tokens`
+is only a conservative local cost allowance, not a provider-enforced ceiling.
 
 M5 is one bounded request (maximum 900 seconds by default). It uses the Files API
 with `store=false` Interactions, structured JSON output, usage capture, persisted

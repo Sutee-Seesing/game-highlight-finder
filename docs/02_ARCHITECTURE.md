@@ -186,7 +186,9 @@ For the implemented M5 Gemini Scout:
 
 - Use the Files API for the bounded proxy upload; remote objects are temporary and must not be treated as cache artifacts.
 - Save only redacted remote name/state/expiry/deletion metadata, reuse no remote object across requests, and attempt deletion when the stage completes or fails.
-- Use `Interactions` with `store=false` and provider-supported structured output, then still apply local semantic validation.
+- Use `Interactions` with `store=false` and provider-supported structured output, then still apply local semantic validation. Parse the current `total_*` and `input_tokens_by_modality` usage fields first; conflicting legacy aliases fail closed.
+- Set `thinking_level: minimal` explicitly for Scout. `reserved_thinking_tokens` is a local conservative reservation allowance because Interactions exposes a qualitative thinking level, not a numeric provider-enforced thinking-token ceiling.
+- Put `resolution: low` on the Gemini 3 video content item. Do not send an unsupported generation-level `media_resolution`; any inability to honor low resolution fails closed.
 - One video per M5 Scout request, low media resolution, and a 900-second default duration bound. Overlapping windows belong to M6.
 - Reserve through the local ledger before any upload and preserve ambiguous outcomes rather than blindly retrying.
 
@@ -242,11 +244,16 @@ As verified on 2026-08-13 (Asia/Bangkok), Google's official documentation lists
 `gemini-3.5-flash-lite` as stable with text/image/video/audio inputs, structured
 outputs, and thinking support. Low-resolution video uses about 66 vision tokens
 per second plus 32 audio tokens per second; the Files API samples at 1 FPS and
-keeps uploads temporarily. Interactions supports stateless `store=false`, while
-video metadata/custom FPS and Batch are not available on that surface. These are
-volatile provider facts and belong in a dated catalog/compatibility test, not
-silent assumptions:
+keeps uploads temporarily. Interactions supports stateless `store=false`,
+documents `total_input_tokens`, `total_output_tokens`, `total_thought_tokens`,
+and `input_tokens_by_modality`, and supports `thinking_level` values including
+`minimal`. Video content items carry `resolution`; video metadata/custom FPS and
+Batch are not available on that surface. These are volatile provider facts and
+belong in a dated catalog/compatibility test, not silent assumptions:
 
 - [Gemini video understanding](https://ai.google.dev/gemini-api/docs/video-understanding)
+- [Gemini Interactions API](https://ai.google.dev/api/interactions-api)
+- [Gemini token usage](https://ai.google.dev/gemini-api/docs/tokens)
+- [Gemini media resolution](https://ai.google.dev/gemini-api/docs/media-resolution)
 - [Gemini Files API](https://ai.google.dev/gemini-api/docs/files)
 - [Gemini structured outputs](https://ai.google.dev/gemini-api/docs/structured-output)

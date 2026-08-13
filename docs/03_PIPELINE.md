@@ -48,7 +48,8 @@ quotes and reserves before the Files API upload; the adapter marks the ledger
 `IN_FLIGHT` immediately before generation, settles visible/thinking usage on a
 completed response, and marks a post-send failure `AMBIGUOUS`. Only the committed
 analysis proxy is uploadable. The M5 cache key covers source/proxy/signal summary,
-prompt/schema, model, billing mode, media resolution, and token ceilings; a
+prompt/schema, model, billing mode, media resolution, thinking level, and the
+local reserved thinking allowance; a
 verified cache hit performs no upload or generation. Long-session window planning
 and reconciliation are M6 work.
 

@@ -101,7 +101,11 @@ class ScoutConfig(StrictModel):
     media_resolution: Literal["low"] = "low"
     max_duration_seconds: int = Field(default=900, ge=1, le=10_800)
     max_output_tokens: int = Field(default=2_048, ge=1, le=65_536)
-    max_thinking_tokens: int = Field(default=1_024, ge=0, le=10_000_000)
+    thinking_level: Literal["minimal", "low", "medium", "high"] = "minimal"
+    # Gemini exposes a qualitative thinking level rather than a numeric hard
+    # thinking-token limit through Interactions.  This is therefore a local,
+    # conservative reservation allowance used only by the M4 cost gate.
+    reserved_thinking_tokens: int = Field(default=1_024, ge=0, le=10_000_000)
     prompt_version: str = Field(default="gemini-scout-v1", min_length=1, max_length=64)
     readiness_timeout_seconds: float = Field(default=120.0, gt=0, le=3_600)
     readiness_poll_initial_seconds: float = Field(default=1.0, gt=0, le=60)

@@ -85,6 +85,8 @@ class GeminiPreflightResult(BaseModel):
     model: str
     billing_mode: str
     media_resolution: str
+    thinking_level: str
+    reserved_thinking_tokens: int
     usage_estimate: ProviderUsageEstimate
     quote: CostQuote
     available_micro_thb: int
@@ -126,21 +128,22 @@ def estimate_gemini_usage(
     response_schema: dict[str, Any],
     audio_present: bool,
     max_output_tokens: int,
-    max_thinking_tokens: int,
+    reserved_thinking_tokens: int,
 ) -> ProviderUsageEstimate:
     """Conservatively estimate low-resolution video plus bounded text context.
 
     Google's current video guidance is approximately 66 vision tokens/second
     plus 32 audio tokens/second at low resolution.  Prompt/schema text and the
-    complete configured response/thinking ceilings are reserved as well.
+    complete configured response and local thinking reservation allowances are
+    reserved as well.  The latter is not a provider-enforced hard ceiling.
     """
 
     if duration_ms <= 0:
         raise ValidationError("Gemini Scout duration must be positive")
-    if max_output_tokens < 0 or max_thinking_tokens < 0:
-        raise ValidationError("Gemini output and thinking ceilings cannot be negative")
-    if max_output_tokens + max_thinking_tokens > MAX_USAGE_TOKENS_PER_DIMENSION:
-        raise ValidationError("Gemini output and thinking ceilings exceed the safety bound")
+    if max_output_tokens < 0 or reserved_thinking_tokens < 0:
+        raise ValidationError("Gemini output and thinking reservation cannot be negative")
+    if max_output_tokens + reserved_thinking_tokens > MAX_USAGE_TOKENS_PER_DIMENSION:
+        raise ValidationError("Gemini output and thinking reservation exceed the safety bound")
     seconds = (duration_ms + 999) // 1000
     schema_bytes = len(schema_json_for(response_schema).encode("utf-8"))
     text_tokens = max(1, (len(prompt.encode("utf-8")) + 3) // 4)
@@ -150,7 +153,7 @@ def estimate_gemini_usage(
         input_video_tokens=min(10_000_000, seconds * 66),
         input_audio_tokens=min(10_000_000, seconds * 32 if audio_present else 0),
         output_tokens=max_output_tokens,
-        thinking_tokens=max_thinking_tokens,
+        thinking_tokens=reserved_thinking_tokens,
     )
 
 
@@ -195,6 +198,8 @@ def preflight_gemini_scout(
         model=config.scout.model,
         billing_mode=config.scout.billing_mode,
         media_resolution=config.scout.media_resolution,
+        thinking_level=config.scout.thinking_level,
+        reserved_thinking_tokens=config.scout.reserved_thinking_tokens,
         usage_estimate=estimate,
         quote=quote,
         available_micro_thb=summary.available_micro_thb,
@@ -320,6 +325,8 @@ def generate_gemini_scout(
                     source,
                     canonical_path,
                     paths,
+                    media_resolution=config.scout.media_resolution,
+                    thinking_level=config.scout.thinking_level,
                     max_response_bytes=config.scout.response_max_bytes,
                 )
                 _complete_gemini_stage(
@@ -433,7 +440,7 @@ def generate_gemini_scout(
                 response_schema=schema,
                 media_resolution=config.scout.media_resolution,
                 max_output_tokens=config.scout.max_output_tokens,
-                max_thinking_tokens=config.scout.max_thinking_tokens,
+                thinking_level=config.scout.thinking_level,
                 remote_metadata_path=remote_meta_path,
                 before_generation=mark_in_flight_before_generation,
             )
@@ -452,6 +459,8 @@ def generate_gemini_scout(
                 source,
                 canonical_path,
                 paths,
+                media_resolution=config.scout.media_resolution,
+                thinking_level=config.scout.thinking_level,
                 max_response_bytes=config.scout.response_max_bytes,
             )
             _complete_gemini_stage(
@@ -531,7 +540,7 @@ def _request_parts(
         response_schema=schema,
         audio_present=bool(summary.get("audio_present")),
         max_output_tokens=config.scout.max_output_tokens,
-        max_thinking_tokens=config.scout.max_thinking_tokens,
+        reserved_thinking_tokens=config.scout.reserved_thinking_tokens,
     )
     payload = {
         "prompt_version": config.scout.prompt_version,
@@ -544,7 +553,8 @@ def _request_parts(
         "local_signals_summary_hash": _hash_json(summary),
         "response_schema": schema,
         "max_output_tokens": config.scout.max_output_tokens,
-        "max_thinking_tokens": config.scout.max_thinking_tokens,
+        "thinking_level": config.scout.thinking_level,
+        "reserved_thinking_tokens": config.scout.reserved_thinking_tokens,
     }
     return prompt, schema, payload, estimate
 
@@ -580,6 +590,8 @@ def _canonicalize_envelope(
     canonical_path: Path,
     paths: Any,
     *,
+    media_resolution: str,
+    thinking_level: str,
     max_response_bytes: int,
 ) -> SessionMap:
     session_map = canonicalize_scout_response(
@@ -598,7 +610,8 @@ def _canonicalize_envelope(
                 "backend": "gemini",
                 "model": envelope.model,
                 "interaction_id": envelope.interaction_id or "unknown",
-                "media_resolution": "low",
+                "media_resolution": media_resolution,
+                "thinking_level": thinking_level,
                 "remote_cleanup": envelope.remote_cleanup_status,
             },
         }

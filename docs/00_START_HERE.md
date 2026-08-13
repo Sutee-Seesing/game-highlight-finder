@@ -116,8 +116,9 @@ selected Gemini pipeline.
 M5 adds one bounded, explicitly opt-in Gemini request after the local ingest,
 proxy, and signal stages. The exact model is `gemini-3.5-flash-lite` on Google's
 Standard tier. The adapter uploads only the committed session analysis proxy,
-uses low media resolution and structured JSON output through `store=false`
-Interactions, captures visible/thinking usage, reserves before upload, and
+uses low media resolution on the video content item and structured JSON output
+through `store=false` Interactions, captures current total/modality usage plus
+separate visible/thinking counts, reserves before upload, and
 persists the complete cost lifecycle. Remote file metadata excludes the URI;
 deletion is retried without regenerating a paid request. Completed paid responses
 are cacheable by a semantic provider fingerprint, while ambiguous outcomes remain

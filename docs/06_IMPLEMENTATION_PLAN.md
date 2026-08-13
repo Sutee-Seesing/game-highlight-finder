@@ -59,8 +59,10 @@ absent. The complete automated suite is **131 passed / 0 failed / 0 skipped**.
 
 - Implement the exact stable `gemini-3.5-flash-lite` adapter through the official
   `google-genai` SDK, with Files API upload/readiness/deletion lifecycle,
-  `Interactions` `store=false`, low media resolution, structured JSON output,
-  usage capture including thinking tokens, and no thought-step persistence.
+  `Interactions` `store=false`, per-video-item low media resolution, structured
+  JSON output, current total/modality usage capture including separate thinking
+  tokens, and no thought-step persistence. `thinking_level: minimal` is sent to
+  the provider; the reserved thinking allowance is local cost-gate metadata.
 - Reserve through the M4 cost gate before upload, persist request/cache identity,
   preserve `RESERVED -> IN_FLIGHT -> SETTLED/AMBIGUOUS`, and retry only remote
   cleanup on resume. Upload validation accepts only the committed session
@@ -72,7 +74,8 @@ absent. The complete automated suite is **131 passed / 0 failed / 0 skipped**.
 - Offline exit evidence: deterministic prompt/schema/estimate, privacy boundary,
   preflight without transport calls, fake upload/generation/delete lifecycle,
   verified paid cache hit, ambiguous no-retry, and source immutability. Live
-  Gemini acceptance remains opt-in and was not run.
+  Gemini acceptance remains opt-in and was not run. The complete offline suite
+  after this maintenance is **152 passed / 0 failed / 0 skipped**.
 
 ### M6 — Long-session reconciliation and extraction
 

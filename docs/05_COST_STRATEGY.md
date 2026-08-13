@@ -41,6 +41,9 @@ Before upload/generation, calculate estimated usage from:
 - audio modality if separately sent;
 - prompt, schema, transcript, and metadata tokens;
 - configured maximum output tokens, not optimistic average output;
+- a local reserved thinking allowance for the selected qualitative
+  `thinking_level`; this is a cost-gate reservation, not a provider-enforced
+  numeric limit;
 - cached-token behavior only when a confirmed provider cache applies;
 - request fees and storage/cache charges when relevant.
 
@@ -49,7 +52,7 @@ Prefer a provider token-count endpoint after upload when available, but do not r
 Current official Gemini guidance estimates roughly 66 vision tokens/second plus
 32 audio tokens/second for low media resolution (about 100 combined tokens per
 second). M5 uses those rates for conservative preflight, plus bounded prompt,
-schema, visible-output, and thinking ceilings. A 45-minute low-resolution window
+schema, visible-output, and local thinking reservation allowance. A 45-minute low-resolution window
 would be roughly 178,200 vision + 86,400 audio tokens before prompt/output; a
 four-hour VOD must wait for M6 windowing: [Gemini video understanding](https://ai.google.dev/gemini-api/docs/video-understanding).
 

@@ -55,7 +55,8 @@ scout:
   media_resolution: low
   max_duration_seconds: 900
   max_output_tokens: 2048
-  max_thinking_tokens: 1024
+  thinking_level: minimal
+  reserved_thinking_tokens: 1024
   prompt_version: gemini-scout-v1
   readiness_timeout_seconds: 120
   readiness_poll_initial_seconds: 1
