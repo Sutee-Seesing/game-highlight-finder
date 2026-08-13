@@ -607,6 +607,19 @@ class ScoutResponse(PersistedModel):
             raise ValueError("Scout response time fields must be integers")
         return value
 
+    @model_validator(mode="after")
+    def validate_time_basis(self) -> ScoutResponse:
+        if self.time_basis == "window_relative":
+            # M3 accepted window-relative fixtures without an explicit end;
+            # retain that compatibility while enforcing ordering whenever the
+            # M6 window bound is supplied.  M6-generated responses always set
+            # both bounds before canonicalization.
+            if self.window_end_ms is not None and self.window_end_ms <= self.window_start_ms:
+                raise ValueError("window-relative Scout response bounds must be ordered")
+        elif self.window_start_ms != 0 or self.window_end_ms is not None:
+            raise ValueError("source-relative Scout responses cannot carry a window interval")
+        return self
+
 
 ScoutCandidate = ScoutCandidateFragment
 ScoutMatch = ScoutMatchFragment

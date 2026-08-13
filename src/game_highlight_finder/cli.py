@@ -25,7 +25,7 @@ from game_highlight_finder.pipeline.gemini_scout import (
     generate_gemini_scout,
     preflight_gemini_scout,
 )
-from game_highlight_finder.pipeline.runner import AnalysisResult, analyze_source
+from game_highlight_finder.pipeline.runner import AnalysisResult, analyze_m6_source, analyze_source
 from game_highlight_finder.providers import ProviderRegistry
 from game_highlight_finder.status import get_session_status
 
@@ -201,7 +201,7 @@ def analyze(
         str,
         typer.Option(
             "--stop-after",
-            help="Stop after ingest, proxy, local-signals, or scout (default: scout).",
+            help="Stop after ingest, proxy, local-signals, windows, scout, reconcile, or extract.",
         ),
     ] = "scout",
     scout_backend: Annotated[
@@ -225,6 +225,10 @@ def analyze(
             help="Gemini preflight only: quote locally and make no upload or provider call.",
         ),
     ] = False,
+    m6: Annotated[
+        bool,
+        typer.Option("--m6", help="Run the offline M6 window/reconcile/extract flow."),
+    ] = False,
 ) -> None:
     """Run local stages and the configured Scout without modifying the source."""
     _execute(
@@ -236,6 +240,7 @@ def analyze(
             scout_backend=scout_backend,
             allow_remote_upload=allow_remote_upload,
             dry_run=dry_run,
+            m6=m6,
         ),
     )
 
@@ -248,6 +253,7 @@ def _analyze(
     scout_backend: str | None = None,
     allow_remote_upload: bool = False,
     dry_run: bool = False,
+    m6: bool = False,
 ) -> None:
     config = _load(options).config
     if scout_backend is not None:
@@ -261,6 +267,45 @@ def _analyze(
         config = config.model_copy(
             update={"scout": config.scout.model_copy(update={"allow_remote_upload": True})}
         )
+    if m6:
+        if allow_remote_upload or config.scout.backend != "fake":
+            raise ConfigError(
+                "M6 is offline-only; remote upload and live Gemini are not permitted."
+            )
+        m6_result = analyze_m6_source(video, config, stop_after=stop_after)
+        typer.echo("[PASS] M6 offline windowed analysis completed")
+        if m6_result.windows is not None:
+            typer.echo(
+                f"windows: {len(m6_result.windows.windows)} "
+                f"(cache hits: {m6_result.windows.cache_hits})"
+            )
+        if m6_result.scout is not None:
+            cache_hits = sum(1 for item in m6_result.scout.results if item.cache_hit)
+            typer.echo(
+                f"window Scout responses: {len(m6_result.scout.results)} (cache hits: {cache_hits})"
+            )
+            typer.echo(
+                "aggregate cost preflight micro-THB: "
+                f"{m6_result.scout.aggregate_preflight.estimated_micro_thb}"
+            )
+        if m6_result.session_map is not None:
+            typer.echo(f"reconciled candidates: {len(m6_result.session_map.candidates)}")
+            session_map_path = (
+                config.storage.data_dir
+                / "sessions"
+                / m6_result.ingest.session_id
+                / "session_map.json"
+            )
+            typer.echo(f"session map: {session_map_path}")
+        if m6_result.extraction is not None:
+            typer.echo(
+                f"extractions: {m6_result.extraction.completed} completed, "
+                f"{m6_result.extraction.incomplete} incomplete"
+            )
+        typer.echo("Real Gemini API calls: ZERO")
+        typer.echo(f"session ID: {m6_result.ingest.session_id}")
+        typer.echo(f"session directory: {m6_result.ingest.session_dir}")
+        return
     if dry_run:
         if config.scout.backend != "gemini":
             raise ConfigError("--dry-run is only available with the Gemini Scout backend.")
@@ -300,7 +345,7 @@ def _analyze(
             f"Maximum reserved cost: {_format_micro_thb(preflight.quote.reserved_cost_micro_thb)}"
         )
         typer.echo(f"Monthly available budget: {_format_micro_thb(preflight.available_micro_thb)}")
-        result = AnalysisResult(
+        result: AnalysisResult = AnalysisResult(
             ingest=local.ingest,
             proxy=local.proxy,
             local_signals=local.local_signals,

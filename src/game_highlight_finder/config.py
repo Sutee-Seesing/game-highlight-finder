@@ -57,9 +57,40 @@ class AudioConfig(StrictModel):
     codec: Literal["aac"] = "aac"
 
 
+class ExtractionConfig(StrictModel):
+    """M6 candidate extraction policy.
+
+    All durations are integer seconds at the configuration boundary and are
+    converted to integer milliseconds by the extraction planner.  Keeping the
+    policy explicit makes the default accurate re-encode auditable while still
+    allowing a clearly-labelled stream-copy alternative.
+    """
+
+    mode: Literal["accurate", "copy"] = "accurate"
+    pre_roll_seconds: int = Field(default=5, ge=0, le=60)
+    post_roll_seconds: int = Field(default=5, ge=0, le=60)
+    minimum_duration_seconds: int = Field(default=1, ge=1, le=900)
+    maximum_duration_seconds: int = Field(default=900, ge=1, le=900)
+    video_codec: Literal["libx264"] = "libx264"
+    crf: int = Field(default=18, ge=0, le=51)
+    preset: Literal["ultrafast", "superfast", "veryfast", "faster", "fast", "medium"] = "medium"
+    audio_codec: Literal["aac"] = "aac"
+    thumbnail: bool = True
+    thumbnail_width: int = Field(default=320, ge=32, le=1920)
+    thumbnail_height: int = Field(default=180, ge=32, le=1080)
+    accurate_tolerance_ms: int = Field(default=500, ge=0, le=10_000)
+
+    @model_validator(mode="after")
+    def duration_bounds_ordered(self) -> ExtractionConfig:
+        if self.maximum_duration_seconds < self.minimum_duration_seconds:
+            raise ValueError("maximum extraction duration must be at least minimum duration")
+        return self
+
+
 class MediaConfig(StrictModel):
     proxy: ProxyConfig = ProxyConfig()
     audio: AudioConfig = AudioConfig()
+    extraction: ExtractionConfig = ExtractionConfig()
 
 
 class DiskConfig(StrictModel):
@@ -111,6 +142,14 @@ class ScoutConfig(StrictModel):
     readiness_poll_initial_seconds: float = Field(default=1.0, gt=0, le=60)
     readiness_poll_max_seconds: float = Field(default=8.0, gt=0, le=120)
     cleanup_retry_limit: int = Field(default=3, ge=0, le=10)
+    # M6 bounded overlapping-window policy.  These are intentionally separate
+    # from the M5 one-request duration ceiling so old configs remain valid.
+    window_duration_seconds: int = Field(default=900, ge=1, le=3_600)
+    window_overlap_seconds: int = Field(default=30, ge=0, le=3_599)
+    max_windows: int = Field(default=1_024, ge=1, le=10_000)
+    window_prompt_version: str = Field(
+        default="gemini-scout-window-v1", min_length=1, max_length=64
+    )
 
     @field_validator("api_key_env")
     @classmethod
@@ -124,6 +163,8 @@ class ScoutConfig(StrictModel):
     def validate_polling(self) -> ScoutConfig:
         if self.readiness_poll_max_seconds < self.readiness_poll_initial_seconds:
             raise ValueError("readiness poll max must be at least the initial delay")
+        if self.window_overlap_seconds >= self.window_duration_seconds:
+            raise ValueError("window overlap must be shorter than window duration")
         return self
 
 

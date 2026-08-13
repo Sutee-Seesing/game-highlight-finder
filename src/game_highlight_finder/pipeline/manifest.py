@@ -33,12 +33,15 @@ def new_manifest(session_id: str, *, now: datetime | None = None) -> Manifest:
             "proxy": StageRecord(stage="proxy"),
             "local_signals": StageRecord(stage="local_signals"),
             "scout": StageRecord(stage="scout"),
+            "reconcile": StageRecord(stage="reconcile"),
+            "extract": StageRecord(stage="extract"),
         },
     )
 
 
 M2_STAGE_NAMES = ("proxy", "local_signals")
 M3_STAGE_NAMES = ("scout",)
+M6_STAGE_NAMES = ("reconcile", "extract")
 
 
 def ensure_m2_stages(manifest: Manifest, *, now: datetime | None = None) -> bool:
@@ -59,6 +62,19 @@ def ensure_m3_stages(manifest: Manifest, *, now: datetime | None = None) -> bool
 
     changed = ensure_m2_stages(manifest, now=now)
     for name in M3_STAGE_NAMES:
+        if name not in manifest.stages:
+            manifest.stages[name] = StageRecord(stage=name)
+            changed = True
+    if changed:
+        manifest.updated_at = now or utc_now()
+    return changed
+
+
+def ensure_m6_stages(manifest: Manifest, *, now: datetime | None = None) -> bool:
+    """Add M6 reconciliation/extraction records without rewriting prior state."""
+
+    changed = ensure_m3_stages(manifest, now=now)
+    for name in M6_STAGE_NAMES:
         if name not in manifest.stages:
             manifest.stages[name] = StageRecord(stage=name)
             changed = True

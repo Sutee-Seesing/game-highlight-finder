@@ -202,6 +202,7 @@ def canonicalize_scout_response(
     source_offset_ms: int = 0,
     created_at: datetime | None = None,
     max_response_bytes: int = MAX_SCOUT_RESPONSE_BYTES,
+    source_window_id: str | None = None,
 ) -> SessionMap:
     """Turn one untrusted Scout response into a deterministic canonical map."""
 
@@ -265,7 +266,7 @@ def canonicalize_scout_response(
                     offset_ms=offset,
                     field=f"matches[{match_number}].evidence",
                 ),
-                source_window_ids=["fake-window"],
+                source_window_ids=[source_window_id or "fake-window"],
                 warnings=actions,
             )
         except PydanticValidationError as exc:
@@ -379,7 +380,7 @@ def canonicalize_scout_response(
                     offset_ms=offset,
                     field=f"candidates[{candidate_number}].evidence",
                 ),
-                source_window_ids=["fake-window"],
+                source_window_ids=[source_window_id or "fake-window"],
                 clip_start_ms=setup if setup is not None else start,
                 clip_end_ms=payoff if payoff is not None else end,
                 normalization_actions=candidate_actions,

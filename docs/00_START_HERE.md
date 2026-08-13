@@ -1,6 +1,6 @@
 # Game Highlight Finder — Start Here
 
-Status: Milestone 5 Gemini Scout implementation complete; live provider acceptance remains opt-in
+Status: Milestone 6 long-session reconciliation and extraction complete; live windowed Gemini acceptance not run
 Plan date: 2026-08-11  
 Working project path: `C:\Data\Works\Personal_Projects\Active_Products\game-highlight-finder`
 
@@ -140,4 +140,23 @@ future live run, confirm:
 - A valid user-managed `GEMINI_API_KEY` and an explicit FX snapshot.
 - A short, synthetic/non-private proxy and the configured M5 duration/budget limits.
 
-M6 remains not started and must not be inferred from the M5 implementation.
+## M6 long-session reconciliation and extraction
+
+M6 is implemented as an explicit offline `highlight analyze --m6` flow. It plans
+deterministic source-relative windows bounded to 900 seconds with 30 seconds of
+overlap by default, derives every window proxy only from the committed analysis
+proxy, intersects bounded local-signal hints, and persists strict per-window
+lineage plus raw/canonical responses. Fake Window Scout is the implementation
+and acceptance harness; M6 live windowed Gemini acceptance was not run.
+
+Window timestamps are returned relative to each window and converted exactly
+once to the canonical source timeline. Reconciliation conservatively stitches
+compatible match fragments, records conflicts, deduplicates same-category
+candidate fragments across overlap lineage, derives bounded clip context, and
+persists diagnostics. Accurate source re-encode is the extraction default;
+stream-copy is opt-in and marked keyframe-approximate. Outputs and thumbnails
+are re-probed, hashed, atomically committed, and tracked per candidate in a
+restart-safe extraction manifest. Source identity is rechecked before cutting.
+
+All M6 implementation tests and smoke validation used local FFmpeg/ffprobe,
+synthetic media, and Fake Scout. Real Gemini API calls: ZERO. M7 is not started.

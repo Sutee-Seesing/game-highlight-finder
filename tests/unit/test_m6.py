@@ -1,0 +1,200 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+
+from game_highlight_finder.config import AppConfig
+from game_highlight_finder.domain.canonical import canonicalize_scout_response
+from game_highlight_finder.domain.reconcile import derive_clip_boundaries, reconcile_session_maps
+from game_highlight_finder.domain.windows import plan_scout_windows
+from game_highlight_finder.errors import ValidationError
+from game_highlight_finder.media.ffmpeg import (
+    build_extraction_command,
+    build_thumbnail_command,
+    build_window_proxy_command,
+)
+from game_highlight_finder.pipeline.windowed_scout import FakeWindowScout
+
+
+def _window_response(
+    *, duration_ms: int, start_ms: int, end_ms: int, event_start: int, event_end: int
+) -> dict[str, object]:
+    return {
+        "schema_version": 1,
+        "source_duration_ms": duration_ms,
+        "time_basis": "window_relative",
+        "window_start_ms": start_ms,
+        "window_end_ms": end_ms,
+        "matches": [
+            {
+                "start_ms": 0,
+                "end_ms": end_ms - start_ms,
+                "confidence": 0.8,
+                "label": "same round",
+                "ordinal": 0,
+                "evidence": [],
+                "candidates": [],
+            }
+        ],
+        "candidates": [
+            {
+                "start_ms": event_start - start_ms,
+                "end_ms": event_end - start_ms,
+                "category": "CLUTCH",
+                "score": 8.0,
+                "confidence": 0.9,
+                "reason": "same event across overlapping windows",
+                "evidence": [],
+                "match_index": 0,
+            }
+        ],
+        "warnings": [],
+        "metadata": {"backend": "fake-window"},
+    }
+
+
+def test_window_planner_is_bounded_contiguous_and_deterministic() -> None:
+    first = plan_scout_windows(1_800_001, session_id="session", source_id="src_" + "a" * 16)
+    second = plan_scout_windows(1_800_001, session_id="session", source_id="src_" + "a" * 16)
+    assert first.plan_hash == second.plan_hash
+    assert len(first.windows) == 3
+    assert first.windows[0].source_start_ms == 0
+    assert first.windows[-1].source_end_ms == 1_800_001
+    for left, right in zip(first.windows, first.windows[1:], strict=False):
+        assert right.source_start_ms == left.source_end_ms - 30_000
+        assert left.duration_ms <= 900_000
+
+
+@pytest.mark.parametrize("overlap", [-1, 900_000])
+def test_window_planner_rejects_invalid_overlap(overlap: int) -> None:
+    with pytest.raises(ValidationError):
+        plan_scout_windows(100_000, overlap_ms=overlap)
+
+
+def test_window_relative_canonicalization_preserves_absolute_event() -> None:
+    payload = _window_response(
+        duration_ms=20_000,
+        start_ms=10_000,
+        end_ms=20_000,
+        event_start=12_000,
+        event_end=13_000,
+    )
+    session_map = canonicalize_scout_response(
+        payload,
+        session_id="session",
+        source_id="src_" + "a" * 16,
+        source_duration_ms=20_000,
+        source_window_id="scout_window_" + "b" * 16,
+    )
+    assert session_map.candidates[0].event_start_ms == 12_000
+    assert session_map.candidates[0].event_end_ms == 13_000
+    assert session_map.candidates[0].source_window_ids == ["scout_window_" + "b" * 16]
+
+
+def test_reconcile_stitches_overlap_and_deduplicates_candidate() -> None:
+    source_id = "src_" + "a" * 16
+    plan = plan_scout_windows(
+        20_000, max_duration_ms=15_000, overlap_ms=5_000, session_id="session", source_id=source_id
+    )
+    maps = []
+    for window in plan.windows:
+        payload = _window_response(
+            duration_ms=20_000,
+            start_ms=window.source_start_ms,
+            end_ms=window.source_end_ms,
+            event_start=12_000,
+            event_end=13_000,
+        )
+        maps.append(
+            (
+                window,
+                canonicalize_scout_response(
+                    payload,
+                    session_id="session",
+                    source_id=source_id,
+                    source_duration_ms=20_000,
+                    source_window_id=window.window_id,
+                ),
+            )
+        )
+    reconciled = reconcile_session_maps("session", source_id, 20_000, maps)
+    assert len(reconciled.candidates) == 1
+    assert len(reconciled.matches) == 1
+    assert len(reconciled.candidates[0].source_window_ids) == 2
+    assert reconciled.matches[0].candidate_ids == [reconciled.candidates[0].candidate_id]
+
+
+def test_clip_boundaries_apply_pre_post_roll_and_bounds() -> None:
+    source_id = "src_" + "a" * 16
+    window = plan_scout_windows(10_000, session_id="session", source_id=source_id).windows[0]
+    payload = _window_response(
+        duration_ms=10_000,
+        start_ms=0,
+        end_ms=10_000,
+        event_start=500,
+        event_end=700,
+    )
+    session_map = canonicalize_scout_response(
+        payload,
+        session_id="session",
+        source_id=source_id,
+        source_duration_ms=10_000,
+        source_window_id=window.window_id,
+    )
+    config = AppConfig().media.extraction.model_copy(
+        update={"pre_roll_seconds": 1, "post_roll_seconds": 1}
+    )
+    bounded = derive_clip_boundaries(session_map, 10_000, config)
+    candidate = bounded.candidates[0]
+    assert candidate.clip_start_ms == 0
+    assert candidate.clip_end_ms == 1_700
+
+
+def test_command_builders_use_integer_seconds_and_never_shell() -> None:
+    class Extraction:
+        mode = "accurate"
+        video_codec = "libx264"
+        crf = 18
+        preset = "medium"
+        audio_codec = "aac"
+
+    window = build_window_proxy_command(
+        Path("ffmpeg"),
+        Path("analysis proxy.mp4"),
+        Path("window.mp4"),
+        proxy_start_ms=1_001,
+        duration_ms=2_003,
+        has_audio=True,
+    )
+    accurate = build_extraction_command(
+        Path("ffmpeg"),
+        Path("raw source.mp4"),
+        Path("candidate.mp4"),
+        start_ms=1_001,
+        end_ms=3_004,
+        extraction=Extraction(),
+        has_audio=False,
+    )
+    thumbnail = build_thumbnail_command(
+        Path("ffmpeg"), Path("candidate.mp4"), Path("thumb.jpg"), at_ms=1_001
+    )
+    assert "1.001" in window and "2.003" in window
+    assert "1.001" in accurate and "2.003" in accurate
+    assert "-c:v" in accurate and "libx264" in accurate
+    assert "-frames:v" in thumbnail and "1.001" in thumbnail
+    assert all(isinstance(arg, str) for arg in accurate)
+
+
+def test_fake_window_scout_is_observable_and_deterministic() -> None:
+    source_id = "src_" + "a" * 16
+    window = plan_scout_windows(5_000, session_id="session", source_id=source_id).windows[0]
+    provider = FakeWindowScout()
+    one = provider.generate(
+        window=window, source_duration_ms=5_000, source_sha256="a" * 64, summary={}
+    )
+    two = provider.generate(
+        window=window, source_duration_ms=5_000, source_sha256="a" * 64, summary={}
+    )
+    assert one == two
+    assert provider.calls == [window.window_id, window.window_id]

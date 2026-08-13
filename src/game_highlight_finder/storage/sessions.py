@@ -54,6 +54,11 @@ class SessionPaths:
     scout_canonical_dir: Path
     session_map: Path
     tmp_dir: Path
+    scout_windows_dir: Path
+    reconcile_dir: Path
+    candidates_dir: Path
+    thumbnails_dir: Path
+    extraction_manifest: Path
 
 
 def session_paths(data_dir: Path, session_id: str) -> SessionPaths:
@@ -76,6 +81,11 @@ def session_paths(data_dir: Path, session_id: str) -> SessionPaths:
         scout_canonical_dir=root / "scout" / "canonical",
         session_map=root / "session_map.json",
         tmp_dir=root / "tmp",
+        scout_windows_dir=root / "scout" / "windows",
+        reconcile_dir=root / "reconcile",
+        candidates_dir=root / "candidates",
+        thumbnails_dir=root / "thumbnails",
+        extraction_manifest=root / "extraction_manifest.json",
     )
 
 

@@ -10,7 +10,7 @@ from game_highlight_finder.config import AppConfig
 from game_highlight_finder.domain.models import AttemptRecord, SourceAsset, StageStatus
 from game_highlight_finder.domain.time import format_duration
 from game_highlight_finder.errors import SourceError
-from game_highlight_finder.pipeline.manifest import ensure_m3_stages
+from game_highlight_finder.pipeline.manifest import ensure_m6_stages
 from game_highlight_finder.storage.sessions import (
     completed_cache_is_valid,
     compute_ingest_cache_key,
@@ -43,7 +43,7 @@ def get_session_status(session_id: str, config: AppConfig) -> SessionStatus:
         raise SourceError(f"Session does not exist: {session_id}")
     source = source_from_artifact(paths.source)
     manifest = load_manifest(paths.manifest)
-    if ensure_m3_stages(manifest):
+    if ensure_m6_stages(manifest):
         from game_highlight_finder.storage.sessions import write_manifest
 
         write_manifest(paths.manifest, manifest)

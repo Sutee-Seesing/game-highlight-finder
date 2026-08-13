@@ -9,6 +9,7 @@ import threading
 import time
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
+from decimal import Decimal
 from pathlib import Path
 
 from game_highlight_finder.config import AppConfig
@@ -300,6 +301,175 @@ def build_signal_command(
         "pipe:1",
         "-nostats",
         "-",
+    ]
+
+
+def _format_ms_seconds(milliseconds: int) -> str:
+    """Format integer milliseconds without float rounding or locale effects."""
+
+    if isinstance(milliseconds, bool) or not isinstance(milliseconds, int) or milliseconds < 0:
+        raise ValueError("milliseconds must be a non-negative integer")
+    return format(Decimal(milliseconds) / Decimal(1000), "f").rstrip("0").rstrip(".") or "0"
+
+
+def build_window_proxy_command(
+    ffmpeg_path: Path,
+    analysis_proxy_path: Path,
+    output_path: Path,
+    *,
+    proxy_start_ms: int,
+    duration_ms: int,
+    has_audio: bool,
+) -> list[str]:
+    """Cut a Scout window from the committed analysis proxy only."""
+
+    if duration_ms <= 0:
+        raise ValueError("window duration must be positive")
+    command = [
+        str(ffmpeg_path),
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-y",
+        "-i",
+        str(analysis_proxy_path),
+        "-ss",
+        _format_ms_seconds(proxy_start_ms),
+        "-t",
+        _format_ms_seconds(duration_ms),
+        "-map",
+        "0:v:0",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "veryfast",
+        "-pix_fmt",
+        "yuv420p",
+    ]
+    if has_audio:
+        command.extend(["-map", "0:a:0?", "-c:a", "aac", "-ac", "1"])
+    else:
+        command.append("-an")
+    command.extend(
+        [
+            "-avoid_negative_ts",
+            "make_zero",
+            "-reset_timestamps",
+            "1",
+            "-movflags",
+            "+faststart",
+            "-progress",
+            "pipe:1",
+            "-nostats",
+            str(output_path),
+        ]
+    )
+    return command
+
+
+def build_extraction_command(
+    ffmpeg_path: Path,
+    source_path: Path,
+    output_path: Path,
+    *,
+    start_ms: int,
+    end_ms: int,
+    extraction: object,
+    has_audio: bool,
+    timestamp_origin_ms: int = 0,
+) -> list[str]:
+    """Build an accurate or explicitly approximate source extraction command."""
+
+    if end_ms <= start_ms:
+        raise ValueError("extraction interval must be non-empty")
+    mode = getattr(extraction, "mode", "accurate")
+    duration_ms = end_ms - start_ms
+    seek_ms = start_ms + max(0, timestamp_origin_ms)
+    command = [
+        str(ffmpeg_path),
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-y",
+        "-ss",
+        _format_ms_seconds(seek_ms),
+        "-i",
+        str(source_path),
+        "-t",
+        _format_ms_seconds(duration_ms),
+        "-map",
+        "0:v:0",
+    ]
+    if has_audio:
+        command.extend(["-map", "0:a:0?"])
+    if mode == "copy":
+        command.extend(["-c:v", "copy"])
+        if has_audio:
+            command.extend(["-c:a", "copy"])
+        else:
+            command.append("-an")
+    else:
+        command.extend(
+            [
+                "-c:v",
+                str(getattr(extraction, "video_codec", "libx264")),
+                "-crf",
+                str(getattr(extraction, "crf", 18)),
+                "-preset",
+                str(getattr(extraction, "preset", "medium")),
+                "-pix_fmt",
+                "yuv420p",
+            ]
+        )
+        if has_audio:
+            command.extend(["-c:a", str(getattr(extraction, "audio_codec", "aac"))])
+        else:
+            command.append("-an")
+    command.extend(
+        [
+            "-avoid_negative_ts",
+            "make_zero",
+            "-movflags",
+            "+faststart",
+            "-progress",
+            "pipe:1",
+            "-nostats",
+            str(output_path),
+        ]
+    )
+    return command
+
+
+def build_thumbnail_command(
+    ffmpeg_path: Path,
+    source_path: Path,
+    output_path: Path,
+    *,
+    at_ms: int,
+    width: int = 320,
+    height: int = 180,
+) -> list[str]:
+    if at_ms < 0 or width <= 0 or height <= 0:
+        raise ValueError("thumbnail time and dimensions must be positive")
+    return [
+        str(ffmpeg_path),
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-y",
+        "-ss",
+        _format_ms_seconds(at_ms),
+        "-i",
+        str(source_path),
+        "-frames:v",
+        "1",
+        "-vf",
+        f"scale={width}:{height}:force_original_aspect_ratio=decrease",
+        "-q:v",
+        "2",
+        "-f",
+        "image2",
+        str(output_path),
     ]
 
 

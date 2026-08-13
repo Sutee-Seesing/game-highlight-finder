@@ -190,3 +190,33 @@ Use half-open intervals `[start_ms, end_ms)` internally. Clamp twice: after mode
 ## 10. Remote lifecycle
 
 Local cache is authoritative. A provider upload record contains remote ID, content hash, created/expiry times, and deletion state. Reuse only when provider, project, content hash, purpose, and validity match. On success or terminal failure, attempt explicit deletion; if deletion fails, record it and show a privacy warning. Never depend on a remote file surviving a resume beyond its documented retention period.
+
+## 11. Implemented M6 flow and resume rules
+
+The explicit `--m6` flow is:
+
+```text
+ingest -> proxy -> local_signals -> window proxies -> window Scout
+       -> reconcile -> derive clip bounds -> extract -> thumbnails
+```
+
+Window planning uses `[start_ms, end_ms)` with a maximum of 900,000 ms and a
+30,000 ms overlap by default. The tail ends exactly at source duration and the
+planner rejects non-forward progress or excessive window counts. Each window
+directory commits `analysis_window.mp4`, `window.json`, bounded `signals.json`,
+raw/canonical responses, and request metadata. Cache identity includes the
+source, parent/window proxy, exact bounds, signal summary, provider/model,
+billing/media/thinking settings, prompt/schema hashes, and output ceiling.
+
+An existing valid raw response can be canonicalized again without generation.
+A fully verified canonical response is a cache hit. Aggregate paid-window
+preflight quotes all missing windows together and compares the sum with current
+available exposure before a future upload; cached windows are excluded. The M6
+CLI remains Fake-only until a separately authorized live windowed acceptance.
+
+Reconcile completes only when all expected windows have canonical results.
+Extraction records each candidate independently and atomically. On interruption,
+verified completed clip/thumbnail hashes are reused and only missing/incomplete
+items retry. The aggregate extract stage is complete only when every candidate
+record is complete. Accurate extraction is the default; copy mode is explicitly
+labelled approximate because keyframes can shift boundaries.

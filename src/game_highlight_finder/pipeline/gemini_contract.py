@@ -100,6 +100,19 @@ def gemini_scout_schema() -> dict[str, Any]:
     }
 
 
+def gemini_window_scout_schema() -> dict[str, Any]:
+    """Project the M6 window-relative contract for a provider request."""
+
+    schema = gemini_scout_schema()
+    properties = schema["properties"]
+    properties["time_basis"] = {"type": "string", "enum": ["window_relative"]}
+    properties["window_start_ms"] = {"type": "integer"}
+    properties["window_end_ms"] = {"type": "integer"}
+    required = schema["required"]
+    required.extend(["window_start_ms", "window_end_ms"])
+    return schema
+
+
 def schema_json() -> str:
     return json.dumps(gemini_scout_schema(), sort_keys=True, separators=(",", ":"))
 
@@ -159,6 +172,7 @@ __all__ = [
     "GEMINI_SCHEMA_VERSION",
     "build_gemini_prompt",
     "gemini_scout_schema",
+    "gemini_window_scout_schema",
     "schema_hash",
     "schema_json",
 ]

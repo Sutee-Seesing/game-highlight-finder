@@ -257,3 +257,30 @@ belong in a dated catalog/compatibility test, not silent assumptions:
 - [Gemini media resolution](https://ai.google.dev/gemini-api/docs/media-resolution)
 - [Gemini Files API](https://ai.google.dev/gemini-api/docs/files)
 - [Gemini structured outputs](https://ai.google.dev/gemini-api/docs/structured-output)
+
+## 10. Implemented M6 architecture
+
+M6 adds four local components while preserving the M1–M5 paths:
+
+- `domain.windows` plans deterministic half-open windows with integer
+  milliseconds, a 900-second maximum, a 30-second overlap, stable IDs, and a
+  hard maximum window count.
+- `pipeline.windowed_scout` cuts window media only from the committed analysis
+  proxy, persists provenance/signal/request/raw/canonical artifacts, and uses a
+  semantic per-window cache. Its Fake Window Scout seam is observable for
+  no-regeneration tests. A window upload privacy validator rejects RAW paths and
+  artifacts without matching committed provenance.
+- `domain.reconcile` conservatively stitches compatible match fragments,
+  exposes conflicts in diagnostics, deduplicates compatible candidates across
+  overlap lineage, reassigns only safe match references, and derives bounded
+  clip context.
+- `pipeline.extraction` revalidates original source identity, accurately
+  re-encodes candidates by default, offers an explicit keyframe-approximate
+  copy mode, creates thumbnails, re-probes outputs, and commits a restart-safe
+  per-candidate manifest.
+
+The Scout privacy boundary sees only `scout/windows/<id>/analysis_window.mp4`,
+which must hash back to `window.json` and a committed parent analysis-proxy
+hash. The original source is used only by the local extraction boundary. M6
+live windowed Gemini acceptance is not enabled by the M6 CLI and was not run.
+M7 components are absent.

@@ -1,10 +1,10 @@
 # Game Highlight Finder
 
-Game Highlight Finder is a local-first CLI for turning long gameplay recordings into a reviewable highlight library. The repository currently implements **Milestone 5: Gemini Scout integration** on top of the accepted M1–M4 foundation.
+Game Highlight Finder is a local-first CLI for turning long gameplay recordings into a reviewable highlight library. The repository currently implements **Milestone 6: long-session windowed reconciliation and extraction** on top of the accepted M1–M5 foundation.
 
 M3 keeps the M2 source/proxy/signal foundation and adds a versioned `Session -> Match -> Candidate` domain map. A deterministic Fake Scout produces bounded offline response fixtures, preserves raw Scout bytes separately from canonical data, and validates hostile output before assigning local deterministic IDs. Canonical timestamps are integer milliseconds with half-open intervals `[start_ms, end_ms)`.
 
-M3 remains offline and deterministic. M4 adds provider-neutral contracts and a fail-closed cost boundary. M5 adds an explicitly opt-in Gemini adapter while keeping Fake Scout as the default; the accepted live smoke used one deterministic synthetic proxy request, and the automated suite continues to use a transport fake with zero provider calls.
+M3 remains offline and deterministic. M4 adds provider-neutral contracts and a fail-closed cost boundary. M5 adds an explicitly opt-in Gemini adapter while keeping Fake Scout as the default. M6 adds bounded overlapping windows, deterministic reconciliation, and accurate source extraction; M6 live windowed Gemini acceptance was **not run** and all M6 validation uses Fake Scout plus synthetic local media.
 
 ## Windows setup
 
@@ -66,6 +66,10 @@ uv run highlight analyze "D:\Recordings\game.mp4" --stop-after ingest
 uv run highlight analyze "D:\Recordings\game.mp4" --stop-after proxy
 uv run highlight analyze "D:\Recordings\game.mp4" --stop-after local-signals
 uv run highlight analyze "D:\Recordings\game.mp4" --stop-after scout
+uv run highlight analyze "D:\Recordings\game.mp4" --m6 --stop-after windows
+uv run highlight analyze "D:\Recordings\game.mp4" --m6 --stop-after scout
+uv run highlight analyze "D:\Recordings\game.mp4" --m6 --stop-after reconcile
+uv run highlight analyze "D:\Recordings\game.mp4" --m6 --stop-after extract
 uv run highlight status <session-id>
 uv run highlight cost status
 uv run highlight cost report
@@ -102,6 +106,17 @@ data/sessions/<session-id>/
     raw/gemini_remote_file.json
     canonical/scout_result.json
     cost.json                 # derived from the authoritative SQLite ledger
+    windows/<scout-window-id>/
+      analysis_window.mp4    # derived only from proxy/analysis_proxy.mp4
+      window.json
+      signals.json
+      response.raw.json
+      response.canonical.json
+      request_meta.json
+  reconcile/diagnostics.json
+  candidates/<candidate-id>.mp4
+  thumbnails/<candidate-id>.jpg
+  extraction_manifest.json
   session_map.json
   logs/
 ```
@@ -111,6 +126,29 @@ The proxy is an analysis derivative (maximum 854x480 by default, aspect-ratio pr
 M3 is entirely local: Fake Scout makes no cloud uploads, paid requests, network calls, or AI calls. A source with no audio still completes proxy and local-signal stages with a warning and empty audio signals. The canonical map keeps every valid candidate above quality/safety validation; there is no product quota such as “top 5”.
 
 Completed stages are cache-verified and resumable. Changing proxy settings invalidates proxy and dependent local signals while keeping ingest cached; changing logging does not invalidate any semantic stage.
+
+## M6 windowed reconciliation and extraction
+
+`highlight analyze --m6` is an offline-only M6 flow. Windows are half-open,
+source-relative, integer-millisecond intervals with a 900-second maximum and
+30-second overlap by default. Each window proxy is cut from the committed
+analysis proxy; the RAW source never crosses the Scout boundary. Local signals
+are intersected and capped before they enter a window prompt. Window response
+identity includes source/proxy/window/signal hashes, model, prompt/schema, and
+output ceilings, so a verified response is never regenerated on resume.
+
+Window-relative timestamps are canonicalized once into the authoritative source
+timeline. Reconciliation merges only compatible boundary fragments, records
+conflicts, deduplicates candidates by category plus overlap/endpoint evidence,
+and keeps deterministic lineage and IDs. Clip bounds use setup/event/payoff
+context with bounded pre/post-roll. Accurate re-encode is the default; opt-in
+`media.extraction.mode: copy` is marked keyframe-approximate. Every output is
+re-probed, thumbnails are validated, and `extraction_manifest.json` records
+source identity, tool/config fingerprints, warnings, and per-candidate resume
+state. Synthetic FFmpeg/ffprobe tests cover interruption and cache reuse.
+
+M6 live windowed Gemini acceptance: **NOT RUN**. Real Gemini API calls during
+M6 implementation and validation: **ZERO**. M7 is not started.
 
 ## Development and tests
 
@@ -167,8 +205,9 @@ SETTLED/AMBIGUOUS`, and explicit remote-file deletion with retry-only cleanup on
 resume. Raw provider response, redacted request metadata, remote deletion state,
 canonical output, and a derived `cost.json` are stored under the session. A paid
 result is reused on a verified cache hit; ambiguous outcomes are never retried
-automatically. Long-session windowing, candidate detection, Gemini live acceptance,
-and all later milestones remain unimplemented.
+automatically. M6 windowing/reconciliation/extraction is local-only; Gemini live
+windowed acceptance was not run. M7 reporting and later milestones remain
+unimplemented.
 
 ## Known M3 limitations
 
@@ -177,7 +216,7 @@ and all later milestones remain unimplemented.
 - Moving a source after ingest is reported as missing; a relink command is future work.
 - Cache identity uses a fast path/size/mtime check and a stored authoritative SHA-256. A changed source creates a new session.
 - Lock recovery handles dead processes on the same host conservatively; unreadable or remote-host locks require manual inspection.
-- Gemini integration is implemented but live acceptance is opt-in and was not run by the offline test suite. Long-session reconciliation, candidate extraction, reports, and reviewer/ranking workflows are future work.
+- Gemini integration is implemented but live acceptance is opt-in; M6 live windowed acceptance was not run. Reports and reviewer/ranking workflows remain future work.
 - JSON schema migrations and force-stage controls are future work.
 
 See [docs/00_START_HERE.md](docs/00_START_HERE.md) for the full product plan.

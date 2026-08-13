@@ -304,3 +304,31 @@ retains all qualifying candidates.
 - Readers reject unknown major versions.
 - Migrations write new files atomically and retain backups or regenerate derived artifacts.
 - Raw provider responses are immutable evidence; canonical results may be regenerated from them when parser logic changes without repeating the paid call, provided the prompt/schema contract remains compatible.
+
+## 9. M6 persisted models
+
+### ScoutWindow / WindowPlan
+
+`ScoutWindow` stores stable ID/ordinal, full source identity, absolute half-open
+bounds, before/after overlap, relative committed proxy path/hash, parent analysis
+proxy hash, bounded signal-summary hash, provider cache key, status, and warnings.
+`WindowPlan` validates start at zero, exact tail coverage, no gaps, deterministic
+overlap, maximum duration, contiguous ordinals, and a hard item-count ceiling.
+
+### Reconciled SessionMap
+
+M6 retains the M3 `SessionMap` schema and enriches `source_window_ids`, warnings,
+normalization actions, candidate-to-match references, and statistics. Match
+fragments merge only with compatible interval/label/ordinal evidence. Conflicts
+are diagnostic rather than silently forced. Candidate dedupe requires compatible
+category and high interval overlap or endpoint jitter across overlapping window
+lineage. IDs are regenerated after final source-time normalization.
+
+### ExtractionManifest / ExtractionRecord
+
+The extraction manifest binds every output to source ID/hash, requested integer
+source interval, accurate/copy mode and accuracy class, output and thumbnail
+paths/hashes, probed duration, tool identity, extraction-config fingerprint,
+status, and bounded warnings/errors. `COMPLETED` items are reusable only while
+all semantic inputs and artifact hashes still match. Partial work never counts
+as an aggregate completed extraction stage.

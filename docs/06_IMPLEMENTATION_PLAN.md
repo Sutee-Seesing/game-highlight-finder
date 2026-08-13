@@ -89,6 +89,17 @@ absent. The complete automated suite is **131 passed / 0 failed / 0 skipped**.
 - Implement precise candidate extraction from source, pre/post-roll, thumbnails, candidate manifest, and stream-copy alternative.
 - Exit: boundary accuracy and dedupe pass on synthetic cross-window cases; interrupted extraction resumes at the missing candidate.
 
+Implemented on 2026-08-13 as an offline long-session foundation. The runtime
+now has a deterministic bounded/overlapping window planner, strict persisted
+window provenance, proxy-only window derivatives, bounded per-window signal
+summaries, window-relative prompt/schema/canonicalization, semantic cache keys,
+aggregate preflight support, conservative match stitching/conflict diagnostics,
+candidate dedupe, bounded clip derivation, accurate source re-encode, an
+explicit keyframe-approximate stream-copy alternative, thumbnails, per-candidate
+manifests, and resume/source-immutability checks. M6 live windowed Gemini
+acceptance was not run; implementation validation made zero Gemini API calls.
+M7 remains not started.
+
 ### M7 — Report and usable V1
 
 - Generate self-contained HTML grouped by match with chronology/ranking/category data, cost, warnings, thumbnails, and local file links.
@@ -108,7 +119,7 @@ absent. The complete automated suite is **131 passed / 0 failed / 0 skipped**.
 - Add keep/maybe/reject/merge suggestions without destructive rewrites.
 - Exit: measured improvement in shortlist precision justifies incremental cost; otherwise leave disabled.
 
-The original milestone order is adjusted so schemas/fake AI and budget controls precede real API integration. Cache/resume is foundational from M1 rather than added late, preventing paid-stage rework. M6 remains the next milestone and is not part of M5.
+The original milestone order is adjusted so schemas/fake AI and budget controls precede real API integration. Cache/resume is foundational from M1 rather than added late, preventing paid-stage rework. M6 is complete; M7 remains a separate future milestone.
 
 ## 3. Test strategy
 
@@ -190,6 +201,6 @@ Create a private annotation format for matches and candidate intervals. Evaluate
 
 V1 is done only after a representative 1–4 hour recording completes through report generation, an interrupted run resumes without repeating paid completed work, the original hash remains unchanged, the cost ledger stays within the hard limit, all candidates are traceable to validated evidence and source intervals, and the owner can find useful clips by reviewing a small fraction of the VOD.
 
-## 7. Exact next action after M5 publication
+## 7. Exact next action after M6 publication
 
-M5 implementation is complete and publishable under the current owner authorization. The next milestone is **M6 — Long-session reconciliation and extraction**; do not begin it as part of this handoff.
+M6 implementation is complete and publishable under the current owner authorization. Stop after M6 publication; do not begin **M7 — Report and usable V1** as part of this handoff.
