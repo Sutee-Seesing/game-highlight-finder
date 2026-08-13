@@ -211,8 +211,9 @@ billing/media/thinking settings, prompt/schema hashes, and output ceiling.
 An existing valid raw response can be canonicalized again without generation.
 A fully verified canonical response is a cache hit. Aggregate paid-window
 preflight quotes all missing windows together and compares the sum with current
-available exposure before a future upload; cached windows are excluded. The M6
-CLI remains Fake-only until a separately authorized live windowed acceptance.
+available exposure before an upload; cached windows are excluded. The M6 CLI
+defaults to Fake Scout; Gemini window execution requires explicit opt-in and
+uses the same per-window ledger/cache boundary validated by the bounded smoke.
 
 Reconcile completes only when all expected windows have canonical results.
 Extraction records each candidate independently and atomically. On interruption,

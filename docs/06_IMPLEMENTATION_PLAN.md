@@ -89,16 +89,22 @@ absent. The complete automated suite is **131 passed / 0 failed / 0 skipped**.
 - Implement precise candidate extraction from source, pre/post-roll, thumbnails, candidate manifest, and stream-copy alternative.
 - Exit: boundary accuracy and dedupe pass on synthetic cross-window cases; interrupted extraction resumes at the missing candidate.
 
-Implemented on 2026-08-13 as an offline long-session foundation. The runtime
+Implemented on 2026-08-13 as a local-first long-session foundation. The runtime
 now has a deterministic bounded/overlapping window planner, strict persisted
 window provenance, proxy-only window derivatives, bounded per-window signal
 summaries, window-relative prompt/schema/canonicalization, semantic cache keys,
 aggregate preflight support, conservative match stitching/conflict diagnostics,
 candidate dedupe, bounded clip derivation, accurate source re-encode, an
 explicit keyframe-approximate stream-copy alternative, thumbnails, per-candidate
-manifests, and resume/source-immutability checks. M6 live windowed Gemini
-acceptance was not run; implementation validation made zero Gemini API calls.
-M7 remains not started.
+manifests, and resume/source-immutability checks. The bounded live acceptance on
+2026-08-13 used a deterministic synthetic ~10-second source, two 6-second
+windows with 2-second overlap, and `gemini-3.5-flash-lite` at low resolution with
+minimal thinking. Both window calls were `SETTLED`, remote cleanup deleted both
+files, and the identical cache rerun made zero new generations or reservations.
+List-rate-equivalent reservations were W0 THB 0.331454 and W1 THB 0.331478
+(total THB 0.662932); settlements were W0 THB 0.022785 and W1 THB 0.022761
+(total THB 0.045546). The full offline suite is 173 passed / 0 failed / 0
+skipped. M7 remains not started.
 
 ### M7 — Report and usable V1
 
@@ -203,4 +209,5 @@ V1 is done only after a representative 1–4 hour recording completes through re
 
 ## 7. Exact next action after M6 publication
 
-M6 implementation is complete and publishable under the current owner authorization. Stop after M6 publication; do not begin **M7 — Report and usable V1** as part of this handoff.
+M6 implementation and bounded live acceptance are complete. The next planned
+milestone is **M7 — Report and usable V1**; do not begin it as part of this handoff.

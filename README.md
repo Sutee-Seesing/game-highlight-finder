@@ -4,7 +4,7 @@ Game Highlight Finder is a local-first CLI for turning long gameplay recordings 
 
 M3 keeps the M2 source/proxy/signal foundation and adds a versioned `Session -> Match -> Candidate` domain map. A deterministic Fake Scout produces bounded offline response fixtures, preserves raw Scout bytes separately from canonical data, and validates hostile output before assigning local deterministic IDs. Canonical timestamps are integer milliseconds with half-open intervals `[start_ms, end_ms)`.
 
-M3 remains offline and deterministic. M4 adds provider-neutral contracts and a fail-closed cost boundary. M5 adds an explicitly opt-in Gemini adapter while keeping Fake Scout as the default. M6 adds bounded overlapping windows, deterministic reconciliation, and accurate source extraction; M6 live windowed Gemini acceptance was **not run** and all M6 validation uses Fake Scout plus synthetic local media.
+M3 remains offline and deterministic. M4 adds provider-neutral contracts and a fail-closed cost boundary. M5 adds an explicitly opt-in Gemini adapter while keeping Fake Scout as the default. M6 adds bounded overlapping windows, deterministic reconciliation, and accurate source extraction; its bounded live windowed Gemini acceptance is **accepted** while Fake Scout remains the default.
 
 ## Windows setup
 
@@ -113,6 +113,8 @@ data/sessions/<session-id>/
       response.raw.json
       response.canonical.json
       request_meta.json
+      cost.json
+      gemini_remote_file.json
   reconcile/diagnostics.json
   candidates/<candidate-id>.mp4
   thumbnails/<candidate-id>.jpg
@@ -129,7 +131,8 @@ Completed stages are cache-verified and resumable. Changing proxy settings inval
 
 ## M6 windowed reconciliation and extraction
 
-`highlight analyze --m6` is an offline-only M6 flow. Windows are half-open,
+`highlight analyze --m6` is a local-first M6 flow; Fake Scout remains the default
+and Gemini requires explicit opt-in. Windows are half-open,
 source-relative, integer-millisecond intervals with a 900-second maximum and
 30-second overlap by default. Each window proxy is cut from the committed
 analysis proxy; the RAW source never crosses the Scout boundary. Local signals
@@ -147,8 +150,16 @@ re-probed, thumbnails are validated, and `extraction_manifest.json` records
 source identity, tool/config fingerprints, warnings, and per-candidate resume
 state. Synthetic FFmpeg/ffprobe tests cover interruption and cache reuse.
 
-M6 live windowed Gemini acceptance: **NOT RUN**. Real Gemini API calls during
-M6 implementation and validation: **ZERO**. M7 is not started.
+M6 live windowed Gemini acceptance: **ACCEPTED** (2026-08-13). The bounded
+synthetic smoke used a ~10-second FFmpeg source, exactly two 6-second windows
+with 2-second overlap, `gemini-3.5-flash-lite`, low media resolution,
+`thinking_level=minimal`, and `store=false`. Only the two derived Scout window
+proxies crossed the provider boundary; W0 and W1 were `SETTLED`, both remote
+files were deleted, and the cache-only rerun made zero new generations or
+reservations. List-rate-equivalent reservations were W0 THB 0.331454 and W1
+THB 0.331478 (total THB 0.662932); settlements were W0 THB 0.022785 and W1
+THB 0.022761 (total THB 0.045546). The 173-test offline suite passed; M7 is
+not started.
 
 ## Development and tests
 
@@ -205,8 +216,8 @@ SETTLED/AMBIGUOUS`, and explicit remote-file deletion with retry-only cleanup on
 resume. Raw provider response, redacted request metadata, remote deletion state,
 canonical output, and a derived `cost.json` are stored under the session. A paid
 result is reused on a verified cache hit; ambiguous outcomes are never retried
-automatically. M6 windowing/reconciliation/extraction is local-only; Gemini live
-windowed acceptance was not run. M7 reporting and later milestones remain
+automatically. M6 windowing/reconciliation/extraction is local-first with an
+accepted bounded Gemini window smoke. M7 reporting and later milestones remain
 unimplemented.
 
 ## Known M3 limitations
@@ -216,7 +227,9 @@ unimplemented.
 - Moving a source after ingest is reported as missing; a relink command is future work.
 - Cache identity uses a fast path/size/mtime check and a stored authoritative SHA-256. A changed source creates a new session.
 - Lock recovery handles dead processes on the same host conservatively; unreadable or remote-host locks require manual inspection.
-- Gemini integration is implemented but live acceptance is opt-in; M6 live windowed acceptance was not run. Reports and reviewer/ranking workflows remain future work.
+- Gemini integration is implemented but live acceptance remains opt-in; the
+  accepted M6 smoke was synthetic and bounded. Reports and reviewer/ranking
+  workflows remain future work.
 - JSON schema migrations and force-stage controls are future work.
 
 See [docs/00_START_HERE.md](docs/00_START_HERE.md) for the full product plan.

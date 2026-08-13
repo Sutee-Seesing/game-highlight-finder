@@ -1,6 +1,6 @@
 # Game Highlight Finder — Start Here
 
-Status: Milestone 6 long-session reconciliation and extraction complete; live windowed Gemini acceptance not run
+Status: Milestone 6 long-session reconciliation, extraction, and bounded live Gemini acceptance complete
 Plan date: 2026-08-11  
 Working project path: `C:\Data\Works\Personal_Projects\Active_Products\game-highlight-finder`
 
@@ -142,12 +142,12 @@ future live run, confirm:
 
 ## M6 long-session reconciliation and extraction
 
-M6 is implemented as an explicit offline `highlight analyze --m6` flow. It plans
+M6 is implemented as a local-first `highlight analyze --m6` flow. It plans
 deterministic source-relative windows bounded to 900 seconds with 30 seconds of
 overlap by default, derives every window proxy only from the committed analysis
 proxy, intersects bounded local-signal hints, and persists strict per-window
-lineage plus raw/canonical responses. Fake Window Scout is the implementation
-and acceptance harness; M6 live windowed Gemini acceptance was not run.
+lineage plus raw/canonical responses. Fake Window Scout remains the offline
+acceptance harness; Gemini window execution is explicitly opt-in.
 
 Window timestamps are returned relative to each window and converted exactly
 once to the canonical source timeline. Reconciliation conservatively stitches
@@ -158,5 +158,15 @@ stream-copy is opt-in and marked keyframe-approximate. Outputs and thumbnails
 are re-probed, hashed, atomically committed, and tracked per candidate in a
 restart-safe extraction manifest. Source identity is rechecked before cutting.
 
-All M6 implementation tests and smoke validation used local FFmpeg/ffprobe,
-synthetic media, and Fake Scout. Real Gemini API calls: ZERO. M7 is not started.
+M6 live windowed Gemini acceptance completed on 2026-08-13 with one deterministic
+synthetic ~10-second FFmpeg source. The bounded smoke used exactly two windows
+of 6 seconds with 2 seconds of overlap (the production/default policy remains
+15 minutes with 30 seconds overlap), uploaded only the two derived Scout window
+proxies, and used `gemini-3.5-flash-lite` with low media resolution,
+`thinking_level=minimal`, and `store=false`. Both calls settled in the M4 ledger;
+list-rate-equivalent reservations were W0 THB 0.331454 and W1 THB 0.331478
+(total THB 0.662932), and settlements were W0 THB 0.022785 and W1 THB 0.022761
+(total THB 0.045546). Both remote files were deleted. The identical cache rerun made
+zero new generation calls or reservations; reconciliation and empty-set
+accurate extraction passed. The full suite is 173 passed / 0 failed / 0 skipped.
+M7 is not started.

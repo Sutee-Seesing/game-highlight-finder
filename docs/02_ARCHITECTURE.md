@@ -281,6 +281,7 @@ M6 adds four local components while preserving the M1–M5 paths:
 
 The Scout privacy boundary sees only `scout/windows/<id>/analysis_window.mp4`,
 which must hash back to `window.json` and a committed parent analysis-proxy
-hash. The original source is used only by the local extraction boundary. M6
-live windowed Gemini acceptance is not enabled by the M6 CLI and was not run.
-M7 components are absent.
+hash. The original source is used only by the local extraction boundary. A
+bounded synthetic M6 Gemini window acceptance completed on 2026-08-13 using
+two 6-second windows with 2-second overlap; Fake Scout remains the default and
+Gemini remains explicitly opt-in. M7 components are absent.
