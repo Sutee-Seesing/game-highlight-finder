@@ -111,7 +111,7 @@ until explicit acknowledgement. M4 performs no provider, AI, or network calls.
 M5 adds the exact production Gemini pricing snapshot only inside the explicitly
 selected Gemini pipeline.
 
-## Implemented M5 Gemini Scout foundation
+## M5 Gemini Scout (accepted)
 
 M5 adds one bounded, explicitly opt-in Gemini request after the local ingest,
 proxy, and signal stages. The exact model is `gemini-3.5-flash-lite` on Google's
@@ -123,14 +123,18 @@ persists the complete cost lifecycle. Remote file metadata excludes the URI;
 deletion is retried without regenerating a paid request. Completed paid responses
 are cacheable by a semantic provider fingerprint, while ambiguous outcomes remain
 unresolved until explicit ledger reconciliation. M5 intentionally does not add
-long-session windows, candidate extraction, or any M6 work. Live Gemini acceptance
-was not run because no live opt-in/API key was supplied.
+long-session windows, candidate extraction, or any M6 work. Live acceptance was
+completed on 2026-08-13 with one deterministic synthetic 8-second proxy request
+to `gemini-3.5-flash-lite` using low video resolution, `thinking_level=minimal`,
+and `store=false`. Remote cleanup finished as `deletion_status=deleted`; the
+list-rate-equivalent reservation/settlement were ฿0.331074/฿0.021643. The
+identical cache rerun performed zero generation calls and zero new reservations.
 
-## Current publication and acceptance gate
+## Current publication and acceptance state
 
-M1–M5 implementation is publishable only under the owner-approved commit. The
-offline suite does not authorize a live provider call. Before an owner chooses to
-run one, confirm:
+M1–M5 implementation and the authorized M5 live acceptance are published. The
+default backend remains Fake Scout and remote upload remains opt-in. Before any
+future live run, confirm:
 
 - Whether cloud-uploaded proxy data is acceptable under the chosen Gemini account/tier and data-use terms.
 - A valid user-managed `GEMINI_API_KEY` and an explicit FX snapshot.

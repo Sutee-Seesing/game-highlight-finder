@@ -4,7 +4,7 @@ Game Highlight Finder is a local-first CLI for turning long gameplay recordings 
 
 M3 keeps the M2 source/proxy/signal foundation and adds a versioned `Session -> Match -> Candidate` domain map. A deterministic Fake Scout produces bounded offline response fixtures, preserves raw Scout bytes separately from canonical data, and validates hostile output before assigning local deterministic IDs. Canonical timestamps are integer milliseconds with half-open intervals `[start_ms, end_ms)`.
 
-M3 remains offline and deterministic. M4 adds provider-neutral contracts and a fail-closed cost boundary. M5 adds an explicitly opt-in Gemini adapter while keeping Fake Scout as the default; automated validation uses a transport fake and makes zero real AI/provider/network calls.
+M3 remains offline and deterministic. M4 adds provider-neutral contracts and a fail-closed cost boundary. M5 adds an explicitly opt-in Gemini adapter while keeping Fake Scout as the default; the accepted live smoke used one deterministic synthetic proxy request, and the automated suite continues to use a transport fake with zero provider calls.
 
 ## Windows setup
 

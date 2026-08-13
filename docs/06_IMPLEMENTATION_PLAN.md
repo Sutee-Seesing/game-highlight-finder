@@ -55,7 +55,7 @@ and an offline Fake Provider contract fixture.
 Production provider SDKs, pricing, API keys, and network calls are intentionally
 absent. The complete automated suite is **131 passed / 0 failed / 0 skipped**.
 
-### M5 — Gemini Scout integration (implementation complete; live acceptance opt-in)
+### M5 — Gemini Scout integration (ACCEPTED)
 
 - Implement the exact stable `gemini-3.5-flash-lite` adapter through the official
   `google-genai` SDK, with Files API upload/readiness/deletion lifecycle,
@@ -74,8 +74,14 @@ absent. The complete automated suite is **131 passed / 0 failed / 0 skipped**.
 - Offline exit evidence: deterministic prompt/schema/estimate, privacy boundary,
   preflight without transport calls, fake upload/generation/delete lifecycle,
   verified paid cache hit, ambiguous no-retry, and source immutability. Live
-  Gemini acceptance remains opt-in and was not run. The complete offline suite
-  after this maintenance is **152 passed / 0 failed / 0 skipped**.
+  acceptance completed on 2026-08-13 with exactly one generation attempt using
+  a deterministic synthetic 8-second proxy only. The accepted request used
+  `gemini-3.5-flash-lite`, low video resolution, `thinking_level=minimal`, and
+  `store=false`; remote cleanup completed with `deletion_status=deleted`.
+  The conservative list-rate-equivalent reservation was **฿0.331074** and
+  settlement was **฿0.021643**. The identical cache verification performed
+  zero new generation calls and zero new reservations. The complete automated
+  suite is **152 passed / 0 failed / 0 skipped**.
 
 ### M6 — Long-session reconciliation and extraction
 
