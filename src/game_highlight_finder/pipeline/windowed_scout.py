@@ -6,6 +6,7 @@ import hashlib
 import json
 from collections.abc import Mapping, Sequence
 from contextlib import suppress
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -13,6 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from game_highlight_finder.config import AppConfig
 from game_highlight_finder.cost.fx import FxSnapshot
+from game_highlight_finder.cost.ledger import LedgerRecord, LifecycleStatus
 from game_highlight_finder.cost.production import production_pricing_catalog
 from game_highlight_finder.cost.service import CostRequest, CostService
 from game_highlight_finder.domain.canonical import canonicalize_scout_response, parse_scout_response
@@ -82,6 +84,17 @@ class AggregateCostPreflight(BaseModel):
     blocked: bool = False
     reason: str = "offline fake provider"
     window_estimates_micro_thb: dict[str, int] = Field(default_factory=dict, max_length=10_000)
+
+
+@dataclass(frozen=True)
+class _PaidWindowRecovery:
+    """Ledger-authoritative recovery decision for one Gemini window."""
+
+    call_id: str
+    ledger: LedgerRecord | None = None
+    envelope: GeminiInteractionEnvelope | None = None
+    full_cache: bool = False
+    retry_call_id: str | None = None
 
 
 def _sha256_bytes(value: bytes) -> str:
@@ -638,7 +651,8 @@ def _run_gemini_windowed_scout(
         cleanup_retry_limit=config.scout.cleanup_retry_limit,
     )
     cache_keys: dict[str, str] = {}
-    payloads: dict[str, tuple[dict[str, Any], str, dict[str, Any]]] = {}
+    payloads: dict[str, tuple[dict[str, Any], str, dict[str, Any], CostRequest]] = {}
+    recoveries: dict[str, _PaidWindowRecovery] = {}
     cached_ids: set[str] = set()
     schema = gemini_window_scout_schema()
     schema_digest = _sha256_bytes(
@@ -659,8 +673,37 @@ def _run_gemini_windowed_scout(
             json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
         )
         cache_keys[window.window_id] = cache_key
-        payloads[window.window_id] = (payload, prompt, summary)
-        if _window_cache_valid(item_dir, cache_key):
+        estimate = estimate_gemini_usage(
+            duration_ms=window.duration_ms,
+            prompt=prompt,
+            response_schema=schema,
+            audio_present=source.selected_audio_stream is not None,
+            max_output_tokens=config.scout.max_output_tokens,
+            reserved_thinking_tokens=config.scout.reserved_thinking_tokens,
+        )
+        request = CostRequest(
+            call_id=f"gemini-window-{cache_key[:44]}",
+            provider="gemini",
+            model=config.scout.model,
+            billing_mode=config.scout.billing_mode,
+            stage="scout",
+            session_id=preparation.plan.session_id,
+            usage_estimate=estimate,
+            request_payload=payload,
+        )
+        payloads[window.window_id] = (payload, prompt, summary, request)
+        recovery = _inspect_paid_window_recovery(
+            item_dir=item_dir,
+            cache_key=cache_key,
+            request=request,
+            service=service,
+            provider=provider,
+        )
+        recoveries[window.window_id] = recovery
+        if recovery.envelope is not None:
+            # A SETTLED raw result is a paid-result cache hit even when local
+            # canonicalization must be rerun.  It must not enter preflight as
+            # a new billable window.
             cached_ids.add(window.window_id)
     preflight = aggregate_window_preflight(
         source,
@@ -681,11 +724,42 @@ def _run_gemini_windowed_scout(
         remote_meta_path = item_dir / "gemini_remote_file.json"
         cost_path = item_dir / "cost.json"
         proxy_path = paths.root / window.proxy_path
-        payload, prompt, _summary = payloads[window.window_id]
+        payload, prompt, _summary, base_request = payloads[window.window_id]
         cache_key = cache_keys[window.window_id]
+        recovery = recoveries[window.window_id]
         committed_window = window.model_copy(update={"provider_cache_key": cache_key})
+        if recovery.full_cache:
+            _retry_window_cleanup(provider, remote_meta_path)
+            results.append(
+                WindowScoutResult(
+                    window=committed_window,
+                    cache_hit=True,
+                    cache_reason="verified paid window cache",
+                    raw_path=raw_path,
+                    canonical_path=canonical_path,
+                    session_map=SessionMap.model_validate(read_json(canonical_path)),
+                )
+            )
+            continue
+        if recovery.envelope is not None:
+            _retry_window_cleanup(provider, remote_meta_path)
+            session_map = _canonicalize_window_envelope(
+                recovery.envelope, source, committed_window, canonical_path, config
+            )
+            results.append(
+                WindowScoutResult(
+                    window=committed_window,
+                    cache_hit=False,
+                    cache_reason="paid-result-reused-for-local-canonicalization",
+                    raw_path=raw_path,
+                    canonical_path=canonical_path,
+                    session_map=session_map,
+                )
+            )
+            continue
         # This exact check is repeated at the boundary immediately before the
-        # provider may open the upload path.
+        # provider may open the upload path.  Recovery decisions above never
+        # call Gemini; only this genuinely new-request branch reaches it.
         validate_window_proxy_upload(
             proxy_path,
             paths.scout_windows_dir,
@@ -699,73 +773,8 @@ def _run_gemini_windowed_scout(
                 expected_parent_proxy_sha256=parent_sha,
             )
 
-        if _window_cache_valid(item_dir, cache_key):
-            if remote_meta_path.is_file() and _cleanup_pending(remote_meta_path):
-                provider.retry_remote_cleanup(remote_meta_path)
-            results.append(
-                WindowScoutResult(
-                    window=committed_window,
-                    cache_hit=True,
-                    cache_reason="verified paid window cache",
-                    raw_path=raw_path,
-                    canonical_path=canonical_path,
-                    session_map=SessionMap.model_validate(read_json(canonical_path)),
-                )
-            )
-            continue
-        reusable = _reusable_window_envelope(raw_path, request_meta_path, cache_key)
-        if reusable is not None:
-            session_map = _canonicalize_window_envelope(
-                reusable, source, committed_window, canonical_path, config
-            )
-            results.append(
-                WindowScoutResult(
-                    window=committed_window,
-                    cache_hit=False,
-                    cache_reason="paid-result-reused-for-local-canonicalization",
-                    raw_path=raw_path,
-                    canonical_path=canonical_path,
-                    session_map=session_map,
-                )
-            )
-            continue
-        call_id = f"gemini-window-{cache_key[:44]}"
-        try:
-            existing = service.ledger.get(call_id)
-        except CostGateError:
-            existing = None
-        if existing is not None:
-            if existing.status.value in {"AMBIGUOUS", "IN_FLIGHT", "RESERVED"}:
-                raise ValidationError(
-                    "A previous Gemini window call has an unresolved cost lifecycle state.",
-                    hint="Reconcile the window call before retrying; no automatic retry was "
-                    "attempted.",
-                )
-            if existing.status.value == "SETTLED":
-                raise ValidationError(
-                    "A settled Gemini window call has no reusable provider artifact.",
-                    hint="Restore the raw response or reconcile the ledger before retrying.",
-                )
-            if existing.status.value == "RELEASED":
-                call_id = f"{call_id}-retry"
-        estimate = estimate_gemini_usage(
-            duration_ms=window.duration_ms,
-            prompt=prompt,
-            response_schema=schema,
-            audio_present=source.selected_audio_stream is not None,
-            max_output_tokens=config.scout.max_output_tokens,
-            reserved_thinking_tokens=config.scout.reserved_thinking_tokens,
-        )
-        request = CostRequest(
-            call_id=call_id,
-            provider="gemini",
-            model=config.scout.model,
-            billing_mode=config.scout.billing_mode,
-            stage="scout",
-            session_id=preparation.plan.session_id,
-            usage_estimate=estimate,
-            request_payload=payload,
-        )
+        call_id = recovery.retry_call_id or recovery.call_id
+        request = base_request.model_copy(update={"call_id": call_id})
         atomic_write_json(
             request_meta_path,
             {
@@ -794,7 +803,7 @@ def _run_gemini_windowed_scout(
                     billing_mode=config.scout.billing_mode,
                     stage="scout",
                     session_id=preparation.plan.session_id,
-                    usage_estimate=estimate,
+                    usage_estimate=request.usage_estimate,
                     request_payload={
                         **payload,
                         "response_max_bytes": config.scout.response_max_bytes,
@@ -883,7 +892,7 @@ def _window_request_payload(
     }
 
 
-def _window_cache_valid(item_dir: Path, cache_key: str) -> bool:
+def _window_artifacts_valid(item_dir: Path, cache_key: str) -> bool:
     try:
         meta = read_json(item_dir / "request_meta.json")
         if meta.get("cache_key") != cache_key:
@@ -895,16 +904,245 @@ def _window_cache_valid(item_dir: Path, cache_key: str) -> bool:
         return False
 
 
+def _window_cache_valid(
+    item_dir: Path,
+    cache_key: str,
+    *,
+    ledger_record: LedgerRecord | None = None,
+) -> bool:
+    """Validate local artifacts and the authoritative paid lifecycle together."""
+
+    return (
+        ledger_record is not None
+        and ledger_record.status is LifecycleStatus.SETTLED
+        and _window_artifacts_valid(item_dir, cache_key)
+    )
+
+
 def _reusable_window_envelope(
-    raw_path: Path, request_meta_path: Path, cache_key: str
+    raw_path: Path,
+    request_meta_path: Path,
+    cache_key: str,
+    *,
+    ledger_record: LedgerRecord | None = None,
+    expected_call_id: str | None = None,
+    expected_request_fingerprint: str | None = None,
 ) -> GeminiInteractionEnvelope | None:
+    """Return a raw result only when its paid call is authoritatively settled."""
+
+    if ledger_record is None or ledger_record.status is not LifecycleStatus.SETTLED:
+        return None
     try:
-        if read_json(request_meta_path).get("cache_key") != cache_key:
+        metadata = read_json(request_meta_path)
+        if metadata.get("cache_key") != cache_key:
+            return None
+        if expected_call_id is not None and metadata.get("call_id") != expected_call_id:
+            return None
+        if (
+            expected_request_fingerprint is not None
+            and metadata.get("request_fingerprint") != expected_request_fingerprint
+        ):
+            return None
+        if ledger_record.call_id != metadata.get("call_id"):
+            return None
+        if (
+            expected_request_fingerprint is not None
+            and ledger_record.request_fingerprint != expected_request_fingerprint
+        ):
             return None
         envelope = GeminiInteractionEnvelope.model_validate(read_json(raw_path))
         return envelope if envelope.status.lower() == "completed" else None
     except Exception:
         return None
+
+
+def _load_completed_window_envelope(path: Path) -> GeminiInteractionEnvelope | None:
+    if not path.is_file():
+        return None
+    try:
+        envelope = GeminiInteractionEnvelope.model_validate(read_json(path))
+        return envelope if envelope.status.lower() == "completed" else None
+    except Exception:
+        return None
+
+
+def _lookup_window_ledger(service: CostService, call_id: str) -> LedgerRecord | None:
+    try:
+        return service.ledger.get(call_id)
+    except CostGateError:
+        return None
+
+
+def _retry_window_cleanup(provider: GeminiProvider, remote_meta_path: Path) -> None:
+    if remote_meta_path.is_file() and _cleanup_pending(remote_meta_path):
+        with suppress(Exception):
+            provider.retry_remote_cleanup(remote_meta_path)
+
+
+def _inspect_paid_window_recovery(
+    *,
+    item_dir: Path,
+    cache_key: str,
+    request: CostRequest,
+    service: CostService,
+    provider: GeminiProvider,
+) -> _PaidWindowRecovery:
+    """Inspect request identity and ledger before looking at paid raw output.
+
+    A completed provider envelope is evidence, not authorization to reuse a
+    paid result.  The persisted request metadata identifies the exact ledger
+    call; lifecycle state is checked before any canonicalization decision.
+    """
+
+    request_meta_path = item_dir / "request_meta.json"
+    raw_path = item_dir / "response.raw.json"
+    remote_meta_path = item_dir / "gemini_remote_file.json"
+    cost_path = item_dir / "cost.json"
+    metadata: Mapping[str, Any] | None = None
+    metadata_matches = False
+    if request_meta_path.is_file():
+        try:
+            raw_metadata = read_json(request_meta_path)
+            if not isinstance(raw_metadata, Mapping):
+                raise ValueError("request metadata must be an object")
+            metadata = raw_metadata
+            metadata_matches = metadata.get("cache_key") == cache_key
+        except Exception as exc:
+            if raw_path.is_file() and _load_completed_window_envelope(raw_path) is not None:
+                raise ValidationError(
+                    "M6 Gemini window has a completed provider result but invalid request "
+                    "metadata; refusing paid-result reuse."
+                ) from exc
+            metadata = None
+
+    # A semantically stale metadata file belongs to an older paid request.  It
+    # cannot authorize reuse of the current window, but it also must not make
+    # the old raw artifact look like a current cache hit.
+    if metadata is not None and not metadata_matches:
+        metadata = None
+
+    persisted_call_id: str | None = None
+    if metadata is not None:
+        value = metadata.get("call_id")
+        if not isinstance(value, str) or not value:
+            if raw_path.is_file() and _load_completed_window_envelope(raw_path) is not None:
+                raise ValidationError(
+                    "M6 Gemini window completed output has no persisted ledger call_id; "
+                    "refusing paid-result reuse."
+                )
+            raise ValidationError("M6 Gemini window request metadata is missing call_id.")
+        persisted_call_id = value
+        if metadata.get("request_fingerprint") != request.request_fingerprint:
+            raise ValidationError(
+                "M6 Gemini window request fingerprint does not match the current request; "
+                "refusing paid-result reuse."
+            )
+        persisted_payload = metadata.get("request")
+        if isinstance(persisted_payload, Mapping) and dict(persisted_payload) != dict(
+            request.request_payload
+        ):
+            raise ValidationError(
+                "M6 Gemini window request metadata conflicts with the current request; "
+                "refusing paid-result reuse."
+            )
+
+    call_id = persisted_call_id or request.call_id
+    ledger = _lookup_window_ledger(service, call_id)
+    envelope = (
+        _load_completed_window_envelope(raw_path)
+        if metadata_matches and metadata is not None
+        else None
+    )
+
+    if ledger is not None:
+        if ledger.call_id != call_id or ledger.request_fingerprint != request.request_fingerprint:
+            raise ValidationError(
+                "M6 Gemini window call identity or request fingerprint conflicts with the "
+                "persisted cost ledger; refusing reuse."
+            )
+        if cost_path.is_file():
+            try:
+                cost_metadata = read_json(cost_path)
+                if isinstance(cost_metadata, Mapping) and cost_metadata.get("call_id") != call_id:
+                    raise ValidationError(
+                        "M6 Gemini window cost artifact call_id conflicts with the ledger."
+                    )
+            except ValidationError:
+                raise
+            except Exception as exc:
+                raise ValidationError(
+                    "M6 Gemini window cost artifact is invalid; refusing paid-result reuse."
+                ) from exc
+
+        if ledger.status is LifecycleStatus.SETTLED:
+            if envelope is None:
+                raise ValidationError(
+                    "A settled M6 Gemini window is missing its completed provider artifact; "
+                    "refusing automatic regeneration."
+                )
+            reusable = _reusable_window_envelope(
+                raw_path,
+                request_meta_path,
+                cache_key,
+                ledger_record=ledger,
+                expected_call_id=call_id,
+                expected_request_fingerprint=request.request_fingerprint,
+            )
+            if reusable is None:
+                raise ValidationError(
+                    "A settled M6 Gemini window provider artifact failed identity validation; "
+                    "refusing paid-result reuse."
+                )
+            return _PaidWindowRecovery(
+                call_id=call_id,
+                ledger=ledger,
+                envelope=reusable,
+                full_cache=_window_cache_valid(item_dir, cache_key, ledger_record=ledger),
+            )
+
+        if ledger.status in {
+            LifecycleStatus.AMBIGUOUS,
+            LifecycleStatus.IN_FLIGHT,
+            LifecycleStatus.RESERVED,
+        }:
+            _retry_window_cleanup(provider, remote_meta_path)
+            raise ValidationError(
+                "M6 Gemini window has an unresolved cost lifecycle "
+                f"({ledger.status.value}); reconcile the call before reuse or retry."
+            )
+
+        if ledger.status is LifecycleStatus.RELEASED:
+            if envelope is not None:
+                _retry_window_cleanup(provider, remote_meta_path)
+                raise ValidationError(
+                    "M6 Gemini window has a RELEASED ledger call with a completed provider "
+                    "result; refusing inconsistent paid-result reuse."
+                )
+            return _PaidWindowRecovery(
+                call_id=call_id,
+                ledger=ledger,
+                retry_call_id=f"{call_id}-retry",
+            )
+
+    if envelope is not None:
+        _retry_window_cleanup(provider, remote_meta_path)
+        raise ValidationError(
+            "M6 Gemini window has a completed provider result without a corresponding cost "
+            "ledger record; refusing paid-result reuse."
+        )
+
+    # A raw completed envelope without metadata cannot be associated with a
+    # current call.  It is not safe to guess that it was free or to regenerate
+    # merely to legitimize it.
+    if metadata is None and not metadata_matches and not request_meta_path.is_file():
+        orphan = _load_completed_window_envelope(raw_path)
+        if orphan is not None:
+            raise ValidationError(
+                "M6 Gemini window has a completed provider result without request metadata or "
+                "a cost ledger record; refusing paid-result reuse."
+            )
+
+    return _PaidWindowRecovery(call_id=call_id, ledger=None)
 
 
 def _canonicalize_window_envelope(

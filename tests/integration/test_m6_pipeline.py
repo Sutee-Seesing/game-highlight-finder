@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sqlite3
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
@@ -27,6 +28,7 @@ from game_highlight_finder.pipeline.windowed_scout import (
     validate_window_proxy_upload,
 )
 from game_highlight_finder.providers.gemini import FakeGeminiTransport, GeminiProviderError
+from game_highlight_finder.storage.atomic import read_json
 
 
 def _config(data_dir: Path, ffmpeg: Path, ffprobe: Path) -> AppConfig:
@@ -78,6 +80,51 @@ def _gemini_cost_service(config: AppConfig) -> CostService:
             source="offline-test",
         ),
     )
+
+
+def _settled_window_fixture(
+    tmp_path: Path,
+    tiny_video: Path,
+    ffmpeg_path: Path,
+    ffprobe_path: Path,
+    *,
+    delete_error: Exception | None = None,
+) -> tuple[AppConfig, object, object, FakeGeminiTransport, CostService, Path]:
+    base = _config(tmp_path / "library", ffmpeg_path, ffprobe_path)
+    local = analyze_m6_source(tiny_video, base, stop_after="windows")
+    assert local.windows is not None and local.local_signals is not None
+    config = base.model_copy(
+        update={
+            "scout": ScoutConfig(backend="gemini", allow_remote_upload=True),
+            "cost": CostConfig(monthly_budget_thb=Decimal("100")),
+        }
+    )
+    window = local.windows.windows[0]
+    transport = FakeGeminiTransport(
+        response=_window_response(
+            local.ingest.source.duration_ms, window.source_start_ms, window.source_end_ms
+        ),
+        delete_error=delete_error,
+    )
+    service = _gemini_cost_service(config)
+    first = run_windowed_scout(
+        local.ingest.source,
+        local.windows,
+        local.local_signals,
+        config,
+        gemini_transport=transport,
+        cost_service=service,
+    )
+    assert first.results[0].cache_hit is False
+    assert service.ledger.list_calls()[0].status.value == "SETTLED"
+    item_dir = local.windows.session_dir / "scout" / "windows" / window.window_id
+    return config, local, window, transport, service, item_dir
+
+
+def _set_ledger_status(service: CostService, status: str) -> None:
+    call_id = service.ledger.list_calls()[0].call_id
+    with sqlite3.connect(service.ledger.path) as connection:
+        connection.execute("UPDATE calls SET status=? WHERE call_id=?", (status, call_id))
 
 
 def test_m6_offline_window_reconcile_extract_resume(
@@ -267,6 +314,165 @@ def test_m6_gemini_ambiguous_window_is_never_retried(
             cost_service=service,
         )
     assert transport.generation_count == calls
+
+
+def test_m6_completed_output_missing_usage_becomes_ambiguous_and_is_never_reused(
+    tmp_path: Path, tiny_video: Path, ffmpeg_path: Path, ffprobe_path: Path
+) -> None:
+    base = _config(tmp_path / "library", ffmpeg_path, ffprobe_path)
+    local = analyze_m6_source(tiny_video, base, stop_after="windows")
+    assert local.windows is not None and local.local_signals is not None
+    config = base.model_copy(
+        update={
+            "scout": ScoutConfig(backend="gemini", allow_remote_upload=True),
+            "cost": CostConfig(monthly_budget_thb=Decimal("100")),
+        }
+    )
+    window = local.windows.windows[0]
+    response = _window_response(
+        local.ingest.source.duration_ms, window.source_start_ms, window.source_end_ms
+    )
+    response["usage"] = {}
+    transport = FakeGeminiTransport(response=response)
+    service = _gemini_cost_service(config)
+    with pytest.raises(Exception, match="missing, conflicting"):
+        run_windowed_scout(
+            local.ingest.source,
+            local.windows,
+            local.local_signals,
+            config,
+            gemini_transport=transport,
+            cost_service=service,
+        )
+    assert transport.generation_count == 1
+    assert service.ledger.list_calls()[0].status.value == "AMBIGUOUS"
+    item_dir = local.windows.session_dir / "scout" / "windows" / window.window_id
+    assert (item_dir / "response.raw.json").is_file()
+    assert not (item_dir / "response.canonical.json").exists()
+    with pytest.raises(Exception, match="unresolved cost lifecycle"):
+        run_windowed_scout(
+            local.ingest.source,
+            local.windows,
+            local.local_signals,
+            config,
+            gemini_transport=transport,
+            cost_service=service,
+        )
+    assert transport.generation_count == 1
+    assert service.ledger.list_calls()[0].status.value == "AMBIGUOUS"
+    assert not (item_dir / "response.canonical.json").exists()
+
+
+@pytest.mark.parametrize(
+    "status, message",
+    [
+        ("IN_FLIGHT", "IN_FLIGHT"),
+        ("RESERVED", "RESERVED"),
+        ("RELEASED", "RELEASED"),
+    ],
+)
+def test_m6_completed_raw_conflicting_ledger_state_blocks_without_generation(
+    tmp_path: Path,
+    tiny_video: Path,
+    ffmpeg_path: Path,
+    ffprobe_path: Path,
+    status: str,
+    message: str,
+) -> None:
+    config, local, _window, transport, service, item_dir = _settled_window_fixture(
+        tmp_path, tiny_video, ffmpeg_path, ffprobe_path
+    )
+    (item_dir / "response.canonical.json").unlink()
+    _set_ledger_status(service, status)
+    generation_count = transport.generation_count
+    with pytest.raises(Exception, match=message):
+        run_windowed_scout(
+            local.ingest.source,
+            local.windows,
+            local.local_signals,
+            config,
+            gemini_transport=transport,
+            cost_service=service,
+        )
+    assert transport.generation_count == generation_count
+    assert not (item_dir / "response.canonical.json").exists()
+    assert service.ledger.list_calls()[0].status.value == status
+
+
+def test_m6_completed_raw_without_ledger_record_blocks_without_generation(
+    tmp_path: Path, tiny_video: Path, ffmpeg_path: Path, ffprobe_path: Path
+) -> None:
+    config, local, _window, transport, service, item_dir = _settled_window_fixture(
+        tmp_path, tiny_video, ffmpeg_path, ffprobe_path
+    )
+    (item_dir / "response.canonical.json").unlink()
+    with sqlite3.connect(service.ledger.path) as connection:
+        connection.execute("DELETE FROM ledger_events")
+        connection.execute("DELETE FROM calls")
+    generation_count = transport.generation_count
+    with pytest.raises(Exception, match="without a corresponding cost ledger"):
+        run_windowed_scout(
+            local.ingest.source,
+            local.windows,
+            local.local_signals,
+            config,
+            gemini_transport=transport,
+            cost_service=service,
+        )
+    assert transport.generation_count == generation_count
+    assert not (item_dir / "response.canonical.json").exists()
+    assert service.ledger.list_calls() == ()
+
+
+def test_m6_settled_raw_recanonicalizes_without_generation(
+    tmp_path: Path, tiny_video: Path, ffmpeg_path: Path, ffprobe_path: Path
+) -> None:
+    config, local, _window, transport, service, item_dir = _settled_window_fixture(
+        tmp_path, tiny_video, ffmpeg_path, ffprobe_path
+    )
+    (item_dir / "response.canonical.json").unlink()
+    second = run_windowed_scout(
+        local.ingest.source,
+        local.windows,
+        local.local_signals,
+        config,
+        gemini_transport=transport,
+        cost_service=service,
+    )
+    assert transport.generation_count == 1
+    assert second.results[0].cache_hit is False
+    assert second.results[0].cache_reason == "paid-result-reused-for-local-canonicalization"
+    assert (item_dir / "response.canonical.json").is_file()
+    assert service.ledger.list_calls()[0].status.value == "SETTLED"
+
+
+def test_m6_settled_full_cache_retries_cleanup_without_generation(
+    tmp_path: Path, tiny_video: Path, ffmpeg_path: Path, ffprobe_path: Path
+) -> None:
+    config, local, _window, first_transport, service, item_dir = _settled_window_fixture(
+        tmp_path,
+        tiny_video,
+        ffmpeg_path,
+        ffprobe_path,
+        delete_error=RuntimeError("synthetic cleanup outage"),
+    )
+    assert first_transport.generation_count == 1
+    assert read_json(item_dir / "gemini_remote_file.json")["deletion_status"] == "pending"
+    recovery_transport = FakeGeminiTransport(
+        response={"status": "completed", "output_text": "{}", "usage": {}}
+    )
+    second = run_windowed_scout(
+        local.ingest.source,
+        local.windows,
+        local.local_signals,
+        config,
+        gemini_transport=recovery_transport,
+        cost_service=service,
+    )
+    assert recovery_transport.generation_count == 0
+    assert second.results[0].cache_hit is True
+    assert read_json(item_dir / "gemini_remote_file.json")["deletion_status"] == "deleted"
+    assert service.ledger.list_calls()[0].status.value == "SETTLED"
 
 
 def test_m6_interrupted_extraction_retries_only_incomplete_candidate(
