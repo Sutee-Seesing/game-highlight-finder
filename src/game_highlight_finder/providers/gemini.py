@@ -327,6 +327,7 @@ class GeminiProvider(ProviderAdapter):
         thinking_level: str = "minimal",
         remote_metadata_path: Path | None = None,
         before_generation: Callable[[], None] | None = None,
+        upload_validator: Callable[[Path], None] | None = None,
     ) -> ProviderCallResult:
         if request.provider != GEMINI_PROVIDER:
             raise GeminiConfigurationError(
@@ -348,7 +349,10 @@ class GeminiProvider(ProviderAdapter):
         root = session_proxy_root or _payload_path(request.request_payload, "session_proxy_root")
         if root is None:
             root = path.parent
-        validate_proxy_upload(path, root)
+        if upload_validator is None:
+            validate_proxy_upload(path, root)
+        else:
+            upload_validator(path)
         if prompt is None:
             prompt = str(request.request_payload.get("prompt", ""))
         if response_schema is None:

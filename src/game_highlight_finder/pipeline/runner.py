@@ -134,17 +134,11 @@ def analyze_m6_source(
     *,
     stop_after: str = "extract",
 ) -> M6AnalysisResult:
-    """Run the local-only M6 window/reconcile/extract pipeline.
+    """Run M6 windows, reconciliation, and extraction.
 
-    Gemini is intentionally rejected at this boundary; this milestone's live
-    windowed acceptance is not run and cannot accidentally dispatch a network
-    request through the M5 provider path.
+    Gemini remains opt-in at the configuration boundary; each enabled window
+    then owns an independent paid lifecycle in ``run_windowed_scout``.
     """
-
-    if config.scout.backend != "fake":
-        raise ConfigError(
-            "M6 requires the offline fake Scout backend; live Gemini acceptance is not enabled."
-        )
     boundary = normalize_m6_stop_after(stop_after)
     local = analyze_source(video, config, stop_after="local-signals")
     if boundary == "ingest":

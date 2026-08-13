@@ -73,12 +73,21 @@ class ExtractionResult(BaseModel):
     session_dir: Path
 
 
-def extraction_config_fingerprint(config: AppConfig) -> str:
+def extraction_config_fingerprint(
+    config: AppConfig,
+    *,
+    ffmpeg_identity: object | None = None,
+    ffprobe_identity: object | None = None,
+) -> str:
     payload = {
         "version": 1,
         "extraction": config.media.extraction.model_dump(mode="json"),
-        "ffprobe": str(config.tools.ffprobe_path or "PATH"),
-        "ffmpeg": str(config.tools.ffmpeg_path or "PATH"),
+        "ffprobe": getattr(
+            ffprobe_identity, "cache_payload", lambda: str(config.tools.ffprobe_path or "PATH")
+        )(),
+        "ffmpeg": getattr(
+            ffmpeg_identity, "cache_payload", lambda: str(config.tools.ffmpeg_path or "PATH")
+        )(),
     }
     return hashlib.sha256(
         json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
@@ -144,7 +153,9 @@ def extract_candidates(
     paths.tmp_dir.mkdir(parents=True, exist_ok=True)
     ffmpeg = tool_identity("ffmpeg", config.tools.ffmpeg_path)
     ffprobe = tool_identity("ffprobe", config.tools.ffprobe_path, include_capabilities=False)
-    fingerprint = extraction_config_fingerprint(config)
+    fingerprint = extraction_config_fingerprint(
+        config, ffmpeg_identity=ffmpeg, ffprobe_identity=ffprobe
+    )
     bounded_map = derive_clip_boundaries(session_map, source.duration_ms, config.media.extraction)
     now = datetime.now(UTC)
     old = _load_manifest(paths.extraction_manifest)

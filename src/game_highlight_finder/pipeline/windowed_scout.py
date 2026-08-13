@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Mapping, Sequence
+from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
@@ -22,7 +23,7 @@ from game_highlight_finder.domain.models import (
     model_json,
 )
 from game_highlight_finder.domain.windows import ScoutWindow, WindowPlan, plan_scout_windows
-from game_highlight_finder.errors import ValidationError
+from game_highlight_finder.errors import CostGateError, ValidationError
 from game_highlight_finder.media.ffmpeg import build_window_proxy_command, run_ffmpeg
 from game_highlight_finder.media.ffprobe import run_ffprobe
 from game_highlight_finder.media.tools import tool_identity
@@ -33,6 +34,12 @@ from game_highlight_finder.pipeline.gemini_scout import (
 )
 from game_highlight_finder.pipeline.local_signals import LocalSignalsResult
 from game_highlight_finder.pipeline.proxy import ProxyResult
+from game_highlight_finder.providers.base import ProviderRequest
+from game_highlight_finder.providers.gemini import (
+    GeminiInteractionEnvelope,
+    GeminiProvider,
+    GeminiProviderError,
+)
 from game_highlight_finder.storage.atomic import atomic_write_bytes, atomic_write_json, read_json
 from game_highlight_finder.storage.hashing import hash_file
 from game_highlight_finder.storage.sessions import session_paths
@@ -120,7 +127,12 @@ def _summary_hash(summary: Mapping[str, Any]) -> str:
     )
 
 
-def validate_window_proxy_upload(path: Path, session_windows_root: Path) -> ScoutWindow:
+def validate_window_proxy_upload(
+    path: Path,
+    session_windows_root: Path,
+    *,
+    expected_parent_proxy_sha256: str | None = None,
+) -> ScoutWindow:
     """Accept only a committed M6 window proxy with matching provenance."""
 
     resolved = path.resolve()
@@ -144,6 +156,11 @@ def validate_window_proxy_upload(path: Path, session_windows_root: Path) -> Scou
         raise ValidationError("M6 window proxy path does not match provenance metadata")
     if window.proxy_sha256 != hash_file(resolved) or window.parent_proxy_sha256 is None:
         raise ValidationError("M6 window proxy hash/provenance does not match")
+    if (
+        expected_parent_proxy_sha256 is not None
+        and window.parent_proxy_sha256 != expected_parent_proxy_sha256
+    ):
+        raise ValidationError("M6 window proxy parent provenance does not match analysis proxy")
     return window
 
 
@@ -452,11 +469,21 @@ def run_windowed_scout(
     config: AppConfig,
     *,
     fake_provider: FakeWindowScout | None = None,
+    gemini_transport: Any | None = None,
+    cost_service: CostService | None = None,
 ) -> WindowedScoutRun:
-    """Generate or reuse one strictly window-relative fake response per window."""
+    """Run each window through Fake or the fully ledger-backed Gemini path."""
 
+    if config.scout.backend == "gemini":
+        return _run_gemini_windowed_scout(
+            source,
+            preparation,
+            config,
+            transport=gemini_transport,
+            cost_service=cost_service,
+        )
     if config.scout.backend != "fake":
-        raise ValidationError("M6 live Gemini windowed acceptance is not enabled")
+        raise ValidationError("Unsupported M6 Scout backend")
     provider = fake_provider or FakeWindowScout()
     paths = session_paths(config.storage.data_dir, preparation.plan.session_id)
     results: list[WindowScoutResult] = []
@@ -577,6 +604,352 @@ def run_windowed_scout(
         missing_windows=tuple(missing),
         aggregate_preflight=preflight,
     )
+
+
+def _run_gemini_windowed_scout(
+    source: SourceAsset,
+    preparation: WindowPreparationResult,
+    config: AppConfig,
+    *,
+    transport: Any | None,
+    cost_service: CostService | None,
+) -> WindowedScoutRun:
+    """Execute one paid, recoverable Gemini interaction for each M6 window.
+
+    Each window has its own immutable request identity, raw response, remote
+    cleanup receipt, and M4 ledger call.  A durable raw result is always
+    canonicalized locally rather than regenerated; unresolved calls fail
+    closed before upload or generation.
+    """
+    if not config.scout.allow_remote_upload:
+        raise ValidationError("M6 Gemini Scout requires explicit remote-upload opt-in.")
+    paths = session_paths(config.storage.data_dir, preparation.plan.session_id)
+    parent_proxy = paths.proxy_dir / "analysis_proxy.mp4"
+    if not parent_proxy.is_file():
+        raise ValidationError("M6 Gemini windows require the committed analysis proxy.")
+    parent_sha = hash_file(parent_proxy)
+    service = cost_service or _build_window_cost_service(config)
+    provider = GeminiProvider(
+        transport=transport,
+        api_key_env=config.scout.api_key_env,
+        readiness_timeout_seconds=config.scout.readiness_timeout_seconds,
+        readiness_poll_initial_seconds=config.scout.readiness_poll_initial_seconds,
+        readiness_poll_max_seconds=config.scout.readiness_poll_max_seconds,
+        cleanup_retry_limit=config.scout.cleanup_retry_limit,
+    )
+    cache_keys: dict[str, str] = {}
+    payloads: dict[str, tuple[dict[str, Any], str, dict[str, Any]]] = {}
+    cached_ids: set[str] = set()
+    schema = gemini_window_scout_schema()
+    schema_digest = _sha256_bytes(
+        json.dumps(schema, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    )
+    for window in preparation.windows:
+        item_dir = paths.scout_windows_dir / window.window_id
+        summary_path = item_dir / "signals.json"
+        summary = read_json(summary_path) if summary_path.is_file() else {}
+        prompt = build_window_prompt(
+            source_duration_ms=source.duration_ms,
+            window=window,
+            local_signal_summary=summary,
+            prompt_version=config.scout.window_prompt_version,
+        )
+        payload = _window_request_payload(source, window, config, prompt, schema_digest)
+        cache_key = _sha256_bytes(
+            json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        )
+        cache_keys[window.window_id] = cache_key
+        payloads[window.window_id] = (payload, prompt, summary)
+        if _window_cache_valid(item_dir, cache_key):
+            cached_ids.add(window.window_id)
+    preflight = aggregate_window_preflight(
+        source,
+        preparation.windows,
+        config,
+        cached_window_ids=cached_ids,
+        cost_service=service,
+    )
+    if preflight.blocked:
+        raise ValidationError("M6 aggregate Gemini preflight is blocked.", hint=preflight.reason)
+
+    results: list[WindowScoutResult] = []
+    for window in preparation.windows:
+        item_dir = paths.scout_windows_dir / window.window_id
+        raw_path = item_dir / "response.raw.json"
+        canonical_path = item_dir / "response.canonical.json"
+        request_meta_path = item_dir / "request_meta.json"
+        remote_meta_path = item_dir / "gemini_remote_file.json"
+        cost_path = item_dir / "cost.json"
+        proxy_path = paths.root / window.proxy_path
+        payload, prompt, _summary = payloads[window.window_id]
+        cache_key = cache_keys[window.window_id]
+        committed_window = window.model_copy(update={"provider_cache_key": cache_key})
+        # This exact check is repeated at the boundary immediately before the
+        # provider may open the upload path.
+        validate_window_proxy_upload(
+            proxy_path,
+            paths.scout_windows_dir,
+            expected_parent_proxy_sha256=parent_sha,
+        )
+
+        def validate_upload(path: Path) -> None:
+            validate_window_proxy_upload(
+                path,
+                paths.scout_windows_dir,
+                expected_parent_proxy_sha256=parent_sha,
+            )
+
+        if _window_cache_valid(item_dir, cache_key):
+            if remote_meta_path.is_file() and _cleanup_pending(remote_meta_path):
+                provider.retry_remote_cleanup(remote_meta_path)
+            results.append(
+                WindowScoutResult(
+                    window=committed_window,
+                    cache_hit=True,
+                    cache_reason="verified paid window cache",
+                    raw_path=raw_path,
+                    canonical_path=canonical_path,
+                    session_map=SessionMap.model_validate(read_json(canonical_path)),
+                )
+            )
+            continue
+        reusable = _reusable_window_envelope(raw_path, request_meta_path, cache_key)
+        if reusable is not None:
+            session_map = _canonicalize_window_envelope(
+                reusable, source, committed_window, canonical_path, config
+            )
+            results.append(
+                WindowScoutResult(
+                    window=committed_window,
+                    cache_hit=False,
+                    cache_reason="paid-result-reused-for-local-canonicalization",
+                    raw_path=raw_path,
+                    canonical_path=canonical_path,
+                    session_map=session_map,
+                )
+            )
+            continue
+        call_id = f"gemini-window-{cache_key[:44]}"
+        try:
+            existing = service.ledger.get(call_id)
+        except CostGateError:
+            existing = None
+        if existing is not None:
+            if existing.status.value in {"AMBIGUOUS", "IN_FLIGHT", "RESERVED"}:
+                raise ValidationError(
+                    "A previous Gemini window call has an unresolved cost lifecycle state.",
+                    hint="Reconcile the window call before retrying; no automatic retry was "
+                    "attempted.",
+                )
+            if existing.status.value == "SETTLED":
+                raise ValidationError(
+                    "A settled Gemini window call has no reusable provider artifact.",
+                    hint="Restore the raw response or reconcile the ledger before retrying.",
+                )
+            if existing.status.value == "RELEASED":
+                call_id = f"{call_id}-retry"
+        estimate = estimate_gemini_usage(
+            duration_ms=window.duration_ms,
+            prompt=prompt,
+            response_schema=schema,
+            audio_present=source.selected_audio_stream is not None,
+            max_output_tokens=config.scout.max_output_tokens,
+            reserved_thinking_tokens=config.scout.reserved_thinking_tokens,
+        )
+        request = CostRequest(
+            call_id=call_id,
+            provider="gemini",
+            model=config.scout.model,
+            billing_mode=config.scout.billing_mode,
+            stage="scout",
+            session_id=preparation.plan.session_id,
+            usage_estimate=estimate,
+            request_payload=payload,
+        )
+        atomic_write_json(
+            request_meta_path,
+            {
+                "cache_key": cache_key,
+                "call_id": call_id,
+                "request_fingerprint": request.request_fingerprint,
+                "request": payload,
+            },
+        )
+        reserved = False
+        in_flight = False
+        try:
+            record = service.reserve(request)
+            reserved = record.status.value in {"RESERVED", "IN_FLIGHT"}
+
+            def mark_in_flight(current_call_id: str = call_id) -> None:
+                nonlocal in_flight
+                service.mark_in_flight(current_call_id)
+                in_flight = True
+
+            response = provider.execute(
+                ProviderRequest(
+                    call_id=call_id,
+                    provider="gemini",
+                    model_id=config.scout.model,
+                    billing_mode=config.scout.billing_mode,
+                    stage="scout",
+                    session_id=preparation.plan.session_id,
+                    usage_estimate=estimate,
+                    request_payload={
+                        **payload,
+                        "response_max_bytes": config.scout.response_max_bytes,
+                    },
+                ),
+                proxy_path=proxy_path,
+                session_proxy_root=paths.scout_windows_dir,
+                upload_validator=validate_upload,
+                prompt=prompt,
+                response_schema=schema,
+                media_resolution=config.scout.media_resolution,
+                max_output_tokens=config.scout.max_output_tokens,
+                thinking_level=config.scout.thinking_level,
+                remote_metadata_path=remote_meta_path,
+                before_generation=mark_in_flight,
+            )
+            envelope = GeminiInteractionEnvelope.model_validate(response.result)
+            atomic_write_json(raw_path, envelope.model_dump(mode="json"))
+            try:
+                service.settle(
+                    call_id, response.usage, provider_request_id=response.provider_request_id
+                )
+            finally:
+                _write_window_cost_artifact(service, call_id, cost_path)
+            session_map = _canonicalize_window_envelope(
+                envelope, source, committed_window, canonical_path, config
+            )
+            results.append(
+                WindowScoutResult(
+                    window=committed_window,
+                    cache_hit=False,
+                    cache_reason="generated Gemini window response",
+                    raw_path=raw_path,
+                    canonical_path=canonical_path,
+                    session_map=session_map,
+                )
+            )
+        except GeminiProviderError as exc:
+            if exc.response:
+                atomic_write_json(raw_path, dict(exc.response))
+            if exc.may_have_dispatched or in_flight:
+                with suppress(Exception):
+                    service.mark_ambiguous(call_id, str(exc))
+            elif reserved:
+                with suppress(Exception):
+                    service.release(call_id)
+            _write_window_cost_artifact(service, call_id, cost_path)
+            raise ValidationError(
+                str(exc), hint="No automatic Gemini window retry was attempted."
+            ) from exc
+        except BaseException:
+            if in_flight:
+                with suppress(Exception):
+                    service.mark_ambiguous(call_id, "local failure after dispatch")
+            elif reserved:
+                with suppress(Exception):
+                    service.release(call_id)
+            _write_window_cost_artifact(service, call_id, cost_path)
+            raise
+    return WindowedScoutRun(
+        plan=preparation.plan, results=tuple(results), aggregate_preflight=preflight
+    )
+
+
+def _window_request_payload(
+    source: SourceAsset, window: ScoutWindow, config: AppConfig, prompt: str, schema_digest: str
+) -> dict[str, Any]:
+    return {
+        "source_sha256": source.sha256,
+        "window_id": window.window_id,
+        "window_start_ms": window.source_start_ms,
+        "window_end_ms": window.source_end_ms,
+        "window_proxy_sha256": window.proxy_sha256,
+        "parent_proxy_sha256": window.parent_proxy_sha256,
+        "signal_summary_hash": window.signal_summary_hash,
+        "model": config.scout.model,
+        "billing_mode": config.scout.billing_mode,
+        "media_resolution": config.scout.media_resolution,
+        "thinking_level": config.scout.thinking_level,
+        "reserved_thinking_tokens": config.scout.reserved_thinking_tokens,
+        "prompt_version": config.scout.window_prompt_version,
+        "prompt_hash": _sha256_bytes(prompt.encode("utf-8")),
+        "schema_version": config.scout.schema_version,
+        "schema_hash": schema_digest,
+        "output_ceiling": config.scout.response_max_bytes,
+    }
+
+
+def _window_cache_valid(item_dir: Path, cache_key: str) -> bool:
+    try:
+        meta = read_json(item_dir / "request_meta.json")
+        if meta.get("cache_key") != cache_key:
+            return False
+        GeminiInteractionEnvelope.model_validate(read_json(item_dir / "response.raw.json"))
+        SessionMap.model_validate(read_json(item_dir / "response.canonical.json"))
+        return True
+    except Exception:
+        return False
+
+
+def _reusable_window_envelope(
+    raw_path: Path, request_meta_path: Path, cache_key: str
+) -> GeminiInteractionEnvelope | None:
+    try:
+        if read_json(request_meta_path).get("cache_key") != cache_key:
+            return None
+        envelope = GeminiInteractionEnvelope.model_validate(read_json(raw_path))
+        return envelope if envelope.status.lower() == "completed" else None
+    except Exception:
+        return None
+
+
+def _canonicalize_window_envelope(
+    envelope: GeminiInteractionEnvelope,
+    source: SourceAsset,
+    window: ScoutWindow,
+    canonical_path: Path,
+    config: AppConfig,
+) -> SessionMap:
+    session_map = canonicalize_scout_response(
+        envelope.output_text.encode("utf-8"),
+        session_id=window.session_id,
+        source_id=source.source_id,
+        source_duration_ms=source.duration_ms,
+        created_at=source.created_at,
+        max_response_bytes=config.scout.response_max_bytes,
+        source_window_id=window.window_id,
+    ).model_copy(
+        update={
+            "scout_backend": "gemini",
+            "scout_metadata": {
+                "backend": "gemini",
+                "model": envelope.model,
+                "interaction_id": envelope.interaction_id or "unknown",
+                "remote_cleanup": envelope.remote_cleanup_status,
+                "window_id": window.window_id,
+            },
+        }
+    )
+    atomic_write_json(canonical_path, model_json(session_map))
+    return session_map
+
+
+def _cleanup_pending(path: Path) -> bool:
+    try:
+        metadata = read_json(path)
+        return not isinstance(metadata, Mapping) or metadata.get("deletion_status") != "deleted"
+    except Exception:
+        return False
+
+
+def _write_window_cost_artifact(service: CostService, call_id: str, path: Path) -> None:
+    with suppress(Exception):
+        record = service.ledger.get(call_id)
+        atomic_write_json(path, record.model_dump(mode="json"))
 
 
 __all__ = [

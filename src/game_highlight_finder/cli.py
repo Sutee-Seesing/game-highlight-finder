@@ -268,12 +268,10 @@ def _analyze(
             update={"scout": config.scout.model_copy(update={"allow_remote_upload": True})}
         )
     if m6:
-        if allow_remote_upload or config.scout.backend != "fake":
-            raise ConfigError(
-                "M6 is offline-only; remote upload and live Gemini are not permitted."
-            )
+        if config.scout.backend == "gemini" and not config.scout.allow_remote_upload:
+            raise ConfigError("M6 Gemini requires --allow-remote-upload.")
         m6_result = analyze_m6_source(video, config, stop_after=stop_after)
-        typer.echo("[PASS] M6 offline windowed analysis completed")
+        typer.echo("[PASS] M6 windowed analysis completed")
         if m6_result.windows is not None:
             typer.echo(
                 f"windows: {len(m6_result.windows.windows)} "
@@ -302,7 +300,8 @@ def _analyze(
                 f"extractions: {m6_result.extraction.completed} completed, "
                 f"{m6_result.extraction.incomplete} incomplete"
             )
-        typer.echo("Real Gemini API calls: ZERO")
+        if config.scout.backend == "fake":
+            typer.echo("Real Gemini API calls: ZERO")
         typer.echo(f"session ID: {m6_result.ingest.session_id}")
         typer.echo(f"session directory: {m6_result.ingest.session_dir}")
         return
