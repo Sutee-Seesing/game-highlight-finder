@@ -288,3 +288,9 @@ Gemini remains explicitly opt-in. M7 presentation is local-only: deterministic
 ranking is a separate artifact and the self-contained HTML report has no CDN,
 remote assets, secrets, or provider calls. Its cache identity includes the
 session-specific cost view but excludes unrelated pricing/logging settings.
+The runner exposes local per-invocation activity so the CLI distinguishes Fake
+Scout zero calls, cached Gemini with zero new generations, and observed Gemini
+generation activity. `resume`, `report`, and `cost session` preserve the
+persisted semantic configuration while never restoring remote-upload consent.
+Report metadata includes the published HTML SHA-256 and byte size; cache hits
+require those identities to match the actual artifact.

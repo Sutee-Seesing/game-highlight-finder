@@ -18,6 +18,7 @@ from game_highlight_finder.pipeline.extraction import ExtractionManifest, Extrac
 from game_highlight_finder.pipeline.manifest import new_manifest
 from game_highlight_finder.pipeline.ranking import rank_session_map
 from game_highlight_finder.pipeline.report import render_report
+from game_highlight_finder.storage.atomic import atomic_write_json, read_json
 from game_highlight_finder.storage.hashing import hash_file
 from game_highlight_finder.storage.sessions import session_paths
 
@@ -144,13 +145,53 @@ def test_multi_candidate_report_is_offline_escaped_and_cached(tmp_path: Path) ->
     ranking = rank_session_map(session_map)
     first_result = render_report(paths, source, session_map, ranking, manifest, config)
     html = paths.report_path.read_text(encoding="utf-8")
+    first_hash = hash_file(paths.report_path)
     second_result = render_report(paths, source, session_map, ranking, manifest, config)
 
     assert first_result.cache_hit is False
     assert second_result.cache_hit is True
+    metadata = read_json(paths.report_meta_path)
+    assert metadata["cache_key"] == first_result.cache_key
+    assert metadata["report_version"] == "m7-report-v1"
+    assert metadata["report_sha256"] == first_hash
+    assert metadata["report_size_bytes"] == paths.report_path.stat().st_size
+    assert hash_file(paths.report_path) == first_hash
     assert "No external" not in html
     assert "http://" not in html and "https://" not in html and "cdn" not in html.lower()
     assert "&lt;/script&gt;" in html
     assert "No candidates found" not in html
     assert "UNASSIGNED" in html
     assert "Open Clip" in html
+
+    # Every integrity failure is a stale cache, not a cache hit, and is repaired.
+    paths.report_path.write_text("truncated", encoding="utf-8")
+    assert render_report(paths, source, session_map, ranking, manifest, config).cache_hit is False
+    assert hash_file(paths.report_path) == first_hash
+
+    paths.report_path.write_text("manual alteration", encoding="utf-8")
+    atomic_write_json(paths.report_meta_path, metadata)
+    assert render_report(paths, source, session_map, ranking, manifest, config).cache_hit is False
+    assert hash_file(paths.report_path) == first_hash
+
+    paths.report_meta_path.write_text("{not-json", encoding="utf-8")
+    assert render_report(paths, source, session_map, ranking, manifest, config).cache_hit is False
+    assert hash_file(paths.report_path) == first_hash
+
+    metadata = read_json(paths.report_meta_path)
+    metadata["report_sha256"] = "0" * 64
+    atomic_write_json(paths.report_meta_path, metadata)
+    assert render_report(paths, source, session_map, ranking, manifest, config).cache_hit is False
+    assert hash_file(paths.report_path) == first_hash
+
+    metadata = read_json(paths.report_meta_path)
+    metadata["report_size_bytes"] = 1
+    atomic_write_json(paths.report_meta_path, metadata)
+    assert render_report(paths, source, session_map, ranking, manifest, config).cache_hit is False
+    assert hash_file(paths.report_path) == first_hash
+
+    # A matching semantic cache key is still invalid when the HTML bytes differ.
+    metadata = read_json(paths.report_meta_path)
+    paths.report_path.write_bytes(b"different bytes")
+    atomic_write_json(paths.report_meta_path, metadata)
+    assert render_report(paths, source, session_map, ranking, manifest, config).cache_hit is False
+    assert hash_file(paths.report_path) == first_hash

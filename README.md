@@ -158,7 +158,7 @@ proxies crossed the provider boundary; W0 and W1 were `SETTLED`, both remote
 files were deleted, and the cache-only rerun made zero new generations or
 reservations. List-rate-equivalent reservations were W0 THB 0.331454 and W1
 THB 0.331478 (total THB 0.662932); settlements were W0 THB 0.022785 and W1
-THB 0.022761 (total THB 0.045546). The 173-test offline suite passed; M7 adds
+THB 0.022761 (total THB 0.045546). The 183-test offline suite passed; M7 adds
 deterministic local ranking and a self-contained HTML report. M7 validation
 performs zero real Gemini calls.
 
@@ -185,6 +185,17 @@ and escaped untrusted text. Thumbnails are hash-checked before optional
 embedding; candidate MP4s remain local relative links. A report never invokes
 Scout or silently authorizes paid Gemini work. `resume` requires a fresh
 `--allow-remote-upload` only when a missing Gemini window needs provider work.
+
+M7 acceptance hardening keeps provider-call output truthful per invocation:
+Fake Scout prints `Real Gemini API calls: ZERO`, cached Gemini reports zero new
+generations only when the runner observed none, and new Gemini work reports the
+observed generation count. `resume`, `report`, and `cost session` use the
+persisted session configuration (while preserving the current `--data-dir` and
+clearing persisted remote-upload authorization). `report.meta.json` stores and
+verifies the published HTML SHA-256 and byte size before accepting a cache hit.
+The cold-to-warm V1 regression, CLI regressions, paid force-stage recovery, and
+report-corruption rebuild checks are automated; the 183-test maintenance run
+made zero real Gemini API calls.
 
 ## Development and tests
 

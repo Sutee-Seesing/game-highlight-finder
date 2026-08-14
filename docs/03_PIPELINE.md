@@ -36,7 +36,12 @@ M7 ranking and reporting are local-only. Ranking uses stable score/confidence/
 event-time/ID ordering and a best-of limit of three while retaining every
 candidate. Reports are atomic offline HTML with escaped text, hash-verified
 thumbnails, relative clip links, stage/warning diagnostics, and session-specific
-ledger cost. Zero-candidate sessions are valid.
+ledger cost. Zero-candidate sessions are valid. `report.meta.json` records the
+semantic cache key plus the published HTML version, SHA-256, and byte size;
+manual edits, truncation, or corrupt metadata force a local rebuild. Report and
+session-cost commands load persisted session semantics while retaining the
+current data-directory locator. Provider-call output is based on observed
+per-invocation activity, never on the configured backend alone.
 
 In M3 the `scout` stage is deliberately offline. It persists the exact Fake Scout
 response under `scout/raw/`, validates it as hostile input, and writes the

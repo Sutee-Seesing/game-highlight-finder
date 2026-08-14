@@ -187,6 +187,9 @@ def test_m6_window_privacy_cache_and_aggregate_cost_preflight(
         fake_provider=provider,
     )
     assert provider.calls == [window.window_id]
+    assert first.activity.provider_generation_calls == 1
+    assert first.activity.provider_uploads == 0
+    assert first.activity.paid_reservations_created == 0
     provider2 = FakeWindowScout()
     second = run_windowed_scout(
         local.ingest.source,
@@ -197,6 +200,20 @@ def test_m6_window_privacy_cache_and_aggregate_cost_preflight(
     )
     assert all(item.cache_hit for item in second.results)
     assert provider2.calls == []
+    assert second.activity.provider_generation_calls == 0
+    assert second.activity.cache_hits == 1
+
+    forced_provider = FakeWindowScout()
+    forced = run_windowed_scout(
+        local.ingest.source,
+        local.windows,
+        local.local_signals,
+        config,
+        fake_provider=forced_provider,
+        force=True,
+    )
+    assert forced_provider.calls == [window.window_id]
+    assert forced.activity.provider_generation_calls == 1
 
     gemini_config = config.model_copy(
         update={
@@ -263,6 +280,9 @@ def test_m6_gemini_windows_settle_cache_and_cleanup_without_network(
         cost_service=service,
     )
     assert transport.generation_count == 1
+    assert first.activity.provider_generation_calls == 1
+    assert first.activity.provider_uploads == 1
+    assert first.activity.paid_reservations_created == 1
     assert first.results[0].cache_hit is False
     assert service.ledger.list_calls()[0].status.value == "SETTLED"
     second = run_windowed_scout(
@@ -272,9 +292,13 @@ def test_m6_gemini_windows_settle_cache_and_cleanup_without_network(
         config,
         gemini_transport=transport,
         cost_service=service,
+        force=True,
     )
     assert second.results[0].cache_hit is True
     assert transport.generation_count == 1
+    assert second.activity.provider_generation_calls == 0
+    assert second.activity.provider_uploads == 0
+    assert second.activity.paid_reservations_created == 0
 
 
 def test_m6_gemini_ambiguous_window_is_never_retried(

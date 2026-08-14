@@ -66,12 +66,27 @@ class WindowScoutResult(BaseModel):
     session_map: SessionMap
 
 
+class ExecutionActivity(BaseModel):
+    """Local, per-invocation provider activity observed by the window runner."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    scout_backend: str = Field(min_length=1, max_length=32)
+    provider_generation_calls: int = Field(default=0, ge=0)
+    provider_uploads: int = Field(default=0, ge=0)
+    paid_reservations_created: int = Field(default=0, ge=0)
+    cache_hits: int = Field(default=0, ge=0)
+
+
 class WindowedScoutRun(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     plan: WindowPlan
     results: tuple[WindowScoutResult, ...]
     missing_windows: tuple[str, ...] = ()
     aggregate_preflight: AggregateCostPreflight
+    activity: ExecutionActivity = Field(
+        default_factory=lambda: ExecutionActivity(scout_backend="unknown")
+    )
 
 
 class AggregateCostPreflight(BaseModel):
@@ -506,6 +521,7 @@ def run_windowed_scout(
     results: list[WindowScoutResult] = []
     cached_ids: set[str] = set()
     missing: list[str] = []
+    generation_calls = 0
     for window in preparation.windows:
         item_dir = paths.scout_windows_dir / window.window_id
         raw_path = item_dir / "response.raw.json"
@@ -570,11 +586,12 @@ def run_windowed_scout(
                     continue
             except Exception:
                 valid_cache = False
-        if raw_path.is_file() and not valid_cache:
+        if raw_path.is_file() and not valid_cache and not force:
             try:
                 raw_bytes = raw_path.read_bytes()
                 parse_scout_response(raw_bytes, max_bytes=config.scout.response_max_bytes)
             except Exception:
+                generation_calls += 1
                 raw_bytes = provider.generate(
                     window=window,
                     source_duration_ms=source.duration_ms,
@@ -582,6 +599,7 @@ def run_windowed_scout(
                     summary=summary,
                 )
         else:
+            generation_calls += 1
             raw_bytes = provider.generate(
                 window=window,
                 source_duration_ms=source.duration_ms,
@@ -623,6 +641,11 @@ def run_windowed_scout(
     return WindowedScoutRun(
         plan=preparation.plan,
         results=tuple(results),
+        activity=ExecutionActivity(
+            scout_backend="fake",
+            provider_generation_calls=generation_calls,
+            cache_hits=len(cached_ids),
+        ),
         missing_windows=tuple(missing),
         aggregate_preflight=preflight,
     )
@@ -661,6 +684,9 @@ def _run_gemini_windowed_scout(
     payloads: dict[str, tuple[dict[str, Any], str, dict[str, Any], CostRequest]] = {}
     recoveries: dict[str, _PaidWindowRecovery] = {}
     cached_ids: set[str] = set()
+    generation_calls = 0
+    provider_uploads = 0
+    paid_reservations_created = 0
     schema = gemini_window_scout_schema()
     schema_digest = _sha256_bytes(
         json.dumps(schema, sort_keys=True, separators=(",", ":")).encode("utf-8")
@@ -799,13 +825,16 @@ def _run_gemini_windowed_scout(
         in_flight = False
         try:
             record = service.reserve(request)
+            paid_reservations_created += 1
             reserved = record.status.value in {"RESERVED", "IN_FLIGHT"}
 
             def mark_in_flight(current_call_id: str = call_id) -> None:
-                nonlocal in_flight
+                nonlocal generation_calls, in_flight
                 service.mark_in_flight(current_call_id)
                 in_flight = True
+                generation_calls += 1
 
+            provider_uploads += 1
             response = provider.execute(
                 ProviderRequest(
                     call_id=call_id,
@@ -875,7 +904,16 @@ def _run_gemini_windowed_scout(
             _write_window_cost_artifact(service, call_id, cost_path)
             raise
     return WindowedScoutRun(
-        plan=preparation.plan, results=tuple(results), aggregate_preflight=preflight
+        plan=preparation.plan,
+        results=tuple(results),
+        activity=ExecutionActivity(
+            scout_backend="gemini",
+            provider_generation_calls=generation_calls,
+            provider_uploads=provider_uploads,
+            paid_reservations_created=paid_reservations_created,
+            cache_hits=len(cached_ids),
+        ),
+        aggregate_preflight=preflight,
     )
 
 

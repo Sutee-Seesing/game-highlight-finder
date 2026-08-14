@@ -38,6 +38,7 @@ from game_highlight_finder.pipeline.runner import (
     analyze_source,
     analyze_v1_source,
 )
+from game_highlight_finder.pipeline.windowed_scout import ExecutionActivity
 from game_highlight_finder.providers import ProviderRegistry
 from game_highlight_finder.status import get_session_status
 from game_highlight_finder.storage.atomic import read_json
@@ -217,10 +218,11 @@ def _cost_calls(options: RuntimeOptions) -> None:
 
 
 def _cost_session(options: RuntimeOptions, session_id: str) -> None:
-    paths = session_paths(_load(options).config.storage.data_dir, session_id)
+    config = _load_persisted_session_config(options, session_id)
+    paths = session_paths(config.storage.data_dir, session_id)
     if not paths.root.is_dir():
         raise ConfigError(f"Session does not exist: {session_id}")
-    service = _cost_service(options)
+    service = CostService.from_config(config, registry=ProviderRegistry())
     calls = [call for call in service.ledger.list_calls() if call.session_id == session_id]
     settled = sum(
         call.settled_cost_micro_thb or 0 for call in calls if call.status.value == "SETTLED"
@@ -363,8 +365,8 @@ def _analyze(
                 f"extractions: {m6_result.extraction.completed} completed, "
                 f"{m6_result.extraction.incomplete} incomplete"
             )
-        if config.scout.backend == "fake":
-            typer.echo("Real Gemini API calls: ZERO")
+        if m6_result.scout is not None:
+            _echo_execution_activity(m6_result.scout.activity)
         typer.echo(f"session ID: {m6_result.ingest.session_id}")
         typer.echo(f"session directory: {m6_result.ingest.session_dir}")
         return
@@ -468,7 +470,21 @@ def _print_v1_result(result: V1AnalysisResult) -> None:
     if result.report is not None:
         typer.echo(f"report: {result.report.path}")
         typer.echo(f"report cache: {'HIT' if result.report.cache_hit else 'MISS'}")
-    typer.echo("Real Gemini API calls: ZERO" if m6.ingest.source.path.is_file() else "")
+    if m6.scout is not None:
+        _echo_execution_activity(m6.scout.activity)
+
+
+def _echo_execution_activity(activity: ExecutionActivity) -> None:
+    """Print only provider activity observed during this local invocation."""
+
+    if activity.scout_backend == "fake":
+        typer.echo("Real Gemini API calls: ZERO")
+    elif activity.scout_backend == "gemini" and activity.provider_generation_calls == 0:
+        typer.echo("Gemini generation calls this run: 0")
+    elif activity.scout_backend == "gemini":
+        typer.echo(f"Gemini generation calls this run: {activity.provider_generation_calls}")
+    else:
+        typer.echo("Provider generation activity: unknown")
 
 
 @app.command()
@@ -558,7 +574,7 @@ def report(
 
 
 def _report(options: RuntimeOptions, session_id: str, open_report: bool) -> None:
-    config = _load(options).config
+    config = _load_persisted_session_config(options, session_id)
     paths = session_paths(config.storage.data_dir, session_id)
     source, session_map, ranking, manifest = load_report_inputs(paths)
     ranking, _ = load_or_create_ranking(paths, session_map, config)

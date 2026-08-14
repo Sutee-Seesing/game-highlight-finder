@@ -111,8 +111,11 @@ M7 implementation includes deterministic `m7-ranking-v1` ranking (default
 best-of 3), atomic escaped offline HTML, cost/stage/warning diagnostics,
 resume/report/candidates/cost-session commands, and safe force-stage invalidation.
 Zero-candidate reports are valid; no AI Reviewer, publishing integration, or
-M8 work is included. Validation: 178 passed / 0 failed / 0 skipped, Ruff and
-mypy clean.
+M8 work is included. M7 acceptance hardening adds truthful per-invocation
+provider activity, persisted report/cost-session configuration, HTML artifact
+hash/size verification, and automated cold/warm, CLI, force-stage, and
+corruption-rebuild regressions. Validation: 183 passed / 0 failed / 0 skipped,
+Ruff and mypy clean; real Gemini API calls during maintenance: zero.
 
 ### M7 — Report and usable V1
 
@@ -215,7 +218,7 @@ Create a private annotation format for matches and candidate intervals. Evaluate
 
 V1 is done only after a representative 1–4 hour recording completes through report generation, an interrupted run resumes without repeating paid completed work, the original hash remains unchanged, the cost ledger stays within the hard limit, all candidates are traceable to validated evidence and source intervals, and the owner can find useful clips by reviewing a small fraction of the VOD.
 
-## 7. Exact next action after M6 publication
+## 7. Exact next action after M7 acceptance hardening
 
-M6 implementation and bounded live acceptance are complete. The next planned
-milestone is **M7 — Report and usable V1**; do not begin it as part of this handoff.
+M7 implementation and acceptance hardening are complete. M8 remains a separate
+future milestone and is not part of this handoff.

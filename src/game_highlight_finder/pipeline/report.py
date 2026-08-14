@@ -244,6 +244,40 @@ def _cache_key(
     ).hexdigest()
 
 
+def _report_bytes_identity(value: bytes) -> tuple[str, int]:
+    return hashlib.sha256(value).hexdigest(), len(value)
+
+
+def _verified_report_cache_hit(paths: SessionPaths, *, cache_key: str) -> bool:
+    """Accept a report cache only when metadata and actual HTML bytes agree."""
+
+    if not paths.report_path.is_file() or not paths.report_meta_path.is_file():
+        return False
+    try:
+        meta = read_json(paths.report_meta_path)
+        if (
+            not isinstance(meta, dict)
+            or meta.get("cache_key") != cache_key
+            or meta.get("report_version") != REPORT_VERSION
+        ):
+            return False
+        expected_sha = meta.get("report_sha256")
+        expected_size = meta.get("report_size_bytes")
+        if (
+            not isinstance(expected_sha, str)
+            or len(expected_sha) != 64
+            or any(character not in "0123456789abcdef" for character in expected_sha)
+            or not isinstance(expected_size, int)
+            or isinstance(expected_size, bool)
+            or expected_size < 0
+        ):
+            return False
+        actual_sha, actual_size = _report_bytes_identity(paths.report_path.read_bytes())
+        return actual_sha == expected_sha and actual_size == expected_size
+    except (OSError, TypeError, ValueError, ValidationError):
+        return False
+
+
 def _thumbnail_html(info: dict[str, Any], *, report_path: Path) -> str:
     if not info.get("thumbnail_ok"):
         return (
@@ -354,18 +388,13 @@ def render_report(
     extraction, records, extraction_warnings = _validate_extraction(paths, session_map, config)
     cost = _cost_summary(config, session_map.session_id)
     cache_key = _cache_key(session_map, ranking, extraction, records, manifest, cost, config)
-    if not force and paths.report_path.is_file() and paths.report_meta_path.is_file():
-        try:
-            meta = read_json(paths.report_meta_path)
-            if meta.get("cache_key") == cache_key:
-                return ReportResult(
-                    paths.report_path,
-                    cache_hit=True,
-                    cache_key=cache_key,
-                    warnings=tuple(extraction_warnings),
-                )
-        except Exception:
-            pass
+    if not force and _verified_report_cache_hit(paths, cache_key=cache_key):
+        return ReportResult(
+            paths.report_path,
+            cache_hit=True,
+            cache_key=cache_key,
+            warnings=tuple(extraction_warnings),
+        )
 
     matches = {match.match_id: match for match in session_map.matches}
     rank_by_id = {entry.candidate_id: entry.rank for entry in ranking.entries}
@@ -435,7 +464,7 @@ def render_report(
         best_cards = '<p class="empty">No candidates found.</p>'
     warning_html = "".join(f"<li>{_esc(item)}</li>" for item in warnings) or "<li>None</li>"
     stage_rows = "".join(
-        f"<tr><td>{_esc(name)}</td><td>{_esc(stage.status.value)}</td></tr>"
+        f"<tr><td>{_esc(name)}</td><td>{_esc('COMPLETED' if name == 'report' else stage.status.value)}</td></tr>"
         for name, stage in manifest.stages.items()
     )
     html_doc = f"""<!doctype html>
@@ -468,9 +497,17 @@ details {{ background:#171c25; padding:10px; border-radius:8px; }}
 <details><summary>Warnings and diagnostics</summary><ul>{warning_html}</ul></details>
 <script>document.querySelectorAll('a.clip').forEach((a) => a.setAttribute('download', ''));</script>
 </body></html>"""
-    atomic_write_bytes(paths.report_path, html_doc.encode("utf-8"))
+    report_bytes = html_doc.encode("utf-8")
+    report_sha256, report_size_bytes = _report_bytes_identity(report_bytes)
+    atomic_write_bytes(paths.report_path, report_bytes)
     atomic_write_json(
-        paths.report_meta_path, {"cache_key": cache_key, "report_version": REPORT_VERSION}
+        paths.report_meta_path,
+        {
+            "cache_key": cache_key,
+            "report_version": REPORT_VERSION,
+            "report_sha256": report_sha256,
+            "report_size_bytes": report_size_bytes,
+        },
     )
     return ReportResult(
         paths.report_path, cache_hit=False, cache_key=cache_key, warnings=tuple(warnings)

@@ -171,4 +171,9 @@ zero new generation calls or reservations; reconciliation and empty-set
 accurate extraction passed. The full suite is 173 passed / 0 failed / 0 skipped.
 M7 is implemented: the default Fake Scout journey ends at a local ranked
 `reports/index.html`. Use `resume`, `report`, `candidates`, and `cost session`
-for persisted follow-up; M7 validation made zero real Gemini calls.
+for persisted follow-up; M7 validation made zero real Gemini calls. Acceptance
+hardening now reports provider activity from the current invocation, resolves
+`report` and `cost session` against the persisted session configuration, and
+verifies report HTML hashes/sizes before accepting a cache hit. Automated
+cold-to-warm, CLI, paid force-stage, and corruption-rebuild regressions pass in
+the 183-test offline suite.
