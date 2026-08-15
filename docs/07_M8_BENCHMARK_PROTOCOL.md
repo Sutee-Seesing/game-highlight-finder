@@ -65,6 +65,21 @@ in a copy, then validate:
 highlight benchmark validate "<data_dir>\benchmarks\annotations\meccha-cal-01.json"
 ```
 
+For the private owner workflow, open the empty template in the tiny local helper:
+
+```powershell
+highlight benchmark annotate "<data_dir>\benchmarks\annotations\meccha-cal-01.json"
+```
+
+The helper binds only to `127.0.0.1`, serves the exact SHA-verified source read-only
+with byte ranges, and has no external resources, analytics, provider SDK, model
+assistance, or network calls. Timestamp buttons persist integer milliseconds only when
+the owner explicitly saves. Server-side `BenchmarkAnnotations` validation, atomic
+writes, private meaningful-data backups, and a separate human-review sidecar protect
+the benchmark truth. `VALID JSON` and `HUMAN_REVIEWED` are distinct from readiness for
+any provider benchmark. Dataset overview is intentionally not implemented in this
+tiny milestone; the single-case command keeps the annotation surface small.
+
 All times are integer milliseconds on the original source timeline. Every interval is
 half-open, `[start_ms, end_ms)`, and must be inside the source. Ground-truth errors
 fail closed; the tool never silently clamps a hand-entered boundary.

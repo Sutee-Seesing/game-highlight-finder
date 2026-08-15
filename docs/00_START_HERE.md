@@ -194,6 +194,12 @@ NOT RUN. V1 defaults: NOT LOCKED. M9: NOT STARTED. Real provider/API calls durin
 M8A/M8B1: ZERO. Quality/fun is the primary product criterion, followed by MUST_CATCH
 recall, precision/review burden, cost per source hour, and runtime/storage.
 
+Use `highlight benchmark annotate <annotation.json>` to open the small local-only
+human annotation helper. The source video is verified by SHA-256/duration, served
+read-only on loopback with byte-range support, and never re-encoded. The browser owns
+unsaved edits; Save performs server-side strict validation and an atomic JSON write.
+The helper has no model assistance, external requests, analytics, or provider calls.
+
 ### M8A comparison hardening
 
 `EvaluationPolicy.semantic_payload()` contains every semantic matching setting and

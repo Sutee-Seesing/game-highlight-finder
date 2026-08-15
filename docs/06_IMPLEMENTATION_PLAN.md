@@ -141,6 +141,12 @@ Ruff and mypy clean; real Gemini API calls during maintenance: zero.
 - M8B2 provider benchmark: **NOT RUN**. V1 defaults are **NOT LOCKED**. Product
   decisions prioritize quality/fun, MUST_CATCH recall, precision/review burden, cost
   per source hour, then runtime/storage.
+- M8B1.5 tiny local human annotation helper: **implemented and provider-free**.
+  `highlight benchmark annotate <annotation.json>` binds only to `127.0.0.1`, supports
+  range-streamed playback and timestamp buttons, keeps human edits in memory until
+  Save, validates with `BenchmarkAnnotations`, writes atomically, and keeps review
+  state in a private sidecar. It does not generate labels or expose a filesystem
+  browsing endpoint.
 - V1 defaults are **NOT LOCKED**. A representative 1–4 hour source must still run
   through analysis → report → evaluation while checking resume, immutability,
   budget, storage, and review ratio before full M8 acceptance.

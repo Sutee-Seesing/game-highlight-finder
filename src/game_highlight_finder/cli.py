@@ -15,6 +15,7 @@ from typing import Annotated, Any
 import typer
 
 from game_highlight_finder.benchmark.aggregate import aggregate_comparison, aggregate_manifest
+from game_highlight_finder.benchmark.annotation_server import AnnotationServer
 from game_highlight_finder.benchmark.evaluator import (
     evaluate_session,
     load_annotations,
@@ -304,6 +305,51 @@ def _benchmark_template(
     typer.echo(f"case ID: {result.annotations.case_id}")
     typer.echo(f"source SHA-256: {result.annotations.source_sha256}")
     typer.echo(f"duration_ms: {result.annotations.source_duration_ms}")
+
+
+@benchmark_app.command("annotate")
+def benchmark_annotate(
+    ctx: typer.Context,
+    annotations: Annotated[
+        Path, typer.Argument(help="Private annotation JSON document to edit locally.")
+    ],
+    no_open: Annotated[
+        bool, typer.Option("--no-open", help="Do not open the local loopback URL automatically.")
+    ] = False,
+    port: Annotated[
+        int,
+        typer.Option(
+            "--port",
+            min=0,
+            max=65_535,
+            help="Loopback port; 0 selects an available port automatically.",
+        ),
+    ] = 0,
+) -> None:
+    """Open one private annotation document in a local-only browser helper."""
+    _execute(ctx, lambda options: _benchmark_annotate(options, annotations, no_open, port))
+
+
+def _benchmark_annotate(
+    options: RuntimeOptions,
+    annotations_path: Path,
+    no_open: bool,
+    port: int,
+) -> None:
+    server = AnnotationServer(annotations_path, _load(options).config, port=port)
+    typer.echo(f"Local annotation URL: {server.url}")
+    typer.echo("Source is read-only; annotation writes require an explicit Save.")
+    typer.echo("provider calls: ZERO")
+    if not no_open:
+        import webbrowser
+
+        webbrowser.open(server.url)
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        typer.echo("Annotation server stopped.")
+    finally:
+        server.shutdown()
 
 
 @benchmark_app.command("validate")

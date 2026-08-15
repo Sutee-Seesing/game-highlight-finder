@@ -75,6 +75,7 @@ uv run highlight cost status
 uv run highlight cost report
 uv run highlight cost calls
 uv run highlight benchmark template "D:\Recordings\game.mp4" --game-profile meccha_chameleon
+uv run highlight benchmark annotate "<data_dir>\benchmarks\annotations\case.json"
 uv run highlight benchmark validate "<data_dir>\benchmarks\annotations\case.json"
 uv run highlight benchmark evaluate <session-id> --annotations "<data_dir>\benchmarks\annotations\case.json"
 uv run highlight benchmark aggregate "<data_dir>\benchmarks\datasets\m8.json"
@@ -222,6 +223,14 @@ required. M8B2 provider benchmarking is **NOT RUN**, V1 defaults are **NOT LOCKE
 and M9 is **NOT STARTED**. Real provider/API calls during all M8 work to date:
 **ZERO**. Product decisions use quality/fun first, then MUST_CATCH recall,
 precision/review burden, cost per source hour, and runtime/storage.
+
+`highlight benchmark annotate <annotation.json>` opens a tiny vanilla HTML/CSS/JS
+helper on `127.0.0.1` for human-owned labels. It streams only the opened read-only
+source with byte ranges, keeps edits in browser memory until explicit Save, validates
+with the strict `BenchmarkAnnotations` model, writes atomically, and creates a private
+backup before changing meaningful prior annotations. It has no AI suggestions,
+provider SDK, external resources, telemetry, or network requests. `--no-open` is
+available for headless tests; `--port 0` selects an available loopback port.
 
 ## Development and tests
 
