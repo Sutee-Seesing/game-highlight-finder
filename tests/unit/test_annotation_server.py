@@ -4,9 +4,10 @@ import hashlib
 import http.client
 import json
 import threading
+from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pytest
 from typer.testing import CliRunner
@@ -35,7 +36,7 @@ def running_annotation(
     tiny_video: Path,
     ffmpeg_path: Path,
     ffprobe_path: Path,
-) -> RunningAnnotation:
+) -> Iterator[RunningAnnotation]:
     config = AppConfig(
         storage=StorageConfig(data_dir=tmp_path / "library"),
         tools=ToolsConfig(ffmpeg_path=ffmpeg_path, ffprobe_path=ffprobe_path),
@@ -89,7 +90,7 @@ def _request(
 def _annotation_payload(running: RunningAnnotation) -> dict[str, Any]:
     status, _headers, body = _request(running, "GET", "/api/annotation")
     assert status == 200
-    return json.loads(body)["annotation"]
+    return cast(dict[str, Any], json.loads(body)["annotation"])
 
 
 def _highlight_payload(running: RunningAnnotation, *, notes: str = "") -> dict[str, Any]:
