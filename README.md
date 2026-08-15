@@ -216,9 +216,12 @@ enforcement, versioned multi-experiment result sets/comparison manifests, and
 equal-case/equal-annotation revision checks. `highlight benchmark aggregate` keeps
 the legacy single-dataset workflow; `highlight benchmark compare` consumes a
 comparison manifest and reports separate calibration, validation, and combined
-groups per experiment. The real gameplay benchmark is **NOT RUN**, V1 defaults are
-**NOT LOCKED**, and M8B/M9 are not started. Real provider/API calls during all M8A
-work: **ZERO**.
+groups per experiment. M8B1 real-gameplay discovery and private annotation preparation
+is complete locally; the corpus remains private and human ground truth is still
+required. M8B2 provider benchmarking is **NOT RUN**, V1 defaults are **NOT LOCKED**,
+and M9 is **NOT STARTED**. Real provider/API calls during all M8 work to date:
+**ZERO**. Product decisions use quality/fun first, then MUST_CATCH recall,
+precision/review burden, cost per source hour, and runtime/storage.
 
 ## Development and tests
 

@@ -188,8 +188,11 @@ Markdown comparison. The evaluator never invokes Scout, a provider adapter, uplo
 API, or network. See [07_M8_BENCHMARK_PROTOCOL.md](07_M8_BENCHMARK_PROTOCOL.md).
 
 M8A benchmark foundation and pre-benchmark hardening: COMPLETE after offline
-synthetic validation. M8 real gameplay benchmark: NOT RUN. V1 defaults: NOT
-LOCKED. M8B and M9: NOT STARTED. Real provider/API calls during M8A: ZERO.
+synthetic validation. M8B1 real-gameplay discovery and private annotation preparation:
+COMPLETE locally; human ground truth is still required. M8B2 provider benchmarking:
+NOT RUN. V1 defaults: NOT LOCKED. M9: NOT STARTED. Real provider/API calls during
+M8A/M8B1: ZERO. Quality/fun is the primary product criterion, followed by MUST_CATCH
+recall, precision/review burden, cost per source hour, and runtime/storage.
 
 ### M8A comparison hardening
 

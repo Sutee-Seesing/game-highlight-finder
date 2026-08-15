@@ -149,8 +149,11 @@ Per-case and aggregate results retain raw counts and report:
 - durable runtime timing where stage timestamps exist, and generated storage bytes
   excluding the original source.
 
-There is no single magic quality score. Future model selection must consider recall,
-precision, modality, timing, cost, runtime, storage, and review burden together.
+There is no single magic quality score. For a product decision, the priority order is
+quality/fun first, then MUST_CATCH recall, then precision and review burden, then cost
+per source hour, and finally runtime/storage. Modality, timing, boring-footage behavior,
+and cost exposure remain required slices rather than a license to trade away useful
+highlights for a cheaper score.
 
 Aggregate an existing private dataset after its evaluations exist:
 
@@ -197,14 +200,35 @@ cost, runtime, storage, review, duplicate, and Best-of metrics. The Markdown out
 contains labels, case IDs, hashes, and metrics only—never local paths, media,
 credentials, authorization headers, signed URLs, or raw provider thoughts.
 
-## Intended M8B private dataset (documented target only)
+## M8B1 real-gameplay preparation (completed locally, private)
 
-M8A does not require real files. M8B should annotate several short/medium MECCHA
-CHAMELEON sessions with boring and high-event footage, including a strong
-voice/reaction session, plus at least one contrasting non-MECCHA game. Try to cover an
+M8B1 performed a bounded, read-only inventory of the owner's local gameplay recordings
+and selected four real-gameplay cases (two calibration and two validation) totaling
+roughly forty minutes. The private corpus uses a profile-diverse competitive FPS pair;
+where a title could not be identified reliably from local evidence, the profile remains
+neutral for human confirmation. Each selected case has original-source provenance,
+content hashes, measured duration, and an empty annotation template. Long recordings
+were cut into private stream-copy derivatives outside the source directory; keyframe
+approximation is recorded in provenance and the source recordings remain immutable.
+
+The inventory, derived clips, selection manifest, dataset manifest, and annotation
+templates stay under the configured ignored data directory. They are never committed,
+and tracked documentation contains no source paths, filenames, media, or annotations.
+Human owners must annotate genuine MUST_CATCH, WORTH_REVIEW, optional, modality, and
+boring intervals; the model and selection script do not write ground truth. M8B1 ends
+at `READY_FOR_HUMAN_ANNOTATION`. M8B2 provider benchmarking must wait until those
+annotations are complete and validated.
+
+## Intended M8B2 private dataset (documented target only)
+
+M8B2 should use the completed M8B1 cases after human annotation, retaining boring and
+high-event footage, audio/reaction coverage, and a contrasting profile. Try to cover an
 obvious visual highlight, subtle smart play, funny reaction, failure, clutch, boring
 interval, and overlapping setup/payoff story. Keep calibration and validation cases
-distinct from the start.
+distinct from the start. Its first comparison is the current Gemini baseline versus a
+lower-cost Gemini baseline on the same sources, annotations, evaluation policy, prompt,
+window/proxy/extraction/ranking settings, and only the model dimension changed. This
+is a future plan, not an executed or implemented provider comparison.
 
 Before full M8 acceptance, at least one representative 1–4 hour source must run
 through analysis → report → evaluation while checking resume, source immutability,
@@ -213,7 +237,9 @@ budget, storage, and review ratio. M8A intentionally does not run that holdout.
 ## Status and safety
 
 M8A benchmark foundation and pre-benchmark hardening: complete after offline
-synthetic tests and local static validation. M8 real gameplay benchmark: not run.
-V1 defaults: not locked. M8B and M9 remain separately authorized milestones.
+synthetic tests and local static validation. M8B1 real-gameplay dataset preparation:
+complete locally, with human annotation pending. M8B2 provider benchmarking: **NOT
+RUN**. V1 defaults: **NOT LOCKED**. M9 remains separately authorized and **NOT
+STARTED**.
 
-Real provider/API calls during M8A: **ZERO**.
+Real provider/API calls during M8A and M8B1: **ZERO**.
