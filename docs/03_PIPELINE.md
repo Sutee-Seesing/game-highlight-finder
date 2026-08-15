@@ -247,3 +247,12 @@ extraction completeness, or annotation schema is invalid. The evaluator reads th
 settled/active/ambiguous cost lifecycle from SQLite; unresolved exposure remains
 explicit and is not reported as settled actual cost. The original source is hashed
 and checked but is never copied into benchmark artifacts.
+
+For one experiment, `highlight benchmark aggregate <dataset.json>` retains the
+legacy workflow. For apples-to-apples model comparison, use a versioned comparison
+manifest and `highlight benchmark compare <comparison.json>`. Every result set must
+contain every dataset case exactly once. The loader blocks unknown/missing case IDs,
+source or annotation revision changes, split/profile changes, policy mismatches,
+and a result set that mixes semantic experiment configurations. Reports contain
+labels, hashes, and metrics only; private paths, media, credentials, and raw
+provider responses remain local.

@@ -1,9 +1,16 @@
 {
   "schema_version": 1,
+  "manifest_type": "dataset",
   "benchmark_id": "m8-private-example",
   "name": "M8A private benchmark (template)",
   "description": "Replace placeholders locally; do not commit real media or annotations.",
   "evaluation_policy_version": "m8-eval-v1",
+  "evaluation_policy": {
+    "schema_version": 1,
+    "policy_version": "m8-eval-v1",
+    "event_iou_threshold": 0.25,
+    "boundary_tolerance_ms": 3000
+  },
   "cases": [
     {
       "case_id": "meccha-cal-01",

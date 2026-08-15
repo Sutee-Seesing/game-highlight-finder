@@ -141,6 +141,20 @@ Ruff and mypy clean; real Gemini API calls during maintenance: zero.
   through analysis → report → evaluation while checking resume, immutability,
   budget, storage, and review ratio before full M8 acceptance.
 
+#### M8A pre-benchmark hardening (accepted offline)
+
+The benchmark ruler is now authoritative before any private gameplay is used:
+semantic policy fingerprints are persisted and compared, legacy `m8-eval-v1`
+manifests migrate only to the exact historical `0.25 / 3000 ms` policy, and
+dataset policy mismatches fail closed. Ground truth remains separate from
+experiment results through strict result-set and comparison manifests. Equal-case
+coverage, source/annotation revision identity, split/profile identity, and
+single-experiment result-set consistency are enforced. The aggregate report keeps
+raw-count weighting and labels each experiment's calibration, validation, and
+combined groups. Focused evaluator/metrics/privacy/CLI regression tests are
+committed. Real provider/API calls are **ZERO**; M8 real gameplay, M8B, and M9 are
+not started and V1 defaults are not locked.
+
 ### M9 — Optional Reviewer
 
 - Batch only extracted candidates; enforce independent reservations and cache keys.

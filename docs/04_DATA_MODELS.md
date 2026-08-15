@@ -361,3 +361,21 @@ JSON models:
 All timestamps are integer milliseconds and half-open. Bounds and duplicate IDs fail
 closed. Annotation hashes affect evaluation identity only; they never enter Scout,
 paid-provider, SessionMap, or extraction cache identity.
+
+### M8A comparison manifests
+
+`EvaluationPolicy` exposes `semantic_payload()` and a deterministic
+`evaluation_policy_fingerprint` over `schema_version`, `policy_version`,
+`event_iou_threshold`, and `boundary_tolerance_ms`. The full policy is persisted
+on `BenchmarkDataset`, `BenchmarkEvaluation`, and `BenchmarkAggregate`; changing
+any threshold changes the fingerprint even when the human-readable version stays
+the same.
+
+`BenchmarkDataset` contains only private source/annotation case metadata.
+`BenchmarkResultRef` points to one completed evaluation, and
+`BenchmarkResultSet` groups refs for one experiment. `BenchmarkComparisonManifest`
+combines result sets over one dataset. The comparison validator requires equal case
+coverage, source SHA, current annotation SHA, split, game profile, benchmark ID,
+and policy fingerprint, plus one experiment fingerprint per result set. These
+models contain locators but no media, secrets, authorization headers, or signed
+URLs; runtime benchmark directories are ignored by Git.

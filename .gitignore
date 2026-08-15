@@ -23,5 +23,7 @@ benchmarks/datasets/
 benchmarks/annotations/
 benchmarks/results/
 benchmarks/reports/
+benchmarks/experiments/
+benchmarks/comparisons/
 *.log
 .test-tmp/

@@ -310,3 +310,18 @@ cache keys, provider request fingerprints, SessionMap output, or extraction cach
 and boundary-tolerance thresholds. Aggregation recomputes metrics from counts and
 retains calibration, validation, and combined slices. Private results are written
 atomically under the data directory and sanitized Markdown reports omit local paths.
+
+### M8A hardening: comparison identity
+
+`EvaluationPolicy.semantic_payload()` is the authoritative comparison ruler. Its
+canonical JSON (sorted keys, compact separators, no paths/timestamps) is hashed as
+`evaluation_policy_fingerprint`; `policy_version` is retained for readability but
+cannot establish equivalence on its own. The dataset's declared policy must match
+every evaluation and result set exactly.
+
+Ground truth is separate from experiment results. A `BenchmarkResultSet` contains
+case/evaluation references for one provider/model/configuration, while a
+`BenchmarkComparisonManifest` names the dataset and multiple result sets. Each set
+must cover exactly the dataset case IDs and must be internally consistent after
+excluding only per-source/annotation identities. Comparison groups are labelled by
+experiment and split/profile; counts remain raw-count weighted.

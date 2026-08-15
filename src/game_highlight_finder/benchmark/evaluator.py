@@ -23,7 +23,6 @@ from pydantic import BaseModel, ConfigDict
 
 from game_highlight_finder import __version__
 from game_highlight_finder.benchmark.models import (
-    EVALUATION_POLICY_VERSION,
     AnnotatedHighlight,
     AnnotatedMatch,
     BenchmarkAnnotations,
@@ -526,6 +525,7 @@ def build_experiment_identity(
     annotations_sha256: str,
     session_map: SessionMap,
     config: AppConfig,
+    policy: EvaluationPolicy | None = None,
 ) -> ExperimentIdentity:
     """Capture semantic inference/evaluation dimensions without ground-truth leakage."""
 
@@ -544,6 +544,7 @@ def build_experiment_identity(
         "audio": config.media.audio.model_dump(mode="json"),
     }
     signal_settings = config.signals.model_dump(mode="json")
+    active_policy = policy or EvaluationPolicy()
     return ExperimentIdentity(
         provider=provider,
         model=model,
@@ -559,7 +560,8 @@ def build_experiment_identity(
         signal_settings_fingerprint=fingerprint(signal_settings),
         extraction_config_fingerprint=fingerprint(config.media.extraction.model_dump(mode="json")),
         ranking_config_fingerprint=fingerprint({"best_of_limit": config.report.best_of_limit}),
-        evaluator_policy_version=EVALUATION_POLICY_VERSION,
+        evaluator_policy_version=active_policy.policy_version,
+        evaluator_policy_fingerprint=active_policy.fingerprint(),
         source_sha256=source.sha256,
         annotation_sha256=annotations_sha256,
         application_version=__version__,
@@ -1011,6 +1013,7 @@ def evaluate_session(
     evaluation = BenchmarkEvaluation(
         created_at=now or datetime.now(UTC),
         evaluation_policy=active_policy,
+        evaluation_policy_fingerprint=active_policy.fingerprint(),
         benchmark_id=annotations.benchmark_id,
         case_id=annotations.case_id,
         split=split,
@@ -1021,7 +1024,7 @@ def evaluate_session(
         source_sha256=source.sha256,
         annotation_sha256=annotation_hash,
         experiment=build_experiment_identity(
-            source, annotations, annotation_hash, session_map, config
+            source, annotations, annotation_hash, session_map, config, active_policy
         ),
         counts=counts,
         primary_metrics=primary,

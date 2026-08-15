@@ -78,6 +78,7 @@ uv run highlight benchmark template "D:\Recordings\game.mp4" --game-profile mecc
 uv run highlight benchmark validate "<data_dir>\benchmarks\annotations\case.json"
 uv run highlight benchmark evaluate <session-id> --annotations "<data_dir>\benchmarks\annotations\case.json"
 uv run highlight benchmark aggregate "<data_dir>\benchmarks\datasets\m8.json"
+uv run highlight benchmark compare "<data_dir>\benchmarks\comparisons\baseline-models.json"
 ```
 
 Global overrides must appear before the subcommand:
@@ -209,8 +210,15 @@ importance slices, boring intervals, boundary/duplicate/review/cost/runtime/stor
 metrics, experiment identity, and ground-truth leakage rules. The local commands under
 `highlight benchmark` only consume completed session artifacts and annotations; they
 never invoke Scout, providers, uploads, or network APIs. M8A uses synthetic fixtures
-for acceptance. The real gameplay benchmark is **NOT RUN**, V1 defaults are **NOT
-LOCKED**, and M8B/M9 are not started.
+for acceptance. The pre-benchmark hardening adds a canonical semantic policy
+fingerprint (the version string alone is not a ruler), explicit dataset policy
+enforcement, versioned multi-experiment result sets/comparison manifests, and
+equal-case/equal-annotation revision checks. `highlight benchmark aggregate` keeps
+the legacy single-dataset workflow; `highlight benchmark compare` consumes a
+comparison manifest and reports separate calibration, validation, and combined
+groups per experiment. The real gameplay benchmark is **NOT RUN**, V1 defaults are
+**NOT LOCKED**, and M8B/M9 are not started. Real provider/API calls during all M8A
+work: **ZERO**.
 
 ## Development and tests
 

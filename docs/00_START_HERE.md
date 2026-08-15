@@ -187,5 +187,19 @@ local session; and `aggregate` produces count-weighted JSON plus a privacy-safe
 Markdown comparison. The evaluator never invokes Scout, a provider adapter, upload
 API, or network. See [07_M8_BENCHMARK_PROTOCOL.md](07_M8_BENCHMARK_PROTOCOL.md).
 
-M8A benchmark foundation: COMPLETE after offline synthetic validation. M8 real
-gameplay benchmark: NOT RUN. V1 defaults: NOT LOCKED. M8B and M9: NOT STARTED.
+M8A benchmark foundation and pre-benchmark hardening: COMPLETE after offline
+synthetic validation. M8 real gameplay benchmark: NOT RUN. V1 defaults: NOT
+LOCKED. M8B and M9: NOT STARTED. Real provider/API calls during M8A: ZERO.
+
+### M8A comparison hardening
+
+`EvaluationPolicy.semantic_payload()` contains every semantic matching setting and
+its canonical SHA-256 fingerprint is persisted in datasets, evaluations, result
+sets, and aggregates. The version string alone is not a ruler: same-version
+threshold changes fail closed. Ground truth remains separate from experiment
+results through strict `BenchmarkResultSet` and `BenchmarkComparisonManifest`
+models. Each set must cover exactly the same case IDs, source hashes, annotation
+revision hashes, split/profile values, and policy fingerprint; mixed experiment
+settings are rejected. Private benchmark directories remain ignored, and the
+evaluator never calls providers, uploads media, reads credentials, or resumes a
+session.

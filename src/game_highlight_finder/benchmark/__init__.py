@@ -1,8 +1,11 @@
 """Provider-neutral M8A benchmark and annotation foundation."""
 
 from game_highlight_finder.benchmark.aggregate import (
+    aggregate_comparison,
     aggregate_dataset,
     aggregate_evaluations,
+    aggregate_manifest,
+    experiment_fingerprint,
     render_markdown,
 )
 from game_highlight_finder.benchmark.evaluator import (
@@ -19,13 +22,18 @@ from game_highlight_finder.benchmark.models import (
     AnnotatedMatch,
     BenchmarkAnnotations,
     BenchmarkCase,
+    BenchmarkComparisonManifest,
     BenchmarkDataset,
     BenchmarkEvaluation,
+    BenchmarkResultRef,
+    BenchmarkResultSet,
     BoringInterval,
     EvaluationPolicy,
     ExperimentIdentity,
     Importance,
     Modality,
+    compute_evaluation_policy_fingerprint,
+    evaluation_policy_fingerprint,
 )
 from game_highlight_finder.benchmark.template import create_annotation_template
 
@@ -38,18 +46,26 @@ __all__ = [
     "AnnotatedMatch",
     "BenchmarkAnnotations",
     "BenchmarkCase",
+    "BenchmarkComparisonManifest",
     "BenchmarkDataset",
     "BenchmarkEvaluation",
+    "BenchmarkResultRef",
+    "BenchmarkResultSet",
     "BoringInterval",
     "EvaluationPolicy",
     "ExperimentIdentity",
     "Importance",
     "Modality",
+    "aggregate_comparison",
     "aggregate_dataset",
     "aggregate_evaluations",
+    "aggregate_manifest",
+    "compute_evaluation_policy_fingerprint",
     "create_annotation_template",
     "deterministic_temporal_match",
     "evaluate_session",
+    "evaluation_policy_fingerprint",
+    "experiment_fingerprint",
     "render_markdown",
     "validate_annotations_file",
 ]

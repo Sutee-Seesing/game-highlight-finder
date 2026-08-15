@@ -8,6 +8,8 @@ never persist provider credentials or raw provider responses.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import math
 from datetime import datetime
 from enum import StrEnum
@@ -92,6 +94,57 @@ class EvaluationPolicy(BenchmarkModel):
     def strict_tolerance(cls, value: object) -> object:
         return _strict_integer(value, field_name="boundary_tolerance_ms")
 
+    def semantic_payload(self) -> dict[str, object]:
+        """Return the complete, ordered-independent policy identity payload.
+
+        Only fields that change the evaluation ruler belong here.  Timestamps,
+        paths, Python representations, and other operational metadata are
+        intentionally excluded so every process derives the same identity.
+        """
+
+        return {
+            "schema_version": self.schema_version,
+            "policy_version": self.policy_version,
+            "event_iou_threshold": self.event_iou_threshold,
+            "boundary_tolerance_ms": self.boundary_tolerance_ms,
+        }
+
+    def fingerprint(self) -> str:
+        """Return the canonical SHA-256 identity of this evaluation ruler."""
+
+        encoded = json.dumps(self.semantic_payload(), sort_keys=True, separators=(",", ":")).encode(
+            "utf-8"
+        )
+        return hashlib.sha256(encoded).hexdigest()
+
+    @property
+    def evaluation_policy_fingerprint(self) -> str:
+        """Readable property alias used by persisted benchmark artifacts."""
+
+        return self.fingerprint()
+
+    @property
+    def semantic_fingerprint(self) -> str:
+        """Alias for callers that name the identity after its semantic payload."""
+
+        return self.fingerprint()
+
+    @property
+    def policy_fingerprint(self) -> str:
+        return self.fingerprint()
+
+
+def compute_evaluation_policy_fingerprint(policy: EvaluationPolicy) -> str:
+    """Compute a policy fingerprint without relying on object repr/order."""
+
+    return policy.fingerprint()
+
+
+def evaluation_policy_fingerprint(policy: EvaluationPolicy) -> str:
+    """Short public alias for the canonical policy fingerprint helper."""
+
+    return compute_evaluation_policy_fingerprint(policy)
+
 
 class BenchmarkCase(BenchmarkModel):
     """One private source/annotation pair in a benchmark dataset."""
@@ -132,6 +185,7 @@ class BenchmarkDataset(BenchmarkModel):
     """Strict versioned manifest; source bytes are intentionally absent."""
 
     schema_version: Literal[1] = 1
+    manifest_type: Literal["dataset"] = "dataset"
     benchmark_id: str = Field(
         min_length=1,
         max_length=MAX_ID,
@@ -145,18 +199,42 @@ class BenchmarkDataset(BenchmarkModel):
     )
     cases: tuple[BenchmarkCase, ...] = Field(default_factory=tuple, max_length=10_000)
     evaluation_policy: EvaluationPolicy | None = None
+    # Populated deterministically from ``evaluation_policy``.  It remains
+    # optional only while loading accepted legacy manifests that omitted the
+    # full policy; the known historical m8-eval-v1 ruler is migrated below.
+    evaluation_policy_fingerprint: str | None = None
 
     @model_validator(mode="after")
     def unique_cases_and_policy(self) -> BenchmarkDataset:
         ids = [case.case_id for case in self.cases]
         if len(set(ids)) != len(ids):
             raise ValueError("benchmark case IDs must be unique")
-        if (
-            self.evaluation_policy is not None
-            and self.evaluation_policy.policy_version != self.evaluation_policy_version
-        ):
+        if self.evaluation_policy is None:
+            if self.evaluation_policy_version != EVALUATION_POLICY_VERSION:
+                raise ValueError(
+                    "dataset evaluation_policy is required for non-legacy policy versions"
+                )
+            # Deterministic migration for the only accepted legacy manifest:
+            # m8-eval-v1 means exactly the historical 0.25 / 3000 ruler.
+            object.__setattr__(self, "evaluation_policy", EvaluationPolicy())
+        assert self.evaluation_policy is not None
+        if self.evaluation_policy.policy_version != self.evaluation_policy_version:
             raise ValueError("dataset policy version does not match its policy")
+        computed = self.evaluation_policy.fingerprint()
+        if (
+            self.evaluation_policy_fingerprint is not None
+            and self.evaluation_policy_fingerprint != computed
+        ):
+            raise ValueError("dataset evaluation policy fingerprint does not match its policy")
+        object.__setattr__(self, "evaluation_policy_fingerprint", computed)
         return self
+
+    @property
+    def policy_fingerprint(self) -> str:
+        """Authoritative policy identity for dataset comparisons."""
+
+        assert self.evaluation_policy is not None
+        return self.evaluation_policy.fingerprint()
 
 
 class AnnotatedMatch(BenchmarkModel):
@@ -332,6 +410,9 @@ class ExperimentIdentity(BenchmarkModel):
     extraction_config_fingerprint: str = Field(min_length=1, max_length=256)
     ranking_config_fingerprint: str = Field(min_length=1, max_length=256)
     evaluator_policy_version: str = Field(min_length=1, max_length=64)
+    # Full semantic policy identity.  The empty default only supports loading
+    # pre-hardening M8A results; it is filled with the known legacy ruler below.
+    evaluator_policy_fingerprint: str = ""
     source_sha256: Sha256
     annotation_sha256: Sha256
     application_version: str | None = Field(default=None, max_length=128)
@@ -351,6 +432,18 @@ class ExperimentIdentity(BenchmarkModel):
     def window_bounds_are_sane(self) -> ExperimentIdentity:
         if self.window_overlap_seconds >= self.window_duration_seconds:
             raise ValueError("experiment window overlap must be shorter than duration")
+        if not self.evaluator_policy_fingerprint:
+            if self.evaluator_policy_version != EVALUATION_POLICY_VERSION:
+                raise ValueError("experiment policy fingerprint is required for non-legacy policy")
+            object.__setattr__(
+                self,
+                "evaluator_policy_fingerprint",
+                EvaluationPolicy().fingerprint(),
+            )
+        if len(self.evaluator_policy_fingerprint) != 64 or any(
+            char not in "0123456789abcdef" for char in self.evaluator_policy_fingerprint
+        ):
+            raise ValueError("experiment evaluator policy fingerprint must be lowercase SHA-256")
         return self
 
 
@@ -520,6 +613,7 @@ class BenchmarkEvaluation(BenchmarkModel):
     evaluator_version: str = Field(default=EVALUATOR_VERSION, min_length=1, max_length=64)
     created_at: datetime
     evaluation_policy: EvaluationPolicy
+    evaluation_policy_fingerprint: str = ""
     benchmark_id: str = Field(min_length=1, max_length=MAX_ID)
     case_id: str = Field(min_length=1, max_length=MAX_ID)
     split: BenchmarkSplit
@@ -553,6 +647,10 @@ class BenchmarkEvaluation(BenchmarkModel):
         default_factory=tuple, max_length=20_000
     )
     warnings: tuple[str, ...] = Field(default_factory=tuple, max_length=100)
+    # Deterministic result identity.  ``created_at`` is excluded so re-persisting
+    # the same local artifacts yields the same identity; annotation bytes remain
+    # part of the identity through annotation_sha256.
+    evaluation_fingerprint: str = ""
 
     @field_validator("source_duration_ms", mode="before")
     @classmethod
@@ -567,7 +665,29 @@ class BenchmarkEvaluation(BenchmarkModel):
             raise ValueError("experiment and evaluation annotation hashes disagree")
         if self.experiment.evaluator_policy_version != self.evaluation_policy.policy_version:
             raise ValueError("experiment and evaluation policy versions disagree")
+        computed_policy = self.evaluation_policy.fingerprint()
+        if (
+            self.evaluation_policy_fingerprint
+            and self.evaluation_policy_fingerprint != computed_policy
+        ):
+            raise ValueError("evaluation policy fingerprint does not match its policy")
+        object.__setattr__(self, "evaluation_policy_fingerprint", computed_policy)
+        if self.experiment.evaluator_policy_fingerprint != computed_policy:
+            raise ValueError("experiment and evaluation policy fingerprints disagree")
+        payload = self.model_dump(
+            mode="json",
+            exclude={"created_at", "evaluation_fingerprint"},
+        )
+        encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        computed_result = hashlib.sha256(encoded).hexdigest()
+        if self.evaluation_fingerprint and self.evaluation_fingerprint != computed_result:
+            raise ValueError("evaluation fingerprint does not match evaluation contents")
+        object.__setattr__(self, "evaluation_fingerprint", computed_result)
         return self
+
+    @property
+    def policy_fingerprint(self) -> str:
+        return self.evaluation_policy_fingerprint
 
 
 class AggregateGroup(BenchmarkModel):
@@ -592,6 +712,8 @@ class AggregateGroup(BenchmarkModel):
     runtime_metrics: RuntimeMetrics
     storage_metrics: StorageMetrics
     warnings: tuple[str, ...] = Field(default_factory=tuple, max_length=100)
+    experiment_label: str | None = Field(default=None, max_length=240)
+    result_set_id: str | None = Field(default=None, max_length=MAX_ID)
 
 
 class BenchmarkAggregate(BenchmarkModel):
@@ -600,9 +722,87 @@ class BenchmarkAggregate(BenchmarkModel):
     created_at: datetime
     benchmark_id: str = Field(min_length=1, max_length=MAX_ID)
     evaluation_policy_version: str = Field(min_length=1, max_length=64)
+    evaluation_policy: EvaluationPolicy | None = None
+    evaluation_policy_fingerprint: str = ""
+    comparison_id: str | None = Field(default=None, max_length=MAX_ID)
+    result_set_ids: tuple[str, ...] = Field(default_factory=tuple, max_length=1_000)
     groups: tuple[AggregateGroup, ...] = Field(default_factory=tuple, max_length=10_000)
     per_case: tuple[BenchmarkEvaluation, ...] = Field(default_factory=tuple, max_length=10_000)
     warnings: tuple[str, ...] = Field(default_factory=tuple, max_length=100)
+
+    @model_validator(mode="after")
+    def policy_identity_is_consistent(self) -> BenchmarkAggregate:
+        if self.evaluation_policy is None:
+            if self.evaluation_policy_version != EVALUATION_POLICY_VERSION:
+                raise ValueError("aggregate evaluation policy is required for non-legacy policy")
+            object.__setattr__(self, "evaluation_policy", EvaluationPolicy())
+        assert self.evaluation_policy is not None
+        if self.evaluation_policy.policy_version != self.evaluation_policy_version:
+            raise ValueError("aggregate policy version does not match its policy")
+        computed = self.evaluation_policy.fingerprint()
+        if self.evaluation_policy_fingerprint and self.evaluation_policy_fingerprint != computed:
+            raise ValueError("aggregate policy fingerprint does not match its policy")
+        object.__setattr__(self, "evaluation_policy_fingerprint", computed)
+        return self
+
+    @property
+    def policy_fingerprint(self) -> str:
+        return self.evaluation_policy_fingerprint
+
+
+class BenchmarkResultRef(BenchmarkModel):
+    """One case evaluation reference in a semantic experiment result set."""
+
+    schema_version: Literal[1] = 1
+    case_id: str = Field(min_length=1, max_length=MAX_ID)
+    evaluation_path: Path
+
+
+class BenchmarkResultSet(BenchmarkModel):
+    """A single experiment's completed evaluations over benchmark cases."""
+
+    schema_version: Literal[1] = 1
+    manifest_type: Literal["result_set"] = "result_set"
+    result_set_id: str = Field(
+        min_length=1,
+        max_length=MAX_ID,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",
+    )
+    label: str = Field(min_length=1, max_length=240)
+    benchmark_id: str = Field(min_length=1, max_length=MAX_ID)
+    evaluation_policy_fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$")
+    experiment_fingerprint: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    results: tuple[BenchmarkResultRef, ...] = Field(default_factory=tuple, max_length=10_000)
+
+    @model_validator(mode="after")
+    def unique_result_cases(self) -> BenchmarkResultSet:
+        case_ids = [item.case_id for item in self.results]
+        if len(set(case_ids)) != len(case_ids):
+            raise ValueError("result set contains duplicate case references")
+        return self
+
+
+class BenchmarkComparisonManifest(BenchmarkModel):
+    """Strict manifest describing an apples-to-apples multi-experiment comparison."""
+
+    schema_version: Literal[1] = 1
+    manifest_type: Literal["comparison"] = "comparison"
+    comparison_id: str = Field(
+        min_length=1,
+        max_length=MAX_ID,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",
+    )
+    benchmark_dataset_path: Path
+    result_sets: tuple[BenchmarkResultSet | Path, ...] = Field(min_length=1, max_length=1_000)
+
+    @model_validator(mode="after")
+    def inline_result_set_ids_unique(self) -> BenchmarkComparisonManifest:
+        ids = [
+            item.result_set_id for item in self.result_sets if isinstance(item, BenchmarkResultSet)
+        ]
+        if len(set(ids)) != len(ids):
+            raise ValueError("comparison contains duplicate result set IDs")
+        return self
 
 
 __all__ = [
@@ -616,8 +816,11 @@ __all__ = [
     "BenchmarkAggregate",
     "BenchmarkAnnotations",
     "BenchmarkCase",
+    "BenchmarkComparisonManifest",
     "BenchmarkDataset",
     "BenchmarkEvaluation",
+    "BenchmarkResultRef",
+    "BenchmarkResultSet",
     "BenchmarkSplit",
     "BestOfMetrics",
     "BoringInterval",
@@ -643,4 +846,6 @@ __all__ = [
     "RuntimeMetrics",
     "SliceMetric",
     "StorageMetrics",
+    "compute_evaluation_policy_fingerprint",
+    "evaluation_policy_fingerprint",
 ]

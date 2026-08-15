@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from collections import defaultdict
 from collections.abc import Iterable, Sequence
 from datetime import UTC, datetime
@@ -16,8 +17,10 @@ from game_highlight_finder.benchmark.models import (
     AggregateGroup,
     BenchmarkAggregate,
     BenchmarkCase,
+    BenchmarkComparisonManifest,
     BenchmarkDataset,
     BenchmarkEvaluation,
+    BenchmarkResultSet,
     BenchmarkSplit,
     BestOfMetrics,
     BoundaryMetrics,
@@ -43,12 +46,47 @@ class AggregateRun(BaseModel):
 
 
 def _experiment_fingerprint(evaluation: BenchmarkEvaluation) -> str:
-    payload = evaluation.experiment.model_dump(mode="json")
-    payload.pop("source_sha256", None)
-    payload.pop("annotation_sha256", None)
+    """Hash semantic inference settings, excluding per-case identities only."""
+
+    payload = evaluation.experiment.model_dump(
+        mode="json", exclude={"source_sha256", "annotation_sha256"}
+    )
     return hashlib.sha256(
         json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
     ).hexdigest()
+
+
+def experiment_fingerprint(evaluation: BenchmarkEvaluation) -> str:
+    """Public stable experiment identity used by result-set validation."""
+
+    return _experiment_fingerprint(evaluation)
+
+
+def _policy_payload(evaluation: BenchmarkEvaluation) -> str:
+    return json.dumps(
+        evaluation.evaluation_policy.semantic_payload(), sort_keys=True, separators=(",", ":")
+    )
+
+
+def _validate_policy_consistency(evaluations: Sequence[BenchmarkEvaluation]) -> tuple[str, str]:
+    fingerprints = {item.evaluation_policy.fingerprint() for item in evaluations}
+    payloads = {_policy_payload(item) for item in evaluations}
+    if len(fingerprints) != 1 or len(payloads) != 1:
+        details = "; ".join(
+            f"{item.evaluation_policy.fingerprint()}={item.evaluation_policy.semantic_payload()}"
+            for item in evaluations
+        )
+        raise ValidationError(
+            "Evaluation policy mismatch blocks benchmark comparison.", hint=details
+        )
+    fingerprint = next(iter(fingerprints))
+    for item in evaluations:
+        if item.evaluation_policy_fingerprint != fingerprint:
+            raise ValidationError(
+                "Persisted evaluation policy fingerprint is inconsistent with its policy.",
+                hint=f"Expected {fingerprint}; found {item.evaluation_policy_fingerprint}.",
+            )
+    return fingerprint, next(iter(payloads))
 
 
 def _sum_slices(
@@ -80,6 +118,8 @@ def _aggregate_group(
     evaluations: tuple[BenchmarkEvaluation, ...],
     *,
     split_override: str | None = None,
+    experiment_label: str | None = None,
+    result_set_id: str | None = None,
 ) -> AggregateGroup:
     first = evaluations[0]
     counts = EvaluationCounts(
@@ -237,6 +277,8 @@ def _aggregate_group(
         runtime_metrics=runtime,
         storage_metrics=storage,
         warnings=tuple(dict.fromkeys(message for item in evaluations for message in item.warnings)),
+        experiment_label=experiment_label,
+        result_set_id=result_set_id,
     )
 
 
@@ -245,13 +287,13 @@ def aggregate_evaluations(
     *,
     benchmark_id: str,
     now: datetime | None = None,
+    experiment_metadata: dict[str, tuple[str, str]] | None = None,
+    comparison_id: str | None = None,
 ) -> BenchmarkAggregate:
     values = tuple(evaluations)
     if not values:
         raise ValidationError("No benchmark evaluation results were found to aggregate.")
-    policies = {item.evaluation_policy.policy_version for item in values}
-    if len(policies) != 1:
-        raise ValidationError("Evaluation policy mismatch blocks benchmark comparison.")
+    policy_fingerprint, _policy_json = _validate_policy_consistency(values)
     if any(item.benchmark_id != benchmark_id for item in values):
         raise ValidationError("Benchmark ID mismatch blocks aggregate comparison.")
     grouped: dict[tuple[str, BenchmarkSplit, str], list[BenchmarkEvaluation]] = defaultdict(list)
@@ -259,8 +301,19 @@ def aggregate_evaluations(
         grouped[
             (_experiment_fingerprint(evaluation), evaluation.split, evaluation.game_profile)
         ].append(evaluation)
+    for key, items in grouped.items():
+        case_ids = [item.case_id for item in items]
+        if len(set(case_ids)) != len(case_ids):
+            raise ValidationError(
+                "Duplicate evaluation case IDs within one experiment group block aggregation.",
+                hint=f"Experiment={key[0]}; split={key[1].value}; profile={key[2]}.",
+            )
     split_groups = [
-        _aggregate_group(tuple(items))
+        _aggregate_group(
+            tuple(items),
+            experiment_label=(experiment_metadata or {}).get(_key[0], (None, None))[0],
+            result_set_id=(experiment_metadata or {}).get(_key[0], (None, None))[1],
+        )
         for _key, items in sorted(
             grouped.items(), key=lambda item: (item[0][0], item[0][1].value, item[0][2])
         )
@@ -271,14 +324,25 @@ def aggregate_evaluations(
             evaluation
         )
     combined_groups = [
-        _aggregate_group(tuple(items), split_override="combined")
+        _aggregate_group(
+            tuple(items),
+            split_override="combined",
+            experiment_label=(experiment_metadata or {}).get(_key[0], (None, None))[0],
+            result_set_id=(experiment_metadata or {}).get(_key[0], (None, None))[1],
+        )
         for _key, items in sorted(combined_grouped.items(), key=lambda item: item[0])
     ]
     groups = tuple([*split_groups, *combined_groups])
     return BenchmarkAggregate(
         created_at=now or datetime.now(UTC),
         benchmark_id=benchmark_id,
-        evaluation_policy_version=next(iter(policies)),
+        evaluation_policy_version=values[0].evaluation_policy.policy_version,
+        evaluation_policy=values[0].evaluation_policy,
+        evaluation_policy_fingerprint=policy_fingerprint,
+        comparison_id=comparison_id,
+        result_set_ids=tuple(
+            sorted({item[1] for item in (experiment_metadata or {}).values() if item[1]})
+        ),
         groups=groups,
         per_case=tuple(sorted(values, key=lambda item: item.case_id)),
         warnings=(),
@@ -313,10 +377,8 @@ def aggregate_dataset(
     output_path: Path | None = None,
     markdown_path: Path | None = None,
 ) -> AggregateRun:
-    try:
-        dataset = BenchmarkDataset.model_validate(read_json(dataset_path))
-    except Exception as exc:
-        raise ValidationError(f"Benchmark dataset manifest is invalid: {dataset_path}") from exc
+    dataset = _load_dataset(dataset_path)
+    assert dataset.evaluation_policy is not None
     evaluations: list[BenchmarkEvaluation] = []
     for case in dataset.cases:
         result_path = next(
@@ -346,6 +408,20 @@ def aggregate_dataset(
             raise ValidationError(
                 f"Game-profile mismatch blocks comparison for case {case.case_id}."
             )
+        if evaluation.evaluation_policy_fingerprint != dataset.policy_fingerprint:
+            raise ValidationError(
+                f"Evaluation policy mismatch blocks comparison for case {case.case_id}.",
+                hint=(
+                    f"Dataset={dataset.policy_fingerprint}; "
+                    f"evaluation={evaluation.evaluation_policy_fingerprint}."
+                ),
+            )
+        if _policy_payload(evaluation) != json.dumps(
+            dataset.evaluation_policy.semantic_payload(), sort_keys=True, separators=(",", ":")
+        ):
+            raise ValidationError(
+                f"Evaluation policy settings mismatch blocks comparison for case {case.case_id}."
+            )
         evaluations.append(evaluation)
     aggregate = aggregate_evaluations(evaluations, benchmark_id=dataset.benchmark_id)
     json_target = (
@@ -359,10 +435,230 @@ def aggregate_dataset(
     return AggregateRun(aggregate=aggregate, json_path=json_target, markdown_path=markdown_target)
 
 
+def _load_dataset(dataset_path: Path) -> BenchmarkDataset:
+    try:
+        raw = read_json(dataset_path)
+        if not isinstance(raw, dict):
+            raise ValueError("dataset manifest must be an object")
+        manifest_type = raw.get("manifest_type", "dataset")
+        if manifest_type != "dataset":
+            raise ValueError("manifest_type is not dataset")
+        return BenchmarkDataset.model_validate(raw)
+    except Exception as exc:
+        raise ValidationError(f"Benchmark dataset manifest is invalid: {dataset_path}") from exc
+
+
+def _resolve_private_path(base: Path, value: Path) -> Path:
+    return (value if value.is_absolute() else base / value).expanduser().resolve()
+
+
+def _load_result_set(
+    value: BenchmarkResultSet | Path, *, base: Path
+) -> tuple[BenchmarkResultSet, Path]:
+    if isinstance(value, BenchmarkResultSet):
+        return value, base
+    path = _resolve_private_path(base, value)
+    try:
+        raw = read_json(path)
+        return BenchmarkResultSet.model_validate(raw), path.parent
+    except Exception as exc:
+        raise ValidationError(f"Benchmark result-set manifest is invalid: {path}") from exc
+
+
+def _validate_result_set(
+    result_set: BenchmarkResultSet,
+    *,
+    result_base: Path,
+    dataset: BenchmarkDataset,
+    dataset_path: Path,
+) -> tuple[list[BenchmarkEvaluation], str]:
+    assert dataset.evaluation_policy is not None
+    if result_set.benchmark_id != dataset.benchmark_id:
+        raise ValidationError(
+            f"Result set {result_set.result_set_id} benchmark ID does not match dataset."
+        )
+    if result_set.evaluation_policy_fingerprint != dataset.policy_fingerprint:
+        raise ValidationError(
+            f"Result set {result_set.result_set_id} policy mismatch blocks comparison.",
+            hint=(
+                f"Dataset={dataset.policy_fingerprint}; "
+                f"result set={result_set.evaluation_policy_fingerprint}."
+            ),
+        )
+    cases_by_id = {case.case_id: case for case in dataset.cases}
+    refs_by_case = {ref.case_id: ref for ref in result_set.results}
+    expected_ids = set(cases_by_id)
+    observed_ids = set(refs_by_case)
+    if observed_ids != expected_ids:
+        missing = sorted(expected_ids - observed_ids)
+        extra = sorted(observed_ids - expected_ids)
+        raise ValidationError(
+            f"Result set {result_set.result_set_id} case coverage mismatch blocks comparison.",
+            hint=f"Missing={missing or 'none'}; unknown={extra or 'none'}.",
+        )
+    evaluations: list[BenchmarkEvaluation] = []
+    experiment_fingerprint_value: str | None = None
+    for case_id in sorted(refs_by_case):
+        case = cases_by_id[case_id]
+        ref = refs_by_case[case_id]
+        evaluation_path = _resolve_private_path(result_base, ref.evaluation_path)
+        if not evaluation_path.is_file():
+            raise ValidationError(
+                "Evaluation result is missing for result set "
+                f"{result_set.result_set_id}, case {case_id}.",
+                hint=str(evaluation_path),
+            )
+        evaluation = load_evaluation(evaluation_path)
+        annotation_path = _resolve_private_path(dataset_path.parent, case.annotation_path)
+        expected_annotation_hash = annotation_sha256(annotation_path)
+        if evaluation.case_id != case_id:
+            raise ValidationError(
+                f"Evaluation case ID mismatch for result set {result_set.result_set_id}."
+            )
+        if evaluation.benchmark_id != dataset.benchmark_id:
+            raise ValidationError(f"Evaluation benchmark ID mismatch for case {case_id}.")
+        if evaluation.source_sha256 != case.expected_source_sha256:
+            raise ValidationError(f"Source hash mismatch blocks comparison for case {case_id}.")
+        if evaluation.annotation_sha256 != expected_annotation_hash:
+            raise ValidationError(
+                f"Annotation revision mismatch blocks comparison for case {case_id}."
+            )
+        if evaluation.split is not case.split:
+            raise ValidationError(f"Split mismatch blocks comparison for case {case_id}.")
+        if evaluation.game_profile != case.game_profile:
+            raise ValidationError(f"Game-profile mismatch blocks comparison for case {case_id}.")
+        if evaluation.evaluation_policy_fingerprint != dataset.policy_fingerprint:
+            raise ValidationError(f"Policy mismatch blocks comparison for case {case_id}.")
+        if _policy_payload(evaluation) != json.dumps(
+            dataset.evaluation_policy.semantic_payload(), sort_keys=True, separators=(",", ":")
+        ):
+            raise ValidationError(f"Policy settings mismatch blocks comparison for case {case_id}.")
+        current_fingerprint = _experiment_fingerprint(evaluation)
+        if experiment_fingerprint_value is None:
+            experiment_fingerprint_value = current_fingerprint
+        elif current_fingerprint != experiment_fingerprint_value:
+            raise ValidationError(
+                f"Result set {result_set.result_set_id} mixes experiment configurations; "
+                "comparison is blocked."
+            )
+        evaluations.append(evaluation)
+    assert experiment_fingerprint_value is not None
+    if (
+        result_set.experiment_fingerprint is not None
+        and result_set.experiment_fingerprint != experiment_fingerprint_value
+    ):
+        raise ValidationError(
+            f"Result set {result_set.result_set_id} experiment fingerprint is inconsistent."
+        )
+    return evaluations, experiment_fingerprint_value
+
+
+def aggregate_comparison(
+    comparison_path: Path,
+    *,
+    output_path: Path | None = None,
+    markdown_path: Path | None = None,
+) -> AggregateRun:
+    """Aggregate multiple complete result sets over exactly the same cases."""
+
+    try:
+        raw = read_json(comparison_path)
+        if not isinstance(raw, dict) or raw.get("manifest_type") != "comparison":
+            raise ValueError("comparison manifest_type must be 'comparison'")
+        comparison = BenchmarkComparisonManifest.model_validate(raw)
+    except Exception as exc:
+        raise ValidationError(
+            f"Benchmark comparison manifest is invalid: {comparison_path}"
+        ) from exc
+    dataset_path = _resolve_private_path(comparison_path.parent, comparison.benchmark_dataset_path)
+    dataset = _load_dataset(dataset_path)
+    seen_ids: set[str] = set()
+    all_evaluations: list[BenchmarkEvaluation] = []
+    metadata: dict[str, tuple[str, str]] = {}
+    for result_set_value in comparison.result_sets:
+        result_set, result_base = _load_result_set(result_set_value, base=comparison_path.parent)
+        if result_set.result_set_id in seen_ids:
+            raise ValidationError(
+                f"Duplicate result set ID in comparison: {result_set.result_set_id}."
+            )
+        seen_ids.add(result_set.result_set_id)
+        evaluations, experiment_id = _validate_result_set(
+            result_set,
+            result_base=result_base,
+            dataset=dataset,
+            dataset_path=dataset_path,
+        )
+        metadata[experiment_id] = (result_set.label, result_set.result_set_id)
+        all_evaluations.extend(evaluations)
+    aggregate = aggregate_evaluations(
+        all_evaluations,
+        benchmark_id=dataset.benchmark_id,
+        experiment_metadata=metadata,
+        comparison_id=comparison.comparison_id,
+    )
+    json_target = (
+        (output_path or comparison_path.parent / "reports" / f"{comparison.comparison_id}.json")
+        .expanduser()
+        .resolve()
+    )
+    markdown_target = (
+        (markdown_path or comparison_path.parent / "reports" / f"{comparison.comparison_id}.md")
+        .expanduser()
+        .resolve()
+    )
+    atomic_write_json(json_target, aggregate.model_dump(mode="json"))
+    atomic_write_bytes(markdown_target, render_markdown(aggregate).encode("utf-8"))
+    return AggregateRun(aggregate=aggregate, json_path=json_target, markdown_path=markdown_target)
+
+
+def aggregate_manifest(
+    manifest_path: Path,
+    *,
+    output_path: Path | None = None,
+    markdown_path: Path | None = None,
+) -> AggregateRun:
+    """Dispatch only on explicit manifest type; preserve legacy datasets."""
+
+    try:
+        raw = read_json(manifest_path)
+    except Exception as exc:
+        raise ValidationError(f"Benchmark manifest cannot be read: {manifest_path}") from exc
+    if not isinstance(raw, dict):
+        raise ValidationError("Benchmark manifest must be a JSON object.")
+    manifest_type = raw.get("manifest_type", "dataset")
+    if manifest_type == "comparison":
+        return aggregate_comparison(
+            manifest_path, output_path=output_path, markdown_path=markdown_path
+        )
+    if manifest_type == "dataset":
+        return aggregate_dataset(
+            manifest_path, output_path=output_path, markdown_path=markdown_path
+        )
+    raise ValidationError(
+        f"Unsupported benchmark manifest_type: {manifest_type!r}.",
+        hint="Use manifest_type 'dataset' or 'comparison'.",
+    )
+
+
 def _format_ratio(value: float | None, *, percent: bool = False) -> str:
     if value is None:
         return "N/A"
     return f"{value * 100:.1f}%" if percent else f"{value:.3f}"
+
+
+def _markdown_safe(value: str) -> str:
+    """Keep shareable reports free of obvious private paths and credentials."""
+
+    from game_highlight_finder.redaction import redact_text
+
+    sanitized = redact_text(value)
+    sanitized = re.sub(
+        r"(?i)(?:[A-Z]:\\|/(?:users|home|mnt|private|var|tmp)/)[^|`\n ]+",
+        "PRIVATE_PATH",
+        sanitized,
+    )
+    sanitized = re.sub(r"(?i)(?:bearer\s+|signed[_ -]?url[=:])[^|`\n ]+", "REDACTED", sanitized)
+    return sanitized.replace("|", "\\|")
 
 
 def render_markdown(aggregate: BenchmarkAggregate) -> str:
@@ -372,7 +668,8 @@ def render_markdown(aggregate: BenchmarkAggregate) -> str:
         "# M8A Benchmark Aggregate",
         "",
         f"Benchmark: `{aggregate.benchmark_id}`  ",
-        f"Evaluation policy: `{aggregate.evaluation_policy_version}`  ",
+        f"Evaluation policy: `{aggregate.evaluation_policy_version}` "
+        f"(`{aggregate.evaluation_policy_fingerprint}`)  ",
         "",
         "| Experiment | Split | Profile | Cases | Hours | Predictions | Precision | Recall | "
         "MUST recall | "
@@ -395,7 +692,10 @@ def render_markdown(aggregate: BenchmarkAggregate) -> str:
             "| "
             + " | ".join(
                 [
-                    f"`{group.provider}/{group.model}` ({group.experiment_fingerprint[:12]})",
+                    _markdown_safe(
+                        f"`{group.experiment_label or f'{group.provider}/{group.model}'}` "
+                        f"({group.experiment_fingerprint[:12]})"
+                    ),
                     group.split,
                     group.game_profile,
                     str(len(group.case_ids)),
@@ -441,13 +741,16 @@ def render_markdown(aggregate: BenchmarkAggregate) -> str:
         lines.extend(["", "## Warnings", ""])
         for evaluation in aggregate.per_case:
             for warning in evaluation.warnings:
-                lines.append(f"- `{evaluation.case_id}`: {warning}")
+                lines.append(f"- `{evaluation.case_id}`: {_markdown_safe(warning)}")
     return "\n".join(lines) + "\n"
 
 
 __all__ = [
     "AggregateRun",
+    "aggregate_comparison",
     "aggregate_dataset",
     "aggregate_evaluations",
+    "aggregate_manifest",
+    "experiment_fingerprint",
     "render_markdown",
 ]

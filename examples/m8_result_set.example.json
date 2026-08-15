@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "manifest_type": "result_set",
+  "result_set_id": "synthetic-model-a",
+  "label": "Synthetic model A",
+  "benchmark_id": "m8-private-example",
+  "evaluation_policy_fingerprint": "13f2a750beb4e8bfb3a8288e6974db38aa4354c6d8e456c95716bf4f680853b2",
+  "results": [
+    {
+      "schema_version": 1,
+      "case_id": "meccha-cal-01",
+      "evaluation_path": "results/synthetic-model-a/meccha-cal-01.json"
+    },
+    {
+      "schema_version": 1,
+      "case_id": "contrast-val-01",
+      "evaluation_path": "results/synthetic-model-a/contrast-val-01.json"
+    }
+  ]
+}

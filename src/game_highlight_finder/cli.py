@@ -14,13 +14,13 @@ from typing import Annotated, Any
 
 import typer
 
-from game_highlight_finder.benchmark.aggregate import aggregate_dataset
+from game_highlight_finder.benchmark.aggregate import aggregate_comparison, aggregate_manifest
 from game_highlight_finder.benchmark.evaluator import (
     evaluate_session,
     load_annotations,
     validate_annotations_file,
 )
-from game_highlight_finder.benchmark.models import BenchmarkSplit
+from game_highlight_finder.benchmark.models import BenchmarkDataset, BenchmarkSplit
 from game_highlight_finder.benchmark.template import create_annotation_template
 from game_highlight_finder.config import (
     AppConfig,
@@ -352,10 +352,20 @@ def benchmark_evaluate(
     output: Annotated[
         Path | None, typer.Option("--output", help="Private evaluation JSON output path.")
     ] = None,
+    dataset_manifest: Annotated[
+        Path | None,
+        typer.Option(
+            "--dataset",
+            help="Optional dataset manifest whose declared full evaluation policy is authoritative.",
+        ),
+    ] = None,
 ) -> None:
     """Evaluate an already completed session entirely from local artifacts."""
     _execute(
-        ctx, lambda options: _benchmark_evaluate(options, session_id, annotations, split, output)
+        ctx,
+        lambda options: _benchmark_evaluate(
+            options, session_id, annotations, split, output, dataset_manifest
+        ),
     )
 
 
@@ -365,6 +375,7 @@ def _benchmark_evaluate(
     annotations_path: Path,
     split: str,
     output: Path | None,
+    dataset_manifest: Path | None,
 ) -> None:
     try:
         split_value = BenchmarkSplit(split.strip().lower())
@@ -372,12 +383,48 @@ def _benchmark_evaluate(
         raise ConfigError("Benchmark split must be calibration or validation.") from exc
     config = _load_persisted_session_config(options, session_id)
     loaded_annotations = load_annotations(annotations_path)
+    declared_policy = None
+    if dataset_manifest is not None:
+        try:
+            raw_dataset = read_json(dataset_manifest)
+            if not isinstance(raw_dataset, dict):
+                raise ValueError("dataset manifest must be an object")
+            dataset = BenchmarkDataset.model_validate(raw_dataset)
+        except Exception as exc:
+            raise ConfigError(
+                "Benchmark dataset manifest is invalid; evaluation cannot guess its policy.",
+                hint=str(dataset_manifest),
+            ) from exc
+        matching_cases = [
+            case for case in dataset.cases if case.case_id == loaded_annotations.case_id
+        ]
+        if not matching_cases:
+            raise ConfigError(
+                f"Annotation case {loaded_annotations.case_id} is not declared by the dataset."
+            )
+        case = matching_cases[0]
+        if loaded_annotations.benchmark_id != dataset.benchmark_id:
+            raise ConfigError("Annotation benchmark ID does not match the dataset manifest.")
+        if loaded_annotations.game_profile != case.game_profile:
+            raise ConfigError("Annotation game profile does not match the dataset manifest.")
+        if split_value is not case.split:
+            raise ConfigError(
+                "Requested split does not match the dataset case; use the declared case split."
+            )
+        declared_policy = dataset.evaluation_policy
     evaluation = evaluate_session(
         session_id,
         annotations_path,
         config,
+        policy=declared_policy,
         split=split_value,
     )
+    if dataset_manifest is not None:
+        assert declared_policy is not None
+        if evaluation.source_sha256 != case.expected_source_sha256:
+            raise ConfigError("Completed session source hash does not match the dataset case.")
+        if evaluation.evaluation_policy_fingerprint != declared_policy.fingerprint():
+            raise ConfigError("Evaluation policy fingerprint does not match the dataset case.")
     target = (
         output.expanduser().resolve()
         if output is not None
@@ -400,7 +447,7 @@ def _benchmark_evaluate(
 def benchmark_aggregate(
     ctx: typer.Context,
     dataset_manifest: Annotated[
-        Path, typer.Argument(help="Private benchmark dataset manifest JSON.")
+        Path, typer.Argument(help="Private benchmark dataset or comparison manifest JSON.")
     ],
     output: Annotated[
         Path | None, typer.Option("--output", help="Aggregate JSON output path.")
@@ -409,7 +456,7 @@ def benchmark_aggregate(
         Path | None, typer.Option("--report-output", help="Human-readable Markdown output path.")
     ] = None,
 ) -> None:
-    """Aggregate existing local evaluation results without provider calls."""
+    """Aggregate a dataset or compare result sets without provider calls."""
     _execute(ctx, lambda _options: _benchmark_aggregate(dataset_manifest, output, report_output))
 
 
@@ -418,13 +465,49 @@ def _benchmark_aggregate(
     output: Path | None,
     report_output: Path | None,
 ) -> None:
-    result = aggregate_dataset(
+    result = aggregate_manifest(
         dataset_manifest,
         output_path=output,
         markdown_path=report_output,
     )
     typer.echo(f"[PASS] aggregate JSON: {result.json_path}")
     typer.echo(f"[PASS] aggregate Markdown: {result.markdown_path}")
+    typer.echo(f"groups: {len(result.aggregate.groups)}")
+    typer.echo("provider calls: ZERO")
+
+
+@benchmark_app.command("compare")
+def benchmark_compare(
+    ctx: typer.Context,
+    comparison_manifest: Annotated[
+        Path, typer.Argument(help="Private benchmark comparison manifest JSON.")
+    ],
+    output: Annotated[
+        Path | None, typer.Option("--output", help="Comparison aggregate JSON output path.")
+    ] = None,
+    report_output: Annotated[
+        Path | None, typer.Option("--report-output", help="Comparison Markdown output path.")
+    ] = None,
+) -> None:
+    """Compare multiple local experiment result sets over identical cases."""
+    _execute(
+        ctx,
+        lambda _options: _benchmark_compare(comparison_manifest, output, report_output),
+    )
+
+
+def _benchmark_compare(
+    comparison_manifest: Path,
+    output: Path | None,
+    report_output: Path | None,
+) -> None:
+    result = aggregate_comparison(
+        comparison_manifest,
+        output_path=output,
+        markdown_path=report_output,
+    )
+    typer.echo(f"[PASS] comparison JSON: {result.json_path}")
+    typer.echo(f"[PASS] comparison Markdown: {result.markdown_path}")
     typer.echo(f"groups: {len(result.aggregate.groups)}")
     typer.echo("provider calls: ZERO")
 

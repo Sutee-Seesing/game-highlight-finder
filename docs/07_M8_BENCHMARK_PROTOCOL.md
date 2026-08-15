@@ -35,6 +35,18 @@ always expose separate calibration and validation groups plus a count-weighted
 `combined` group. Percentages are recomputed from underlying counts; they are never
 averaged across recordings of different lengths.
 
+### Full policy identity
+
+The policy version is a label, not a complete ruler. The persisted
+`EvaluationPolicy.semantic_payload()` contains exactly `schema_version`,
+`policy_version`, `event_iou_threshold`, and `boundary_tolerance_ms`. Its canonical
+JSON uses sorted keys and compact separators and is hashed to
+`evaluation_policy_fingerprint`. Dataset, evaluation, result-set, and aggregate
+artifacts persist this fingerprint. Same-version policies with different IoU or
+boundary values, and different versions with the same numbers, are incompatible
+and fail closed. A legacy manifest with no policy is migrated only when its version
+is exactly `m8-eval-v1`, to the historical `0.25 / 3000 ms` values.
+
 ## Annotation guide
 
 Create a template without provider calls:
@@ -150,6 +162,41 @@ This writes aggregate JSON and a privacy-safe Markdown comparison table. A case'
 annotation hash, source hash, split, profile, and benchmark ID must match the dataset
 manifest; mismatches block comparison.
 
+## Multi-experiment comparison
+
+Ground truth is not duplicated per model. A dataset owns cases and annotations;
+each experiment owns a `BenchmarkResultSet` containing one evaluation reference per
+case. A comparison manifest names the dataset and two or more result-set manifests:
+
+```text
+<data_dir>/benchmarks/
+  datasets/m8-initial.json
+  annotations/<case-id>.json
+  experiments/
+    gemini-3.5-fl/manifest.json
+    gemini-2.5-fl/manifest.json
+  comparisons/baseline-models.json
+  reports/baseline-models.md
+```
+
+Run it locally with:
+
+```powershell
+highlight benchmark compare "<data_dir>\benchmarks\comparisons\baseline-models.json"
+```
+
+Every result set must cover exactly the same case IDs. For each ref, the evaluator
+checks the dataset benchmark/case identity, expected source SHA, current annotation
+file SHA, split, game profile, and full policy fingerprint. All refs within one set
+must share one provider/model/billing/media/thinking/prompt/schema/window/proxy,
+signal, extraction, ranking, canonicalization, and evaluator-policy fingerprint;
+mixing models in one set is rejected. Changing an annotation revision requires
+reevaluating every experiment in the comparison. Aggregate rows are grouped by
+experiment, split, and profile and retain count-weighted primary, slice, boundary,
+cost, runtime, storage, review, duplicate, and Best-of metrics. The Markdown output
+contains labels, case IDs, hashes, and metrics only—never local paths, media,
+credentials, authorization headers, signed URLs, or raw provider thoughts.
+
 ## Intended M8B private dataset (documented target only)
 
 M8A does not require real files. M8B should annotate several short/medium MECCHA
@@ -165,8 +212,8 @@ budget, storage, and review ratio. M8A intentionally does not run that holdout.
 
 ## Status and safety
 
-M8A benchmark foundation: complete after offline synthetic tests and local static
-validation. M8 real gameplay benchmark: not run. V1 defaults: not locked. M8B and M9
-remain separately authorized milestones.
+M8A benchmark foundation and pre-benchmark hardening: complete after offline
+synthetic tests and local static validation. M8 real gameplay benchmark: not run.
+V1 defaults: not locked. M8B and M9 remain separately authorized milestones.
 
 Real provider/API calls during M8A: **ZERO**.
