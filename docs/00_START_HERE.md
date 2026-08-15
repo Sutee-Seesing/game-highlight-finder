@@ -200,6 +200,14 @@ read-only on loopback with byte-range support, and never re-encoded. The browser
 unsaved edits; Save performs server-side strict validation and an atomic JSON write.
 The helper has no model assistance, external requests, analytics, or provider calls.
 
+For external/manual review without moving the multi-gigabyte originals, use
+`highlight benchmark make-review-proxies <dataset.json>`. This dataset-driven helper
+writes private MP4 copies under the configured data directory, requires NVENC
+(`h264_nvenc`) by default, preserves the full source timeline, retains audio, and
+rejects source mutation or proxy duration drift over 250 ms. Review proxies are not
+authoritative benchmark sources and do not change M8 experiment identity; M8B2 remains
+**NOT RUN**.
+
 ### M8A comparison hardening
 
 `EvaluationPolicy.semantic_payload()` contains every semantic matching setting and

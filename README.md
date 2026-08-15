@@ -76,6 +76,7 @@ uv run highlight cost report
 uv run highlight cost calls
 uv run highlight benchmark template "D:\Recordings\game.mp4" --game-profile meccha_chameleon
 uv run highlight benchmark annotate "<data_dir>\benchmarks\annotations\case.json"
+uv run highlight benchmark make-review-proxies "<data_dir>\benchmarks\datasets\dataset.json"
 uv run highlight benchmark validate "<data_dir>\benchmarks\annotations\case.json"
 uv run highlight benchmark evaluate <session-id> --annotations "<data_dir>\benchmarks\annotations\case.json"
 uv run highlight benchmark aggregate "<data_dir>\benchmarks\datasets\m8.json"
@@ -231,6 +232,15 @@ with the strict `BenchmarkAnnotations` model, writes atomically, and creates a p
 backup before changing meaningful prior annotations. It has no AI suggestions,
 provider SDK, external resources, telemetry, or network requests. `--no-open` is
 available for headless tests; `--port 0` selects an available loopback port.
+
+`highlight benchmark make-review-proxies <dataset.json>` creates private, full-timeline
+review copies under `<data_dir>/benchmarks/private/review-proxies/`. The default profile
+is 720p maximum, 30 fps maximum, 1000 kbps H.264 video, 96 kbps AAC, yuv420p, and
+`+faststart`; it requires `h264_nvenc` and never silently falls back to CPU encoding.
+`--small` selects a compact 540p profile, while `--allow-cpu-fallback` is an explicit
+exception. Source SHA-256, read-only source fingerprints, audio presence, and a strict
+250 ms duration tolerance are validated. These proxies are private review conveniences,
+not benchmark sources, and M8B2 remains **NOT RUN**.
 
 ## Development and tests
 

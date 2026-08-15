@@ -22,6 +22,11 @@ from game_highlight_finder.benchmark.evaluator import (
     validate_annotations_file,
 )
 from game_highlight_finder.benchmark.models import BenchmarkDataset, BenchmarkSplit
+from game_highlight_finder.benchmark.review_proxy import (
+    ReviewProxyBatchResult,
+    make_review_profile,
+    make_review_proxies,
+)
 from game_highlight_finder.benchmark.template import create_annotation_template
 from game_highlight_finder.config import (
     AppConfig,
@@ -34,6 +39,7 @@ from game_highlight_finder.cost import CostService, Money
 from game_highlight_finder.doctor import run_doctor
 from game_highlight_finder.domain.time import format_duration
 from game_highlight_finder.errors import AppError, ConfigError, ErrorCategory
+from game_highlight_finder.media.ffmpeg import ProgressUpdate
 from game_highlight_finder.pipeline.gemini_scout import (
     generate_gemini_scout,
     preflight_gemini_scout,
@@ -180,6 +186,15 @@ def _cost_service(options: RuntimeOptions) -> CostService:
 
 def _format_micro_thb(value: int) -> str:
     return Money(micro_thb=value).display()
+
+
+def _format_bytes(value: int) -> str:
+    amount = float(value)
+    for unit in ("B", "KiB", "MiB", "GiB", "TiB"):
+        if abs(amount) < 1024 or unit == "TiB":
+            return f"{amount:.2f} {unit}"
+        amount /= 1024
+    return f"{amount:.2f} TiB"
 
 
 def _cost_status(options: RuntimeOptions, month: str | None) -> None:
@@ -350,6 +365,143 @@ def _benchmark_annotate(
         typer.echo("Annotation server stopped.")
     finally:
         server.shutdown()
+
+
+@benchmark_app.command("make-review-proxies")
+def benchmark_make_review_proxies(
+    ctx: typer.Context,
+    dataset: Annotated[Path, typer.Argument(help="Private BenchmarkDataset JSON manifest.")],
+    small: Annotated[
+        bool, typer.Option("--small", help="Use the compact 540p review profile.")
+    ] = False,
+    max_height: Annotated[
+        int | None,
+        typer.Option("--max-height", min=144, max=2160, help="Override the profile max height."),
+    ] = None,
+    max_fps: Annotated[
+        float | None,
+        typer.Option("--max-fps", min=1.0, max=120.0, help="Override the profile FPS cap."),
+    ] = None,
+    video_bitrate_kbps: Annotated[
+        int | None,
+        typer.Option(
+            "--video-bitrate-kbps",
+            min=100,
+            max=20_000,
+            help="Override the review video bitrate.",
+        ),
+    ] = None,
+    audio_bitrate_kbps: Annotated[
+        int | None,
+        typer.Option(
+            "--audio-bitrate-kbps",
+            min=16,
+            max=512,
+            help="Override the review AAC bitrate.",
+        ),
+    ] = None,
+    output_dir: Annotated[
+        Path | None,
+        typer.Option("--output-dir", help="Private review-proxy output directory."),
+    ] = None,
+    overwrite: Annotated[
+        bool, typer.Option("--overwrite", help="Regenerate stale or existing proxies explicitly.")
+    ] = False,
+    allow_cpu_fallback: Annotated[
+        bool,
+        typer.Option(
+            "--allow-cpu-fallback",
+            help="Explicitly allow libx264 only when h264_nvenc is unavailable.",
+        ),
+    ] = False,
+    case_id: Annotated[
+        str | None,
+        typer.Option("--case-id", help="Generate one dataset case for a bounded local smoke."),
+    ] = None,
+) -> None:
+    """Generate private, full-timeline H.264/AAC review copies from a dataset."""
+    _execute(
+        ctx,
+        lambda options: _benchmark_make_review_proxies(
+            options,
+            dataset,
+            small,
+            max_height,
+            max_fps,
+            video_bitrate_kbps,
+            audio_bitrate_kbps,
+            output_dir,
+            overwrite,
+            allow_cpu_fallback,
+            case_id,
+        ),
+    )
+
+
+def _benchmark_make_review_proxies(
+    options: RuntimeOptions,
+    dataset: Path,
+    small: bool,
+    max_height: int | None,
+    max_fps: float | None,
+    video_bitrate_kbps: int | None,
+    audio_bitrate_kbps: int | None,
+    output_dir: Path | None,
+    overwrite: bool,
+    allow_cpu_fallback: bool,
+    case_id: str | None,
+) -> None:
+    profile = make_review_profile(
+        small=small,
+        max_height=max_height,
+        max_fps=max_fps,
+        video_bitrate_kbps=video_bitrate_kbps,
+        audio_bitrate_kbps=audio_bitrate_kbps,
+    )
+
+    def show_progress(current_case_id: str, update: ProgressUpdate) -> None:
+        percent = update.percent
+        speed = update.speed
+        if percent is None:
+            return
+        suffix = f" Speed: {speed}" if speed else ""
+        typer.echo(f"{current_case_id} Progress: {percent:.0f}%{suffix}")
+
+    result = make_review_proxies(
+        dataset,
+        _load(options).config,
+        profile=profile,
+        output_dir=output_dir,
+        overwrite=overwrite,
+        allow_cpu_fallback=allow_cpu_fallback,
+        case_id=case_id,
+        progress_callback=show_progress,
+    )
+    _print_review_proxy_summary(result)
+
+
+def _print_review_proxy_summary(result: ReviewProxyBatchResult) -> None:
+    typer.echo("[PASS] private review proxies ready (provider/API calls: ZERO)")
+    typer.echo(f"Dataset cases discovered: {len(result.cases)}")
+    typer.echo(f"Review proxies generated: {result.generated_count}")
+    typer.echo(f"Cache hits: {result.cache_hit_count}")
+    typer.echo(f"GPU encoder: {result.encoder}")
+    typer.echo(f"Default profile: {result.profile.summary()}")
+    for item in result.cases:
+        typer.echo(
+            f"{item.case_id}: {item.status} | source {_format_bytes(item.source_size_bytes)} "
+            f"-> proxy {_format_bytes(item.proxy_size_bytes)} "
+            f"({item.reduction_percent:.1f}% reduction) | "
+            f"duration delta {item.duration_delta_ms} ms | encoder {item.encoder} | "
+            f"proxy {item.proxy_path}"
+        )
+    typer.echo(f"Original total size: {_format_bytes(result.original_total_size)}")
+    typer.echo(f"Review proxy total size: {_format_bytes(result.proxy_total_size)}")
+    typer.echo(f"Total reduction: {result.total_reduction_percent:.1f}%")
+    typer.echo(f"Largest proxy: {_format_bytes(result.largest_proxy_bytes)}")
+    typer.echo(f"Smallest proxy: {_format_bytes(result.smallest_proxy_bytes)}")
+    typer.echo(f"Maximum duration delta: {result.maximum_duration_delta_ms} ms")
+    typer.echo(f"Review proxy manifest: {result.manifest_path}")
 
 
 @benchmark_app.command("validate")

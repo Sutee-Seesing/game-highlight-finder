@@ -147,6 +147,12 @@ Ruff and mypy clean; real Gemini API calls during maintenance: zero.
   Save, validates with `BenchmarkAnnotations`, writes atomically, and keeps review
   state in a private sidecar. It does not generate labels or expose a filesystem
   browsing endpoint.
+- M8B1.6 review-proxy helper: **implemented and provider-free**. `highlight benchmark
+  make-review-proxies <dataset.json>` resolves the accepted private dataset, verifies
+  source SHA-256 and read-only fingerprints, and writes private full-timeline MP4 review
+  copies with H.264 NVENC/AAC by default. The helper validates audio, aspect/FPS/scale
+  constraints, and a strict 250 ms duration tolerance; proxies are convenience files,
+  not benchmark sources, and never alter production encoder defaults.
 - V1 defaults are **NOT LOCKED**. A representative 1–4 hour source must still run
   through analysis → report → evaluation while checking resume, immutability,
   budget, storage, and review ratio before full M8 acceptance.

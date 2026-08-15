@@ -80,6 +80,22 @@ the benchmark truth. `VALID JSON` and `HUMAN_REVIEWED` are distinct from readine
 any provider benchmark. Dataset overview is intentionally not implemented in this
 tiny milestone; the single-case command keeps the annotation surface small.
 
+For private manual review copies, use the accepted dataset manifest:
+
+```powershell
+highlight benchmark make-review-proxies "<data_dir>\benchmarks\datasets\dataset.json"
+```
+
+This is a local-only deterministic transcode into the private review-proxy directory.
+The normal profile requires RTX/NVENC `h264_nvenc` (720p maximum, 30 fps maximum,
+1000 kbps video, 96 kbps AAC); `--small` is an explicit compact profile and CPU
+encoding requires `--allow-cpu-fallback`. The helper never trims, crops, speeds up,
+or mutates the authoritative source. It verifies source SHA-256 before/after encoding,
+retains audio, validates MP4/H.264 output and a strict 250 ms duration delta, and
+persists a private cache manifest. Review-proxy timestamps are convenience guidance;
+annotation JSON remains tied to the authoritative benchmark source and integer-
+millisecond timeline. M8B2 remains **NOT RUN**.
+
 All times are integer milliseconds on the original source timeline. Every interval is
 half-open, `[start_ms, end_ms)`, and must be inside the source. Ground-truth errors
 fail closed; the tool never silently clamps a hand-entered boundary.
