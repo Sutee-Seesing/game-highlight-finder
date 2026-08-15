@@ -14,6 +14,14 @@ from typing import Annotated, Any
 
 import typer
 
+from game_highlight_finder.benchmark.aggregate import aggregate_dataset
+from game_highlight_finder.benchmark.evaluator import (
+    evaluate_session,
+    load_annotations,
+    validate_annotations_file,
+)
+from game_highlight_finder.benchmark.models import BenchmarkSplit
+from game_highlight_finder.benchmark.template import create_annotation_template
 from game_highlight_finder.config import (
     AppConfig,
     ConfigResult,
@@ -52,8 +60,13 @@ app = typer.Typer(
 )
 config_app = typer.Typer(help="Inspect and validate configuration.", no_args_is_help=True)
 cost_app = typer.Typer(help="Inspect the local hard-budget cost ledger.", no_args_is_help=True)
+benchmark_app = typer.Typer(
+    help="Build and evaluate private, provider-neutral M8 benchmark artifacts.",
+    no_args_is_help=True,
+)
 app.add_typer(config_app, name="config")
 app.add_typer(cost_app, name="cost")
+app.add_typer(benchmark_app, name="benchmark")
 
 
 @dataclass(frozen=True)
@@ -250,6 +263,170 @@ def _cost_session(options: RuntimeOptions, session_id: str) -> None:
         typer.echo(f"  {provider}/{model} [{stage}]: {_format_micro_thb(amount)}")
     hold = service.ledger.safety_hold()
     typer.echo(f"Safety hold: {hold.reason if hold else 'none'}")
+
+
+@benchmark_app.command("template")
+def benchmark_template(
+    ctx: typer.Context,
+    video: Annotated[Path, typer.Argument(help="Local gameplay recording to annotate.")],
+    game_profile: Annotated[
+        str, typer.Option("--game-profile", help="Stable lowercase game profile identifier.")
+    ] = "unknown",
+    case_id: Annotated[
+        str | None, typer.Option("--case-id", help="Stable private benchmark case ID.")
+    ] = None,
+    output: Annotated[
+        Path | None, typer.Option("--output", help="Private annotation JSON output path.")
+    ] = None,
+) -> None:
+    """Inspect a local source and write an empty annotation template."""
+    _execute(
+        ctx, lambda options: _benchmark_template(options, video, game_profile, case_id, output)
+    )
+
+
+def _benchmark_template(
+    options: RuntimeOptions,
+    video: Path,
+    game_profile: str,
+    case_id: str | None,
+    output: Path | None,
+) -> None:
+    result = create_annotation_template(
+        video,
+        _load(options).config,
+        game_profile=game_profile,
+        case_id=case_id,
+        output=output,
+    )
+    typer.echo("[PASS] annotation template created locally (provider calls: ZERO)")
+    typer.echo(f"annotation: {result.output_path}")
+    typer.echo(f"case ID: {result.annotations.case_id}")
+    typer.echo(f"source SHA-256: {result.annotations.source_sha256}")
+    typer.echo(f"duration_ms: {result.annotations.source_duration_ms}")
+
+
+@benchmark_app.command("validate")
+def benchmark_validate(
+    ctx: typer.Context,
+    annotations: Annotated[Path, typer.Argument(help="Annotation JSON document to validate.")],
+) -> None:
+    """Validate a private annotation document without provider calls."""
+    _execute(ctx, lambda _options: _benchmark_validate(annotations))
+
+
+def _benchmark_validate(annotations_path: Path) -> None:
+    summary = validate_annotations_file(annotations_path)
+    typer.echo(f"source identity: {summary.source_identity}")
+    typer.echo(f"annotation SHA-256: {summary.annotation_sha256}")
+    typer.echo(f"benchmark ID: {summary.benchmark_id}")
+    typer.echo(f"case ID: {summary.case_id}")
+    typer.echo(
+        f"annotation counts: matches={summary.match_count} highlights={summary.highlight_count}"
+    )
+    typer.echo(f"MUST_CATCH: {summary.must_catch_count}")
+    typer.echo(f"WORTH_REVIEW: {summary.worth_review_count}")
+    typer.echo(f"OPTIONAL: {summary.optional_count}")
+    typer.echo(f"boring intervals: {summary.boring_interval_count}")
+    typer.echo(
+        "modality: "
+        + ", ".join(f"{key}={value}" for key, value in sorted(summary.modality_breakdown.items()))
+    )
+    typer.echo(
+        f"total annotated highlight duration_ms: {summary.total_annotated_highlight_duration_ms}"
+    )
+    typer.echo("provider calls: ZERO")
+
+
+@benchmark_app.command("evaluate")
+def benchmark_evaluate(
+    ctx: typer.Context,
+    session_id: Annotated[str, typer.Argument(help="Completed local session identifier.")],
+    annotations: Annotated[
+        Path, typer.Option("--annotations", help="Private annotation JSON document.")
+    ],
+    split: Annotated[
+        str,
+        typer.Option("--split", help="calibration or validation; validation is never tuned here."),
+    ] = "calibration",
+    output: Annotated[
+        Path | None, typer.Option("--output", help="Private evaluation JSON output path.")
+    ] = None,
+) -> None:
+    """Evaluate an already completed session entirely from local artifacts."""
+    _execute(
+        ctx, lambda options: _benchmark_evaluate(options, session_id, annotations, split, output)
+    )
+
+
+def _benchmark_evaluate(
+    options: RuntimeOptions,
+    session_id: str,
+    annotations_path: Path,
+    split: str,
+    output: Path | None,
+) -> None:
+    try:
+        split_value = BenchmarkSplit(split.strip().lower())
+    except ValueError as exc:
+        raise ConfigError("Benchmark split must be calibration or validation.") from exc
+    config = _load_persisted_session_config(options, session_id)
+    loaded_annotations = load_annotations(annotations_path)
+    evaluation = evaluate_session(
+        session_id,
+        annotations_path,
+        config,
+        split=split_value,
+    )
+    target = (
+        output.expanduser().resolve()
+        if output is not None
+        else config.storage.data_dir.resolve()
+        / "benchmarks"
+        / "results"
+        / f"{loaded_annotations.case_id}.json"
+    )
+    from game_highlight_finder.benchmark.evaluator import persist_evaluation
+
+    persist_evaluation(evaluation, target)
+    typer.echo(f"[PASS] benchmark evaluation written: {target}")
+    typer.echo(f"precision: {evaluation.primary_metrics.precision}")
+    typer.echo(f"recall: {evaluation.primary_metrics.recall}")
+    typer.echo(f"F1: {evaluation.primary_metrics.f1}")
+    typer.echo("provider calls: ZERO")
+
+
+@benchmark_app.command("aggregate")
+def benchmark_aggregate(
+    ctx: typer.Context,
+    dataset_manifest: Annotated[
+        Path, typer.Argument(help="Private benchmark dataset manifest JSON.")
+    ],
+    output: Annotated[
+        Path | None, typer.Option("--output", help="Aggregate JSON output path.")
+    ] = None,
+    report_output: Annotated[
+        Path | None, typer.Option("--report-output", help="Human-readable Markdown output path.")
+    ] = None,
+) -> None:
+    """Aggregate existing local evaluation results without provider calls."""
+    _execute(ctx, lambda _options: _benchmark_aggregate(dataset_manifest, output, report_output))
+
+
+def _benchmark_aggregate(
+    dataset_manifest: Path,
+    output: Path | None,
+    report_output: Path | None,
+) -> None:
+    result = aggregate_dataset(
+        dataset_manifest,
+        output_path=output,
+        markdown_path=report_output,
+    )
+    typer.echo(f"[PASS] aggregate JSON: {result.json_path}")
+    typer.echo(f"[PASS] aggregate Markdown: {result.markdown_path}")
+    typer.echo(f"groups: {len(result.aggregate.groups)}")
+    typer.echo("provider calls: ZERO")
 
 
 @app.command()

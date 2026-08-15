@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "benchmark_id": "m8-private-example",
+  "name": "M8A private benchmark (template)",
+  "description": "Replace placeholders locally; do not commit real media or annotations.",
+  "evaluation_policy_version": "m8-eval-v1",
+  "cases": [
+    {
+      "case_id": "meccha-cal-01",
+      "source_path": "PRIVATE_SOURCE_PATH",
+      "expected_source_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "annotation_path": "PRIVATE_ANNOTATION_PATH",
+      "game_profile": "meccha_chameleon",
+      "split": "calibration",
+      "tags": ["high_event", "visual_action"],
+      "notes": "Placeholder only. Keep real paths and annotation data under the configured data directory."
+    },
+    {
+      "case_id": "contrast-val-01",
+      "source_path": "PRIVATE_SOURCE_PATH",
+      "expected_source_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "annotation_path": "PRIVATE_ANNOTATION_PATH",
+      "game_profile": "contrasting_game",
+      "split": "validation",
+      "tags": ["contrasting_game", "boring"],
+      "notes": "Placeholder only; validation cases must remain untouched while tuning."
+    }
+  ]
+}

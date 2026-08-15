@@ -231,3 +231,19 @@ verified completed clip/thumbnail hashes are reused and only missing/incomplete
 items retry. The aggregate extract stage is complete only when every candidate
 record is complete. Accurate extraction is the default; copy mode is explicitly
 labelled approximate because keyframes can shift boundaries.
+
+## 12. M8A benchmark stages (local measurement only)
+
+Benchmark evaluation is deliberately downstream of the completed M7 journey:
+
+```text
+completed session + private annotations -> evaluate -> atomic result JSON
+dataset manifest + result JSONs       -> aggregate -> JSON + Markdown
+```
+
+These commands never resume an incomplete session and never call Scout or a provider.
+They fail closed when source/annotation identity, SessionMap, required stage status,
+extraction completeness, or annotation schema is invalid. The evaluator reads the
+settled/active/ambiguous cost lifecycle from SQLite; unresolved exposure remains
+explicit and is not reported as settled actual cost. The original source is hashed
+and checked but is never copied into benchmark artifacts.

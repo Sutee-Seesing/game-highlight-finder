@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "annotation_version": "m8-annotation-v1",
+  "benchmark_id": "m8-private-example",
+  "case_id": "meccha-cal-01",
+  "source_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "source_duration_ms": 120000,
+  "game_profile": "meccha_chameleon",
+  "annotated_by": "local",
+  "matches": [],
+  "highlights": [
+    {
+      "annotation_id": "highlight-001",
+      "event_start_ms": 45000,
+      "event_end_ms": 48000,
+      "setup_start_ms": 42000,
+      "payoff_end_ms": 50000,
+      "category": "CLUTCH",
+      "importance": "MUST_CATCH",
+      "modality": "VISUAL_AND_AUDIO",
+      "notes": "Synthetic placeholder; replace locally."
+    }
+  ],
+  "boring_intervals": [
+    {
+      "annotation_id": "boring-001",
+      "start_ms": 0,
+      "end_ms": 30000,
+      "notes": "Synthetic placeholder."
+    }
+  ],
+  "notes": "Template only. Never commit private annotation data or absolute source paths."
+}

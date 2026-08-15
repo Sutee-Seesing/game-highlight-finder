@@ -294,3 +294,19 @@ generation activity. `resume`, `report`, and `cost session` preserve the
 persisted semantic configuration while never restoring remote-upload consent.
 Report metadata includes the published HTML SHA-256 and byte size; cache hits
 require those identities to match the actual artifact.
+
+## 11. M8A evaluation boundary
+
+The benchmark package is a pure/local consumer of completed session artifacts. It
+reads source identity, `SessionMap`, optional ranking and extraction manifests, the
+authoritative cost ledger, and private annotation JSON. It does not import a Scout
+runner, provider adapter, upload transport, or credential loader. Annotation hashes
+are present only in evaluation identity/results; they cannot affect Scout/window
+cache keys, provider request fingerprints, SessionMap output, or extraction caches.
+
+`BenchmarkDataset`, `BenchmarkAnnotations`, `ExperimentIdentity`, and
+`BenchmarkEvaluation` are strict versioned Pydantic models. Evaluation policy
+`m8-eval-v1` performs deterministic one-to-one temporal matching with persisted IoU
+and boundary-tolerance thresholds. Aggregation recomputes metrics from counts and
+retains calibration, validation, and combined slices. Private results are written
+atomically under the data directory and sanitized Markdown reports omit local paths.

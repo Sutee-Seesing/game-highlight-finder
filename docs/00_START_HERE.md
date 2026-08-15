@@ -177,3 +177,15 @@ hardening now reports provider activity from the current invocation, resolves
 verifies report HTML hashes/sizes before accepting a cache hit. Automated
 cold-to-warm, CLI, paid force-stage, and corruption-rebuild regressions pass in
 the 183-test offline suite.
+
+## M8A benchmark foundation
+
+M8A adds a provider-neutral, private benchmark layer under `highlight benchmark`.
+`template` hashes/probes a local source and writes an empty annotation document;
+`validate` fails closed on ground-truth errors; `evaluate` consumes only a completed
+local session; and `aggregate` produces count-weighted JSON plus a privacy-safe
+Markdown comparison. The evaluator never invokes Scout, a provider adapter, upload
+API, or network. See [07_M8_BENCHMARK_PROTOCOL.md](07_M8_BENCHMARK_PROTOCOL.md).
+
+M8A benchmark foundation: COMPLETE after offline synthetic validation. M8 real
+gameplay benchmark: NOT RUN. V1 defaults: NOT LOCKED. M8B and M9: NOT STARTED.

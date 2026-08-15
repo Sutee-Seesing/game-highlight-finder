@@ -1,0 +1,172 @@
+# M8A Benchmark Protocol
+
+M8A builds the local benchmark ruler before any real-gameplay provider tuning. It
+does not run Gemini, Qwen, GLM, DeepSeek, or any other provider. The evaluator
+consumes immutable source metadata, a completed `SessionMap`, optional ranking and
+extraction artifacts, the authoritative local cost ledger, and private human
+annotations. It never calls Scout, uploads media, or changes inference cache keys.
+
+## Private data boundary
+
+Gameplay recordings, candidate clips, screenshots, audio, annotations, provider
+responses, SQLite ledgers, credentials, and absolute personal paths stay under the
+configured local data directory. They are never committed. A practical layout is:
+
+```text
+<data_dir>/benchmarks/
+  datasets/
+  annotations/
+  results/
+  reports/
+```
+
+Tracked examples contain placeholders only. A shareable aggregate report contains
+case IDs and hashes, not source paths or media.
+
+## Dataset and split policy
+
+`BenchmarkDataset` is a strict versioned JSON manifest. Each `BenchmarkCase` names a
+private source path, expected SHA-256, annotation path, game profile, tags, and one
+split: `calibration` or `validation`.
+
+Calibration cases may later guide tuning. Validation cases must remain untouched while
+choosing prompts, thresholds, proxy settings, window policy, or profiles. Aggregates
+always expose separate calibration and validation groups plus a count-weighted
+`combined` group. Percentages are recomputed from underlying counts; they are never
+averaged across recordings of different lengths.
+
+## Annotation guide
+
+Create a template without provider calls:
+
+```powershell
+highlight benchmark template "D:\Recordings\session.mp4" `
+  --game-profile meccha_chameleon `
+  --case-id meccha-cal-01
+```
+
+The command hashes and probes the source locally and writes an empty valid annotation
+document. It never modifies the video and never commits the result. Fill annotations
+in a copy, then validate:
+
+```powershell
+highlight benchmark validate "<data_dir>\benchmarks\annotations\meccha-cal-01.json"
+```
+
+All times are integer milliseconds on the original source timeline. Every interval is
+half-open, `[start_ms, end_ms)`, and must be inside the source. Ground-truth errors
+fail closed; the tool never silently clamps a hand-entered boundary.
+
+Stable IDs are required across revisions. Use a different `annotation_version` when
+the human ground truth is intentionally revised. A highlight may reference an
+annotated match, but match annotation is optional when the session is difficult to
+segment.
+
+### Highlight importance
+
+- `MUST_CATCH`: a moment that must appear in a useful shortlist.
+- `WORTH_REVIEW`: worthwhile but less essential.
+- `OPTIONAL`: interesting context; never let it hide misses in the primary product metric.
+
+### Modality
+
+Use `VISUAL`, `AUDIO`, `VISUAL_AND_AUDIO`, or `UNKNOWN`. A visual kill and a funny
+voice reaction are different evaluation slices even when both are temporally found.
+
+### Boring intervals
+
+Mark intentionally uninteresting intervals with `boring_intervals`. A zero-candidate
+boring session is valid. These intervals measure candidates overlapping boring footage,
+false positives per source hour, and review time spent inside boring footage.
+
+## Matching policy
+
+The persisted policy version is `m8-eval-v1`:
+
+- event IoU threshold: `0.25`;
+- boundary tolerance: `3000` ms;
+- one prediction can match at most one annotated highlight, and vice versa;
+- qualifying pairs are ordered by IoU descending, combined boundary error ascending,
+  prediction score descending, then stable IDs;
+- category is not required for the primary temporal match; category correctness is a
+  secondary confusion metric.
+
+A pair qualifies with the configured IoU, or with both boundary errors within tolerance
+and no larger-than-tolerance gap. If this policy changes, increment its version; never
+change the number only after observing one provider's scores.
+
+## Evaluation workflow
+
+Run only against an already completed local session:
+
+```powershell
+highlight benchmark evaluate <session-id> `
+  --annotations "<data_dir>\benchmarks\annotations\meccha-cal-01.json" `
+  --split calibration
+```
+
+The evaluator verifies source hash and duration, SessionMap identity, completed
+Scout/reconcile stages, extraction completeness when candidates exist, and annotation
+hash. It does not call `resume` automatically. Results are atomic JSON artifacts and
+become stale when annotation bytes change. Annotation bytes never participate in
+Scout request fingerprints, paid provider cache keys, SessionMap construction, or
+extraction cache keys.
+
+The machine-readable result retains raw matched-pair boundary measurements and
+diagnostic lists: missed annotations, extra candidates, matched pairs, and duplicate
+candidates. It also records the immutable experiment identity (provider/model,
+billing/media/thinking settings, prompt/schema/canonicalization versions, windows,
+proxy/signal/extraction/ranking fingerprints, source hash, annotation hash, and
+evaluation policy version).
+
+## Metrics
+
+Per-case and aggregate results retain raw counts and report:
+
+- precision, recall, F1, and MUST/WORTH/OPTIONAL recall;
+- VISUAL/AUDIO/VISUAL_AND_AUDIO/UNKNOWN recall;
+- start/end absolute error, IoU median, and p90 boundary error;
+- duplicate count/rate and explicit duplicate diagnostics;
+- union-duration review ratio (overlapping clips count once);
+- Best-of count, MUST/WORTH found, Best-of precision and useful-event recall;
+- boring-interval false-positive behavior;
+- secondary category confusion;
+- manual match segmentation metrics, or explicit N/A when matches are absent;
+- settled/reserved/in-flight/ambiguous cost, THB per source hour, and THB per true
+  positive. Ambiguous exposure is never presented as settled actual cost;
+- durable runtime timing where stage timestamps exist, and generated storage bytes
+  excluding the original source.
+
+There is no single magic quality score. Future model selection must consider recall,
+precision, modality, timing, cost, runtime, storage, and review burden together.
+
+Aggregate an existing private dataset after its evaluations exist:
+
+```powershell
+highlight benchmark aggregate "<data_dir>\benchmarks\datasets\m8.json"
+```
+
+This writes aggregate JSON and a privacy-safe Markdown comparison table. A case's
+annotation hash, source hash, split, profile, and benchmark ID must match the dataset
+manifest; mismatches block comparison.
+
+## Intended M8B private dataset (documented target only)
+
+M8A does not require real files. M8B should annotate several short/medium MECCHA
+CHAMELEON sessions with boring and high-event footage, including a strong
+voice/reaction session, plus at least one contrasting non-MECCHA game. Try to cover an
+obvious visual highlight, subtle smart play, funny reaction, failure, clutch, boring
+interval, and overlapping setup/payoff story. Keep calibration and validation cases
+distinct from the start.
+
+Before full M8 acceptance, at least one representative 1–4 hour source must run
+through analysis → report → evaluation while checking resume, source immutability,
+budget, storage, and review ratio. M8A intentionally does not run that holdout.
+
+## Status and safety
+
+M8A benchmark foundation: complete after offline synthetic tests and local static
+validation. M8 real gameplay benchmark: not run. V1 defaults: not locked. M8B and M9
+remain separately authorized milestones.
+
+Real provider/API calls during M8A: **ZERO**.

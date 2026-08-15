@@ -125,10 +125,21 @@ Ruff and mypy clean; real Gemini API calls during maintenance: zero.
 
 ### M8 — Real gameplay validation and tuning
 
-- Annotate several short/medium MECCHA CHAMELEON and at least one contrasting game session.
-- Measure recall proxy, precision, boundary errors, duplicates, review ratio, time, storage, and THB/hour.
-- Tune proxy, window, prompt, thresholds, and generic/MECCHA profiles from evidence.
-- Exit: publish a written benchmark and lock V1 defaults. A full 1–4 hour validation is required before calling V1 reliable.
+- M8A benchmark foundation: **implemented**. The local provider-neutral harness now
+  provides strict dataset/annotation/result models, calibration/validation separation,
+  deterministic temporal matching, importance/modality/boring labels, boundary and
+  duplicate diagnostics, union-duration review metrics, Best-of/match/category
+  slices, authoritative ledger cost metrics, durable runtime/storage metrics,
+  experiment identity, ground-truth leakage protection, and atomic JSON/Markdown
+  aggregation. `highlight benchmark template|validate|evaluate|aggregate` makes
+  zero provider/API calls.
+- M8 real gameplay benchmark: **NOT RUN**. The intended private dataset (several
+  short/medium MECCHA CHAMELEON sessions, one contrasting game, boring/high-event
+  and audio-reaction cases) is documented only in
+  `docs/07_M8_BENCHMARK_PROTOCOL.md`; no gameplay or annotation data is committed.
+- V1 defaults are **NOT LOCKED**. A representative 1–4 hour source must still run
+  through analysis → report → evaluation while checking resume, immutability,
+  budget, storage, and review ratio before full M8 acceptance.
 
 ### M9 — Optional Reviewer
 
@@ -136,7 +147,7 @@ Ruff and mypy clean; real Gemini API calls during maintenance: zero.
 - Add keep/maybe/reject/merge suggestions without destructive rewrites.
 - Exit: measured improvement in shortlist precision justifies incremental cost; otherwise leave disabled.
 
-The original milestone order is adjusted so schemas/fake AI and budget controls precede real API integration. Cache/resume is foundational from M1 rather than added late, preventing paid-stage rework. M6 and M7 are complete; M8 remains a separate future milestone.
+The original milestone order is adjusted so schemas/fake AI and budget controls precede real API integration. Cache/resume is foundational from M1 rather than added late, preventing paid-stage rework. M6, M7, and M8A are complete; the M8 real-gameplay benchmark and M9 remain separately authorized work.
 
 ## 3. Test strategy
 

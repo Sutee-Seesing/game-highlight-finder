@@ -1,6 +1,6 @@
 # Game Highlight Finder
 
-Game Highlight Finder is a local-first CLI for turning long gameplay recordings into a reviewable highlight library. The repository implements **Milestone 7: a usable offline V1 report journey** on top of the accepted M1–M6 foundation.
+Game Highlight Finder is a local-first CLI for turning long gameplay recordings into a reviewable highlight library. The repository implements **Milestone 8A: a provider-neutral benchmark harness and annotation foundation** on top of the accepted M1–M7 foundation. Real gameplay benchmarking remains a separate M8B activity.
 
 M3 keeps the M2 source/proxy/signal foundation and adds a versioned `Session -> Match -> Candidate` domain map. A deterministic Fake Scout produces bounded offline response fixtures, preserves raw Scout bytes separately from canonical data, and validates hostile output before assigning local deterministic IDs. Canonical timestamps are integer milliseconds with half-open intervals `[start_ms, end_ms)`.
 
@@ -74,6 +74,10 @@ uv run highlight status <session-id>
 uv run highlight cost status
 uv run highlight cost report
 uv run highlight cost calls
+uv run highlight benchmark template "D:\Recordings\game.mp4" --game-profile meccha_chameleon
+uv run highlight benchmark validate "<data_dir>\benchmarks\annotations\case.json"
+uv run highlight benchmark evaluate <session-id> --annotations "<data_dir>\benchmarks\annotations\case.json"
+uv run highlight benchmark aggregate "<data_dir>\benchmarks\datasets\m8.json"
 ```
 
 Global overrides must appear before the subcommand:
@@ -196,6 +200,17 @@ verifies the published HTML SHA-256 and byte size before accepting a cache hit.
 The cold-to-warm V1 regression, CLI regressions, paid force-stage recovery, and
 report-corruption rebuild checks are automated; the 183-test maintenance run
 made zero real Gemini API calls.
+
+## M8A benchmark foundation
+
+`docs/07_M8_BENCHMARK_PROTOCOL.md` defines the private dataset/annotation protocol,
+calibration-versus-validation split, deterministic temporal matching, modality and
+importance slices, boring intervals, boundary/duplicate/review/cost/runtime/storage
+metrics, experiment identity, and ground-truth leakage rules. The local commands under
+`highlight benchmark` only consume completed session artifacts and annotations; they
+never invoke Scout, providers, uploads, or network APIs. M8A uses synthetic fixtures
+for acceptance. The real gameplay benchmark is **NOT RUN**, V1 defaults are **NOT
+LOCKED**, and M8B/M9 are not started.
 
 ## Development and tests
 

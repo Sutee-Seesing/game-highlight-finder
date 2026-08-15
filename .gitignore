@@ -18,5 +18,10 @@ dist/
 
 config.yaml
 data/
+benchmarks/private/
+benchmarks/datasets/
+benchmarks/annotations/
+benchmarks/results/
+benchmarks/reports/
 *.log
 .test-tmp/

@@ -337,3 +337,27 @@ paths/hashes, probed duration, tool identity, extraction-config fingerprint,
 status, and bounded warnings/errors. `COMPLETED` items are reusable only while
 all semantic inputs and artifact hashes still match. Partial work never counts
 as an aggregate completed extraction stage.
+
+## 10. M8A benchmark models
+
+The `game_highlight_finder.benchmark` package adds strict, private, provider-neutral
+JSON models:
+
+- `BenchmarkDataset`/`BenchmarkCase`: versioned case manifest with source hash,
+  profile, tags, and mandatory `calibration` or `validation` split;
+- `BenchmarkAnnotations`: source hash/duration, stable `AnnotatedMatch` and
+  `AnnotatedHighlight` IDs, importance (`MUST_CATCH`, `WORTH_REVIEW`, `OPTIONAL`),
+  modality (`VISUAL`, `AUDIO`, `VISUAL_AND_AUDIO`, `UNKNOWN`), and boring intervals;
+- `EvaluationPolicy`: persisted `m8-eval-v1` IoU/tolerance thresholds;
+- `ExperimentIdentity`: provider/model, billing/media/thinking, prompt/schema/
+  canonicalization, window, proxy/signal/extraction/ranking, source, annotation,
+  and policy identity;
+- `BenchmarkEvaluation`: raw counts, one-to-one matched pairs, importance/modality,
+  boundary, duplicate, Best-of, boring, category, match, review, cost, runtime,
+  storage, and diagnostic lists;
+- `BenchmarkAggregate`: count-weighted calibration, validation, and combined slices
+  plus per-case results.
+
+All timestamps are integer milliseconds and half-open. Bounds and duplicate IDs fail
+closed. Annotation hashes affect evaluation identity only; they never enter Scout,
+paid-provider, SessionMap, or extraction cache identity.
