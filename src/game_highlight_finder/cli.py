@@ -942,7 +942,10 @@ def _analyze(
         typer.echo(f"Model: {preflight.model}")
         typer.echo("Input: analysis proxy only")
         typer.echo(f"Media resolution: {preflight.media_resolution}")
-        typer.echo(f"Thinking level: {preflight.thinking_level}")
+        typer.echo(
+            "Thinking level: "
+            f"{preflight.thinking_level or 'omitted (model default ' + preflight.effective_thinking_mode + ')'}"
+        )
         typer.echo(f"Reserved thinking allowance: {preflight.reserved_thinking_tokens} tokens")
         typer.echo(
             f"Maximum reserved cost: {_format_micro_thb(preflight.quote.reserved_cost_micro_thb)}"

@@ -32,6 +32,7 @@ from game_highlight_finder.media.tools import tool_identity
 from game_highlight_finder.pipeline.gemini_contract import gemini_window_scout_schema
 from game_highlight_finder.pipeline.gemini_scout import (
     build_gemini_registry,
+    effective_gemini_thinking,
     estimate_gemini_usage,
 )
 from game_highlight_finder.pipeline.local_signals import LocalSignalsResult
@@ -416,6 +417,7 @@ def aggregate_window_preflight(
         )
 
     service = cost_service or _build_window_cost_service(config)
+    thinking = effective_gemini_thinking(config)
     summary = service.summary()
     available = summary.available_micro_thb
     estimates: dict[str, int] = {}
@@ -437,7 +439,7 @@ def aggregate_window_preflight(
             response_schema=schema,
             audio_present=source.selected_audio_stream is not None,
             max_output_tokens=config.scout.max_output_tokens,
-            reserved_thinking_tokens=config.scout.reserved_thinking_tokens,
+            reserved_thinking_tokens=thinking.reserved_thinking_tokens,
         )
         request = CostRequest(
             call_id=f"preflight-{window.window_id}",
@@ -672,6 +674,7 @@ def _run_gemini_windowed_scout(
         raise ValidationError("M6 Gemini windows require the committed analysis proxy.")
     parent_sha = hash_file(parent_proxy)
     service = cost_service or _build_window_cost_service(config)
+    thinking = effective_gemini_thinking(config)
     provider = GeminiProvider(
         transport=transport,
         api_key_env=config.scout.api_key_env,
@@ -712,7 +715,7 @@ def _run_gemini_windowed_scout(
             response_schema=schema,
             audio_present=source.selected_audio_stream is not None,
             max_output_tokens=config.scout.max_output_tokens,
-            reserved_thinking_tokens=config.scout.reserved_thinking_tokens,
+            reserved_thinking_tokens=thinking.reserved_thinking_tokens,
         )
         request = CostRequest(
             call_id=f"gemini-window-{cache_key[:44]}",
@@ -856,7 +859,7 @@ def _run_gemini_windowed_scout(
                 response_schema=schema,
                 media_resolution=config.scout.media_resolution,
                 max_output_tokens=config.scout.max_output_tokens,
-                thinking_level=config.scout.thinking_level,
+                thinking_level=thinking.wire_level,
                 remote_metadata_path=remote_meta_path,
                 before_generation=mark_in_flight,
             )
@@ -890,9 +893,20 @@ def _run_gemini_windowed_scout(
             elif reserved:
                 with suppress(Exception):
                     service.release(call_id)
-            _write_window_cost_artifact(service, call_id, cost_path)
+            _write_window_cost_artifact(
+                service,
+                call_id,
+                cost_path,
+                failure_diagnostic=exc.safe_diagnostic(),
+            )
             raise ValidationError(
-                str(exc), hint="No automatic Gemini window retry was attempted."
+                str(exc),
+                hint=(
+                    "No automatic Gemini window retry was attempted."
+                    if exc.diagnostic is None
+                    else "No automatic Gemini window retry was attempted; "
+                    f"phase={exc.diagnostic.phase}, dispatch={exc.diagnostic.dispatch}."
+                ),
             ) from exc
         except BaseException:
             if in_flight:
@@ -920,6 +934,7 @@ def _run_gemini_windowed_scout(
 def _window_request_payload(
     source: SourceAsset, window: ScoutWindow, config: AppConfig, prompt: str, schema_digest: str
 ) -> dict[str, Any]:
+    thinking = effective_gemini_thinking(config)
     return {
         "source_sha256": source.sha256,
         "window_id": window.window_id,
@@ -931,8 +946,11 @@ def _window_request_payload(
         "model": config.scout.model,
         "billing_mode": config.scout.billing_mode,
         "media_resolution": config.scout.media_resolution,
-        "thinking_level": config.scout.thinking_level,
-        "reserved_thinking_tokens": config.scout.reserved_thinking_tokens,
+        "configured_thinking_level": thinking.configured_level,
+        "thinking_level": thinking.wire_level,
+        "effective_thinking_mode": thinking.effective_mode,
+        "thinking_policy": thinking.policy,
+        "reserved_thinking_tokens": thinking.reserved_thinking_tokens,
         "prompt_version": config.scout.window_prompt_version,
         "prompt_hash": _sha256_bytes(prompt.encode("utf-8")),
         "schema_version": config.scout.schema_version,
@@ -1201,6 +1219,7 @@ def _canonicalize_window_envelope(
     canonical_path: Path,
     config: AppConfig,
 ) -> SessionMap:
+    thinking = effective_gemini_thinking(config)
     session_map = canonicalize_scout_response(
         envelope.output_text.encode("utf-8"),
         session_id=window.session_id,
@@ -1216,6 +1235,11 @@ def _canonicalize_window_envelope(
                 "backend": "gemini",
                 "model": envelope.model,
                 "interaction_id": envelope.interaction_id or "unknown",
+                "configured_thinking_level": thinking.configured_level,
+                "thinking_level": thinking.wire_level or "omitted",
+                "effective_thinking_mode": thinking.effective_mode,
+                "thinking_policy": thinking.policy,
+                "thinking_identity": f"{thinking.policy}:{thinking.effective_mode}",
                 "remote_cleanup": envelope.remote_cleanup_status,
                 "window_id": window.window_id,
             },
@@ -1233,10 +1257,19 @@ def _cleanup_pending(path: Path) -> bool:
         return False
 
 
-def _write_window_cost_artifact(service: CostService, call_id: str, path: Path) -> None:
+def _write_window_cost_artifact(
+    service: CostService,
+    call_id: str,
+    path: Path,
+    *,
+    failure_diagnostic: dict[str, object] | None = None,
+) -> None:
     with suppress(Exception):
         record = service.ledger.get(call_id)
-        atomic_write_json(path, record.model_dump(mode="json"))
+        payload = record.model_dump(mode="json")
+        if failure_diagnostic is not None:
+            payload["failure_diagnostic"] = failure_diagnostic
+        atomic_write_json(path, payload)
 
 
 __all__ = [

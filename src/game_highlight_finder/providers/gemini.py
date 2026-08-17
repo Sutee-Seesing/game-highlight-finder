@@ -10,10 +10,11 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import time
 from collections.abc import Callable, Mapping, Sequence
 from contextlib import suppress
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Protocol
@@ -31,11 +32,45 @@ from game_highlight_finder.providers.base import (
     ProviderRequest,
     ProviderUsageActual,
 )
+from game_highlight_finder.providers.gemini_capabilities import (
+    GEMINI_MODEL_IDS,
+    resolve_gemini_thinking_config,
+    validate_wire_thinking_level,
+)
 from game_highlight_finder.storage.atomic import atomic_write_json, read_json
 
 GEMINI_PROVIDER = "gemini"
 GEMINI_MODEL_ID = "gemini-3.5-flash-lite"
-GEMINI_MODEL_IDS = ("gemini-2.5-flash-lite", GEMINI_MODEL_ID)
+
+
+@dataclass(frozen=True)
+class GeminiFailureDiagnostic:
+    """Safe provider failure metadata suitable for local persistence."""
+
+    exception_class: str
+    sdk_error_class: str | None
+    phase: str
+    dispatch: str
+    http_status: int | None
+    provider_code: str | int | None
+    provider_status: str | None
+    provider_request_id: str | None
+    message: str
+    exception_chain: tuple[str, ...] = ()
+
+    def as_dict(self) -> dict[str, object]:
+        return {
+            "exception_class": self.exception_class,
+            "sdk_error_class": self.sdk_error_class,
+            "phase": self.phase,
+            "dispatch": self.dispatch,
+            "http_status": self.http_status,
+            "provider_code": self.provider_code,
+            "provider_status": self.provider_status,
+            "provider_request_id": self.provider_request_id,
+            "message": self.message,
+            "exception_chain": list(self.exception_chain),
+        }
 
 
 class GeminiProviderError(Exception):
@@ -50,6 +85,7 @@ class GeminiProviderError(Exception):
         response: Mapping[str, Any] | None = None,
         remote_file: GeminiRemoteFile | None = None,
         cleanup_pending: bool = False,
+        diagnostic: GeminiFailureDiagnostic | None = None,
     ) -> None:
         super().__init__(message)
         self.may_have_dispatched = may_have_dispatched
@@ -57,6 +93,10 @@ class GeminiProviderError(Exception):
         self.response = dict(response or {})
         self.remote_file = remote_file
         self.cleanup_pending = cleanup_pending
+        self.diagnostic = diagnostic
+
+    def safe_diagnostic(self) -> dict[str, object] | None:
+        return self.diagnostic.as_dict() if self.diagnostic is not None else None
 
 
 class GeminiConfigurationError(GeminiProviderError):
@@ -90,11 +130,16 @@ class GeminiRemoteFile(BaseModel):
     expiration_time: datetime | None = None
     deleted: bool = False
 
-    def safe_metadata(self, *, deletion_status: str = "pending") -> dict[str, Any]:
+    def safe_metadata(
+        self,
+        *,
+        deletion_status: str = "pending",
+        failure_diagnostic: GeminiFailureDiagnostic | None = None,
+    ) -> dict[str, Any]:
         # The URI is deliberately omitted.  It is needed only in-memory for
         # the immediately-following generation call and may contain a signed
         # or otherwise sensitive resource URL.
-        return {
+        metadata: dict[str, Any] = {
             "name": self.name,
             "mime_type": self.mime_type,
             "state": self.state,
@@ -105,6 +150,9 @@ class GeminiRemoteFile(BaseModel):
             "deletion_status": deletion_status,
             "provider": GEMINI_PROVIDER,
         }
+        if failure_diagnostic is not None:
+            metadata["failure_diagnostic"] = failure_diagnostic.as_dict()
+        return metadata
 
 
 class GeminiInteractionEnvelope(BaseModel):
@@ -145,7 +193,7 @@ class GeminiTransport(Protocol):
         response_schema: Mapping[str, Any],
         media_resolution: str,
         max_output_tokens: int,
-        thinking_level: str,
+        thinking_level: str | None,
         store: bool,
     ) -> Any: ...
 
@@ -208,7 +256,7 @@ class GenAITransport:
         response_schema: Mapping[str, Any],
         media_resolution: str,
         max_output_tokens: int,
-        thinking_level: str,
+        thinking_level: str | None,
         store: bool,
     ) -> Any:
         # The SDK accepts the REST-shaped multimodal input.  We intentionally
@@ -218,12 +266,16 @@ class GenAITransport:
             raise GeminiConfigurationError(
                 "Gemini M5 requires the configured low media resolution; refusing fallback."
             )
-        if thinking_level not in {"minimal", "low", "medium", "high"}:
-            raise GeminiConfigurationError(f"Unsupported Gemini thinking level: {thinking_level!r}")
+        try:
+            validate_wire_thinking_level(model, thinking_level)
+        except ValueError as exc:
+            raise GeminiConfigurationError(str(exc), may_have_dispatched=False) from exc
         generation_config: dict[str, Any] = {
             "max_output_tokens": max_output_tokens,
-            "thinking_level": thinking_level,
         }
+        generation_config.update(
+            {"thinking_level": thinking_level} if thinking_level is not None else {}
+        )
         try:
             return self._client.interactions.create(
                 model=model,
@@ -245,9 +297,12 @@ class GenAITransport:
                 store=store,
             )
         except Exception as exc:  # pragma: no cover - requires SDK/network
+            diagnostic = diagnose_gemini_exception(exc)
             raise GeminiDispatchError(
-                "Gemini interaction request failed after the send boundary.",
-                may_have_dispatched=True,
+                _diagnostic_message(diagnostic),
+                may_have_dispatched=diagnostic.dispatch != "NO",
+                provider_request_id=diagnostic.provider_request_id,
+                diagnostic=diagnostic,
             ) from exc
 
     def delete_file(self, name: str) -> None:
@@ -257,6 +312,149 @@ class GenAITransport:
             if _is_not_found_error(exc):
                 return
             raise GeminiCleanupError("Gemini remote file deletion failed.") from exc
+
+
+_SECRET_PATTERNS = (
+    (re.compile(r"AIza[0-9A-Za-z_-]{20,}"), "<redacted-key>"),
+    (re.compile(r"(?i)(?:authorization|x-goog-api-key)\s*[:=]\s*[^,;\s]+"), "<redacted-auth>"),
+    (re.compile(r"https?://[^\s'\"<>]+"), "<redacted-url>"),
+    (re.compile(r"(?i)files/[A-Za-z0-9._-]+"), "<redacted-file>"),
+)
+
+
+def _safe_provider_message(exc: BaseException) -> str:
+    try:
+        value = getattr(exc, "message", None) or str(exc)
+    except Exception:
+        value = type(exc).__name__
+    value = " ".join(str(value).split())
+    for pattern, replacement in _SECRET_PATTERNS:
+        value = pattern.sub(replacement, value)
+    return value[:512] or type(exc).__name__
+
+
+def _exception_chain(exc: BaseException) -> tuple[BaseException, ...]:
+    chain: list[BaseException] = []
+    current: BaseException | None = exc
+    seen: set[int] = set()
+    while current is not None and id(current) not in seen and len(chain) < 8:
+        seen.add(id(current))
+        chain.append(current)
+        current = current.__cause__ or current.__context__
+    return tuple(chain)
+
+
+def _safe_request_id(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    value = value.strip()
+    if not value or len(value) > 256 or not re.fullmatch(r"[A-Za-z0-9._:-]+", value):
+        return None
+    return value
+
+
+def _exception_http_status(chain: tuple[BaseException, ...]) -> int | None:
+    for item in chain:
+        for candidate in (
+            getattr(item, "status_code", None),
+            getattr(getattr(item, "response", None), "status_code", None),
+        ):
+            if isinstance(candidate, int) and 100 <= candidate <= 599:
+                return candidate
+    return None
+
+
+def _exception_provider_code(chain: tuple[BaseException, ...]) -> str | int | None:
+    for item in chain:
+        candidate = getattr(item, "code", None)
+        if isinstance(candidate, (str, int)) and not isinstance(candidate, bool):
+            value = str(candidate) if isinstance(candidate, str) else candidate
+            if isinstance(value, int) or re.fullmatch(r"[A-Za-z0-9_.:-]{1,128}", value):
+                return value
+    return None
+
+
+def _exception_provider_status(chain: tuple[BaseException, ...]) -> str | None:
+    for item in chain:
+        candidate = getattr(item, "status", None)
+        if isinstance(candidate, str) and re.fullmatch(r"[A-Za-z0-9_.:-]{1,128}", candidate):
+            return candidate
+    return None
+
+
+def _exception_request_id(chain: tuple[BaseException, ...]) -> str | None:
+    for item in chain:
+        for name in ("provider_request_id", "request_id", "id"):
+            value = _safe_request_id(getattr(item, name, None))
+            if value is not None:
+                return value
+    return None
+
+
+def _diagnostic_phase(chain: tuple[BaseException, ...], http_status: int | None) -> tuple[str, str]:
+    names = [type(item).__name__.lower() for item in chain]
+    if any(
+        "responsevalidationerror" in name or "apiresponsevalidationerror" in name for name in names
+    ):
+        return "RESPONSE_PARSE", "YES"
+    if http_status is not None or any(
+        name in {"apierror", "clienterror", "servererror", "apistatuserror"}
+        or name.endswith("apierror")
+        for name in names
+    ):
+        return "HTTP_OR_PROVIDER", "YES"
+    if any(
+        "timeout" in name
+        or "connection" in name
+        or "noresponse" in name
+        or type(item).__module__.lower().startswith("httpx")
+        for item, name in zip(chain, names, strict=True)
+    ):
+        return "NETWORK_OR_TIMEOUT", "UNKNOWN"
+    if any(
+        isinstance(item, (TypeError, ValueError, AttributeError, PydanticValidationError))
+        for item in chain
+    ):
+        return "PRE_DISPATCH", "NO"
+    return "DISPATCH_UNKNOWN", "UNKNOWN"
+
+
+def diagnose_gemini_exception(exc: BaseException) -> GeminiFailureDiagnostic:
+    """Extract safe SDK/provider evidence without retaining request secrets."""
+
+    chain = _exception_chain(exc)
+    http_status = _exception_http_status(chain)
+    phase, dispatch = _diagnostic_phase(chain, http_status)
+    root = chain[0]
+    exception_class = f"{type(root).__module__}.{type(root).__name__}"
+    sdk_error_class = next(
+        (
+            f"{type(item).__module__}.{type(item).__name__}"
+            for item in chain
+            if type(item).__module__.startswith("google.")
+        ),
+        None,
+    )
+    return GeminiFailureDiagnostic(
+        exception_class=exception_class,
+        sdk_error_class=sdk_error_class,
+        phase=phase,
+        dispatch=dispatch,
+        http_status=http_status,
+        provider_code=_exception_provider_code(chain),
+        provider_status=_exception_provider_status(chain),
+        provider_request_id=_exception_request_id(chain),
+        message=_safe_provider_message(root),
+        exception_chain=tuple(f"{type(item).__module__}.{type(item).__name__}" for item in chain),
+    )
+
+
+def _diagnostic_message(diagnostic: GeminiFailureDiagnostic) -> str:
+    return (
+        "Gemini interaction failed "
+        f"(phase={diagnostic.phase}, dispatch={diagnostic.dispatch}): "
+        f"{diagnostic.message}"
+    )
 
 
 class GeminiProvider(ProviderAdapter):
@@ -340,7 +538,7 @@ class GeminiProvider(ProviderAdapter):
         response_schema: Mapping[str, Any] | None = None,
         media_resolution: str = "low",
         max_output_tokens: int = 2_048,
-        thinking_level: str = "minimal",
+        thinking_level: str | None = "minimal",
         remote_metadata_path: Path | None = None,
         before_generation: Callable[[], None] | None = None,
         upload_validator: Callable[[Path], None] | None = None,
@@ -357,8 +555,14 @@ class GeminiProvider(ProviderAdapter):
             raise GeminiConfigurationError(
                 "Gemini M5 cost estimates require low media resolution; refusing fallback."
             )
-        if thinking_level not in {"minimal", "low", "medium", "high"}:
-            raise GeminiConfigurationError(f"Unsupported Gemini thinking level: {thinking_level!r}")
+        configured_thinking_level = thinking_level or "minimal"
+        try:
+            thinking_config = resolve_gemini_thinking_config(
+                request.model_id,
+                configured_thinking_level,
+            )
+        except ValueError as exc:
+            raise GeminiConfigurationError(str(exc), may_have_dispatched=False) from exc
         path = proxy_path or _payload_path(request.request_payload, "proxy_path")
         if path is None:
             raise GeminiPrivacyError("Gemini requires an analysis proxy path.")
@@ -406,7 +610,7 @@ class GeminiProvider(ProviderAdapter):
                     response_schema=response_schema,
                     media_resolution=media_resolution,
                     max_output_tokens=max_output_tokens,
-                    thinking_level=thinking_level,
+                    thinking_level=thinking_config.wire_level,
                     store=False,
                 )
             except GeminiProviderError as exc:
@@ -417,16 +621,25 @@ class GeminiProvider(ProviderAdapter):
                     raise
                 raise GeminiDispatchError(
                     str(exc),
-                    may_have_dispatched=True,
+                    may_have_dispatched=exc.may_have_dispatched,
                     provider_request_id=exc.provider_request_id,
                     response=exc.response,
                     remote_file=remote,
+                    diagnostic=exc.diagnostic,
                 ) from exc
             except Exception as exc:
+                diagnostic = diagnose_gemini_exception(exc)
+                if diagnostic.dispatch == "NO":
+                    diagnostic = replace(
+                        diagnostic,
+                        phase="DISPATCH_UNKNOWN",
+                        dispatch="UNKNOWN",
+                    )
                 raise GeminiDispatchError(
-                    "Gemini interaction failed after the send boundary.",
-                    may_have_dispatched=True,
+                    _diagnostic_message(diagnostic),
+                    may_have_dispatched=diagnostic.dispatch != "NO",
                     remote_file=remote,
+                    diagnostic=diagnostic,
                 ) from exc
             envelope = sanitize_interaction_response(
                 raw_response,
@@ -487,7 +700,10 @@ class GeminiProvider(ProviderAdapter):
                 if remote_metadata_path is not None:
                     atomic_write_json(
                         remote_metadata_path,
-                        remote.safe_metadata(deletion_status=cleanup_status),
+                        remote.safe_metadata(
+                            deletion_status=cleanup_status,
+                            failure_diagnostic=exc.diagnostic,
+                        ),
                     )
             raise
         except Exception:
@@ -509,7 +725,10 @@ class GeminiProvider(ProviderAdapter):
                     with suppress(OSError):
                         atomic_write_json(
                             remote_metadata_path,
-                            remote.safe_metadata(deletion_status=cleanup_status),
+                            remote.safe_metadata(
+                                deletion_status=cleanup_status,
+                                failure_diagnostic=None,
+                            ),
                         )
             raise
 
@@ -627,7 +846,11 @@ class FakeGeminiTransport:
             },
             "generation_config": {
                 "max_output_tokens": kwargs.get("max_output_tokens"),
-                "thinking_level": kwargs.get("thinking_level"),
+                **(
+                    {"thinking_level": kwargs.get("thinking_level")}
+                    if kwargs.get("thinking_level") is not None
+                    else {}
+                ),
             },
             "store": kwargs.get("store"),
         }
@@ -1207,6 +1430,7 @@ __all__ = [
     "GeminiCleanupError",
     "GeminiConfigurationError",
     "GeminiDispatchError",
+    "GeminiFailureDiagnostic",
     "GeminiInteractionEnvelope",
     "GeminiMissingUsageError",
     "GeminiPrivacyError",
@@ -1215,6 +1439,7 @@ __all__ = [
     "GeminiRemoteFile",
     "GeminiTransport",
     "GenAITransport",
+    "diagnose_gemini_exception",
     "gemini_provider_descriptor",
     "sanitize_interaction_response",
     "usage_from_envelope",

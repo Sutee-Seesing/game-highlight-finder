@@ -34,6 +34,10 @@ from game_highlight_finder.pipeline.gemini_contract import gemini_window_scout_s
 from game_highlight_finder.pipeline.gemini_scout import estimate_gemini_usage
 from game_highlight_finder.pipeline.windowed_scout import build_window_prompt
 from game_highlight_finder.providers.base import ProviderUsageEstimate
+from game_highlight_finder.providers.gemini_capabilities import (
+    MODEL_DEFAULT_MINIMUM_THINKING,
+    resolve_gemini_thinking_config,
+)
 from game_highlight_finder.storage.atomic import atomic_write_json, read_json
 
 CALIBRATION_CASE_IDS = ("m8-real-cal-01", "m8-real-cal-02")
@@ -52,6 +56,7 @@ EXPECTED_AGGREGATE_COUNTS = {
     "optional": 1,
     "boring_intervals": 4,
 }
+CALIBRATION_EXPERIMENT_REVISION = "v2"
 
 
 def _sha256_json(value: object) -> str:
@@ -194,7 +199,7 @@ class CalibrationComparisonManifest(BenchmarkModel):
     schema_version: Literal[1] = 1
     manifest_type: Literal["planned_comparison"] = "planned_comparison"
     status: Literal["PLANNED_NOT_EXECUTED"] = "PLANNED_NOT_EXECUTED"
-    comparison_id: str = "m8b2-calibration-comparison-v1"
+    comparison_id: str = f"m8b2-calibration-comparison-{CALIBRATION_EXPERIMENT_REVISION}"
     benchmark_id: str
     evaluation_policy_fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$")
     case_ids: tuple[str, ...] = Field(min_length=2, max_length=2)
@@ -234,6 +239,7 @@ class CalibrationArmPlan(BenchmarkModel):
     planned_provider_requests: int = Field(ge=0)
     cache_hits_known: int = Field(ge=0)
     usage_estimate: ProviderUsageEstimate
+    effective_thinking_config: dict[str, Any] = Field(default_factory=dict, max_length=32)
     estimated_paid_equivalent_cost_usd: Decimal
     estimated_paid_equivalent_cost_thb: Decimal | None = None
     actual_settled_cost_thb: Decimal | None = None
@@ -481,6 +487,8 @@ def _shared_config(
         "backend": "gemini",
         "billing_mode": scout.billing_mode,
         "media_resolution": scout.media_resolution,
+        "thinking_policy": MODEL_DEFAULT_MINIMUM_THINKING,
+        "configured_thinking_level": scout.thinking_level,
         "thinking_level": scout.thinking_level,
         "max_output_tokens": scout.max_output_tokens,
         "reserved_thinking_tokens": scout.reserved_thinking_tokens,
@@ -497,6 +505,7 @@ def _shared_config(
         "audio_retained": True,
         "reconciliation_extraction_ranking": "accepted-production-pipeline-unchanged",
         "remote_upload_requires_explicit_future_authorization": True,
+        "experiment_revision": CALIBRATION_EXPERIMENT_REVISION,
     }
 
 
@@ -624,6 +633,11 @@ def build_calibration_plan(
         model_config = provisional_config.model_copy(
             update={"scout": provisional_config.scout.model_copy(update={"model": model_id})}
         )
+        thinking = resolve_gemini_thinking_config(
+            model_id,
+            model_config.scout.thinking_level,
+            model_config.scout.reserved_thinking_tokens,
+        )
         usage_items: list[ProviderUsageEstimate] = []
         for case_plan in case_plans:
             for window in case_plan.windows:
@@ -640,7 +654,7 @@ def build_calibration_plan(
                         response_schema=window_schema,
                         audio_present=window.audio_retained,
                         max_output_tokens=model_config.scout.max_output_tokens,
-                        reserved_thinking_tokens=model_config.scout.reserved_thinking_tokens,
+                        reserved_thinking_tokens=thinking.reserved_thinking_tokens,
                     )
                 )
         usage = _sum_usage(usage_items)
@@ -651,6 +665,7 @@ def build_calibration_plan(
                 "benchmark_id": EXPECTED_BENCHMARK_ID,
                 "policy_fingerprint": verification.policy_fingerprint,
                 "model": model_id,
+                "thinking": thinking.payload(),
                 "shared_config_fingerprint": shared_fingerprint,
                 "source_revision": verification.source_sha256,
                 "annotation_revision": verification.annotation_sha256,
@@ -661,7 +676,7 @@ def build_calibration_plan(
                 arm="A" if ordinal == 0 else "B",
                 model=model_id,
                 label=model_id,
-                result_set_id=f"m8b2-cal-{model_id}-v1",
+                result_set_id=f"m8b2-cal-{model_id}-{CALIBRATION_EXPERIMENT_REVISION}",
                 shared_config_fingerprint=shared_fingerprint,
                 prompt_fingerprint=prompt_fingerprint,
                 schema_fingerprint=schema_fingerprint,
@@ -674,6 +689,7 @@ def build_calibration_plan(
                 ),
                 cache_hits_known=0,
                 usage_estimate=usage,
+                effective_thinking_config=thinking.payload(),
                 estimated_paid_equivalent_cost_usd=estimated_usd,
                 estimated_paid_equivalent_cost_thb=estimated_thb,
                 audio_retained=all(case.audio_retained for case in case_plans),

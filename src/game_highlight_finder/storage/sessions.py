@@ -22,6 +22,9 @@ from game_highlight_finder.domain.models import (
     model_json,
 )
 from game_highlight_finder.errors import StorageError, ValidationError
+from game_highlight_finder.providers.gemini_capabilities import (
+    resolve_gemini_thinking_config,
+)
 from game_highlight_finder.storage.atomic import atomic_write_json, read_json
 from game_highlight_finder.storage.hashing import hash_file
 
@@ -33,8 +36,8 @@ PROXY_CONFIG_FINGERPRINT_VERSION = 1
 LOCAL_SIGNALS_CACHE_VERSION = 1
 LOCAL_SIGNALS_CONFIG_FINGERPRINT_VERSION = 1
 SCOUT_CACHE_VERSION = 1
-SCOUT_CONFIG_FINGERPRINT_VERSION = 2
-GEMINI_PROVIDER_CACHE_VERSION = 3
+SCOUT_CONFIG_FINGERPRINT_VERSION = 3
+GEMINI_PROVIDER_CACHE_VERSION = 4
 
 
 @dataclass(frozen=True)
@@ -312,6 +315,23 @@ def local_signals_cache_payload(
 def scout_config_fingerprint(config: AppConfig, *, fixture_sha256: str | None = None) -> str:
     """Hash semantic Scout inputs; unrelated logging/UI settings never invalidate work."""
 
+    try:
+        thinking_payload: object = resolve_gemini_thinking_config(
+            config.scout.model,
+            config.scout.thinking_level,
+            config.scout.reserved_thinking_tokens,
+        ).payload()
+    except ValueError:
+        if config.scout.backend != "fake":
+            raise
+        thinking_payload = {
+            "policy": "LOCAL_FAKE",
+            "model": config.scout.model,
+            "configured_level": config.scout.thinking_level,
+            "wire_level": config.scout.thinking_level,
+            "effective_mode": config.scout.thinking_level,
+            "reserved_thinking_tokens": config.scout.reserved_thinking_tokens,
+        }
     payload = {
         "fingerprint_version": SCOUT_CONFIG_FINGERPRINT_VERSION,
         "backend": config.scout.backend,
@@ -324,8 +344,7 @@ def scout_config_fingerprint(config: AppConfig, *, fixture_sha256: str | None = 
         "media_resolution": config.scout.media_resolution,
         "max_duration_seconds": config.scout.max_duration_seconds,
         "max_output_tokens": config.scout.max_output_tokens,
-        "thinking_level": config.scout.thinking_level,
-        "reserved_thinking_tokens": config.scout.reserved_thinking_tokens,
+        "thinking": thinking_payload,
         "prompt_version": config.scout.prompt_version,
         "window_duration_seconds": config.scout.window_duration_seconds,
         "window_overlap_seconds": config.scout.window_overlap_seconds,
@@ -393,6 +412,11 @@ def gemini_provider_cache_payload(
     changes without another billable call.
     """
 
+    thinking = resolve_gemini_thinking_config(
+        config.scout.model,
+        config.scout.thinking_level,
+        config.scout.reserved_thinking_tokens,
+    )
     return {
         "cache_version": GEMINI_PROVIDER_CACHE_VERSION,
         "source_sha256": source.sha256,
@@ -410,8 +434,7 @@ def gemini_provider_cache_payload(
         "response_max_bytes": config.scout.response_max_bytes,
         "max_duration_seconds": config.scout.max_duration_seconds,
         "max_output_tokens": config.scout.max_output_tokens,
-        "thinking_level": config.scout.thinking_level,
-        "reserved_thinking_tokens": config.scout.reserved_thinking_tokens,
+        "thinking": thinking.payload(),
         "window_duration_seconds": config.scout.window_duration_seconds,
         "window_overlap_seconds": config.scout.window_overlap_seconds,
         "max_windows": config.scout.max_windows,

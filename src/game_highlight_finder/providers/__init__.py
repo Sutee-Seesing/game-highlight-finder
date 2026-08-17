@@ -18,6 +18,7 @@ from game_highlight_finder.providers.gemini import (
     GeminiCleanupError,
     GeminiConfigurationError,
     GeminiDispatchError,
+    GeminiFailureDiagnostic,
     GeminiInteractionEnvelope,
     GeminiMissingUsageError,
     GeminiPrivacyError,
@@ -26,22 +27,31 @@ from game_highlight_finder.providers.gemini import (
     GeminiRemoteFile,
     GeminiTransport,
     GenAITransport,
+    diagnose_gemini_exception,
     gemini_provider_descriptor,
+)
+from game_highlight_finder.providers.gemini_capabilities import (
+    MODEL_DEFAULT_MINIMUM_THINKING,
+    GeminiThinkingConfig,
+    resolve_gemini_thinking_config,
 )
 
 __all__ = [
     "GEMINI_MODEL_IDS",
     "MAX_USAGE_TOKENS_PER_DIMENSION",
+    "MODEL_DEFAULT_MINIMUM_THINKING",
     "FakeGeminiTransport",
     "GeminiCleanupError",
     "GeminiConfigurationError",
     "GeminiDispatchError",
+    "GeminiFailureDiagnostic",
     "GeminiInteractionEnvelope",
     "GeminiMissingUsageError",
     "GeminiPrivacyError",
     "GeminiProvider",
     "GeminiProviderError",
     "GeminiRemoteFile",
+    "GeminiThinkingConfig",
     "GeminiTransport",
     "GenAITransport",
     "ProviderAdapter",
@@ -53,5 +63,7 @@ __all__ = [
     "ProviderRequest",
     "ProviderUsageActual",
     "ProviderUsageEstimate",
+    "diagnose_gemini_exception",
     "gemini_provider_descriptor",
+    "resolve_gemini_thinking_config",
 ]

@@ -62,6 +62,11 @@ from game_highlight_finder.providers.gemini import (
     gemini_provider_descriptor,
     usage_from_envelope,
 )
+from game_highlight_finder.providers.gemini_capabilities import (
+    MODEL_DEFAULT_MINIMUM_THINKING,
+    GeminiThinkingConfig,
+    resolve_gemini_thinking_config,
+)
 from game_highlight_finder.storage.atomic import atomic_write_json, read_json
 from game_highlight_finder.storage.hashing import hash_file
 from game_highlight_finder.storage.lock import SessionLock
@@ -85,8 +90,10 @@ class GeminiPreflightResult(BaseModel):
     model: str
     billing_mode: str
     media_resolution: str
-    thinking_level: str
+    thinking_level: str | None
     reserved_thinking_tokens: int
+    effective_thinking_mode: str
+    thinking_policy: str = MODEL_DEFAULT_MINIMUM_THINKING
     usage_estimate: ProviderUsageEstimate
     quote: CostQuote
     available_micro_thb: int
@@ -95,6 +102,19 @@ class GeminiPreflightResult(BaseModel):
 
 def build_gemini_registry() -> ProviderRegistry:
     return ProviderRegistry([gemini_provider_descriptor()])
+
+
+def effective_gemini_thinking(config: AppConfig) -> GeminiThinkingConfig:
+    """Resolve model-aware thinking semantics before cost or provider work."""
+
+    try:
+        return resolve_gemini_thinking_config(
+            config.scout.model,
+            config.scout.thinking_level,
+            config.scout.reserved_thinking_tokens,
+        )
+    except ValueError as exc:
+        raise ValidationError(str(exc)) from exc
 
 
 def summarize_local_signals(local_signals: LocalSignalsResult) -> dict[str, Any]:
@@ -169,6 +189,7 @@ def preflight_gemini_scout(
 
     _validate_window(source, config)
     _, _, semantic_payload, estimate = _request_parts(source, proxy, local_signals, config)
+    thinking = effective_gemini_thinking(config)
     service = cost_service or _build_cost_service(config)
     request = CostRequest(
         call_id="preflight-gemini",
@@ -198,8 +219,10 @@ def preflight_gemini_scout(
         model=config.scout.model,
         billing_mode=config.scout.billing_mode,
         media_resolution=config.scout.media_resolution,
-        thinking_level=config.scout.thinking_level,
-        reserved_thinking_tokens=config.scout.reserved_thinking_tokens,
+        thinking_level=thinking.wire_level,
+        reserved_thinking_tokens=thinking.reserved_thinking_tokens,
+        effective_thinking_mode=thinking.effective_mode,
+        thinking_policy=thinking.policy,
         usage_estimate=estimate,
         quote=quote,
         available_micro_thb=summary.available_micro_thb,
@@ -229,6 +252,7 @@ def generate_gemini_scout(
             "Gemini Scout requires explicit remote-upload opt-in.",
             hint="Set scout.allow_remote_upload=true or pass --allow-remote-upload.",
         )
+    thinking = effective_gemini_thinking(config)
     _validate_window(source, config)
     if proxy.session_id != _session_id(source) or local_signals.session_id != _session_id(source):
         raise ValidationError("Gemini Scout inputs belong to different sessions.")
@@ -326,7 +350,7 @@ def generate_gemini_scout(
                     canonical_path,
                     paths,
                     media_resolution=config.scout.media_resolution,
-                    thinking_level=config.scout.thinking_level,
+                    thinking=thinking,
                     max_response_bytes=config.scout.response_max_bytes,
                 )
                 _complete_gemini_stage(
@@ -402,6 +426,7 @@ def generate_gemini_scout(
                 "prompt_hash": _sha256_text(prompt),
                 "schema_hash": schema_hash(),
                 "media_resolution": config.scout.media_resolution,
+                "thinking": thinking.payload(),
                 "usage_estimate": estimate.model_dump(mode="json"),
                 "proxy_artifact_sha256": proxy_hash,
                 "local_signals_summary_hash": summary_hash,
@@ -440,7 +465,7 @@ def generate_gemini_scout(
                 response_schema=schema,
                 media_resolution=config.scout.media_resolution,
                 max_output_tokens=config.scout.max_output_tokens,
-                thinking_level=config.scout.thinking_level,
+                thinking_level=thinking.wire_level,
                 remote_metadata_path=remote_meta_path,
                 before_generation=mark_in_flight_before_generation,
             )
@@ -460,7 +485,7 @@ def generate_gemini_scout(
                 canonical_path,
                 paths,
                 media_resolution=config.scout.media_resolution,
-                thinking_level=config.scout.thinking_level,
+                thinking=thinking,
                 max_response_bytes=config.scout.response_max_bytes,
             )
             _complete_gemini_stage(
@@ -505,9 +530,22 @@ def generate_gemini_scout(
             elif reserved:
                 with suppress(Exception):
                     service.release(request.call_id)
+            diagnostic = exc.safe_diagnostic()
+            _write_cost_artifact(
+                service,
+                request.call_id,
+                paths.scout_dir / "cost.json",
+                failure_diagnostic=diagnostic,
+            )
             _record_stage_failure(manifest, paths, exc)
             raise ValidationError(
-                str(exc), hint="No automatic Gemini generation retry was attempted."
+                str(exc),
+                hint=(
+                    "No automatic Gemini generation retry was attempted."
+                    if diagnostic is None
+                    else "No automatic Gemini generation retry was attempted; "
+                    f"phase={diagnostic.get('phase')}, dispatch={diagnostic.get('dispatch')}."
+                ),
             ) from exc
         except BaseException as exc:
             if in_flight:
@@ -526,6 +564,7 @@ def _request_parts(
     local_signals: LocalSignalsResult,
     config: AppConfig,
 ) -> tuple[str, dict[str, Any], dict[str, Any], ProviderUsageEstimate]:
+    thinking = effective_gemini_thinking(config)
     summary = summarize_local_signals(local_signals)
     prompt = build_gemini_prompt(
         duration_ms=source.duration_ms,
@@ -540,7 +579,7 @@ def _request_parts(
         response_schema=schema,
         audio_present=bool(summary.get("audio_present")),
         max_output_tokens=config.scout.max_output_tokens,
-        reserved_thinking_tokens=config.scout.reserved_thinking_tokens,
+        reserved_thinking_tokens=thinking.reserved_thinking_tokens,
     )
     payload = {
         "prompt_version": config.scout.prompt_version,
@@ -553,8 +592,11 @@ def _request_parts(
         "local_signals_summary_hash": _hash_json(summary),
         "response_schema": schema,
         "max_output_tokens": config.scout.max_output_tokens,
-        "thinking_level": config.scout.thinking_level,
-        "reserved_thinking_tokens": config.scout.reserved_thinking_tokens,
+        "configured_thinking_level": thinking.configured_level,
+        "thinking_level": thinking.wire_level,
+        "effective_thinking_mode": thinking.effective_mode,
+        "thinking_policy": thinking.policy,
+        "reserved_thinking_tokens": thinking.reserved_thinking_tokens,
     }
     return prompt, schema, payload, estimate
 
@@ -591,7 +633,7 @@ def _canonicalize_envelope(
     paths: Any,
     *,
     media_resolution: str,
-    thinking_level: str,
+    thinking: GeminiThinkingConfig,
     max_response_bytes: int,
 ) -> SessionMap:
     session_map = canonicalize_scout_response(
@@ -611,7 +653,11 @@ def _canonicalize_envelope(
                 "model": envelope.model,
                 "interaction_id": envelope.interaction_id or "unknown",
                 "media_resolution": media_resolution,
-                "thinking_level": thinking_level,
+                "configured_thinking_level": thinking.configured_level,
+                "thinking_level": thinking.wire_level or "omitted",
+                "effective_thinking_mode": thinking.effective_mode,
+                "thinking_policy": thinking.policy,
+                "thinking_identity": f"{thinking.policy}:{thinking.effective_mode}",
                 "remote_cleanup": envelope.remote_cleanup_status,
             },
         }
@@ -702,26 +748,32 @@ def _load_session_map(path: Path) -> SessionMap:
         ) from exc
 
 
-def _write_cost_artifact(service: CostService, call_id: str, path: Path) -> None:
+def _write_cost_artifact(
+    service: CostService,
+    call_id: str,
+    path: Path,
+    *,
+    failure_diagnostic: dict[str, object] | None = None,
+) -> None:
     record = service.ledger.get(call_id)
-    atomic_write_json(
-        path,
-        {
-            "provider": record.provider,
-            "model": record.model,
-            "billing_mode": record.billing_mode,
-            "call_id": record.call_id,
-            "state": record.status.value,
-            "reserved_micro_thb": record.reserved_cost_micro_thb,
-            "settled_micro_thb": record.settled_cost_micro_thb,
-            "estimated_usage": record.estimated_usage.model_dump(mode="json"),
-            "actual_usage": (
-                record.actual_usage.model_dump(mode="json") if record.actual_usage else None
-            ),
-            "created_at": record.created_at.isoformat(),
-            "updated_at": record.updated_at.isoformat(),
-        },
-    )
+    payload: dict[str, object] = {
+        "provider": record.provider,
+        "model": record.model,
+        "billing_mode": record.billing_mode,
+        "call_id": record.call_id,
+        "state": record.status.value,
+        "reserved_micro_thb": record.reserved_cost_micro_thb,
+        "settled_micro_thb": record.settled_cost_micro_thb,
+        "estimated_usage": record.estimated_usage.model_dump(mode="json"),
+        "actual_usage": (
+            record.actual_usage.model_dump(mode="json") if record.actual_usage else None
+        ),
+        "created_at": record.created_at.isoformat(),
+        "updated_at": record.updated_at.isoformat(),
+    }
+    if failure_diagnostic is not None:
+        payload["failure_diagnostic"] = failure_diagnostic
+    atomic_write_json(path, payload)
 
 
 def schema_json_for(schema: dict[str, Any]) -> str:
@@ -752,6 +804,17 @@ def _error_record(exc: BaseException) -> ErrorRecord:
             hint=exc.hint,
             retryable=exc.category in {ErrorCategory.STORAGE, ErrorCategory.INTERNAL},
         )
+    if isinstance(exc, GeminiProviderError) and exc.diagnostic is not None:
+        diagnostic = exc.diagnostic
+        return ErrorRecord(
+            category=ErrorCategory.PROVIDER.value,
+            message="Gemini Scout attempt did not complete.",
+            hint=(
+                f"phase={diagnostic.phase}; dispatch={diagnostic.dispatch}; "
+                f"exception={diagnostic.exception_class}"
+            ),
+            retryable=False,
+        )
     return ErrorRecord(
         category=ErrorCategory.PROVIDER.value,
         message="Gemini Scout attempt did not complete.",
@@ -764,6 +827,7 @@ __all__ = [
     "FakeGeminiTransport",
     "GeminiPreflightResult",
     "build_gemini_registry",
+    "effective_gemini_thinking",
     "estimate_gemini_usage",
     "generate_gemini_scout",
     "preflight_gemini_scout",

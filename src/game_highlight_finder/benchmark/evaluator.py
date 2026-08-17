@@ -59,6 +59,7 @@ from game_highlight_finder.domain.models import Candidate, Match, SessionMap, So
 from game_highlight_finder.errors import StorageError, ValidationError
 from game_highlight_finder.pipeline.extraction import ExtractionManifest
 from game_highlight_finder.pipeline.ranking import RankingArtifact, rank_session_map
+from game_highlight_finder.providers.gemini_capabilities import resolve_gemini_thinking_config
 from game_highlight_finder.storage.atomic import atomic_write_json, read_json
 from game_highlight_finder.storage.hashing import hash_file
 from game_highlight_finder.storage.sessions import (
@@ -539,6 +540,20 @@ def build_experiment_identity(
         provider = config.scout.backend
     model = metadata.get("model", "fake-scout-v1" if provider == "fake" else config.scout.model)
     prompt_version = metadata.get("prompt_version", config.scout.window_prompt_version)
+    try:
+        thinking = resolve_gemini_thinking_config(
+            str(model),
+            config.scout.thinking_level,
+            config.scout.reserved_thinking_tokens,
+        )
+        thinking_identity = str(
+            metadata.get(
+                "thinking_identity",
+                f"{thinking.policy}:{thinking.effective_mode}",
+            )
+        )
+    except ValueError:
+        thinking_identity = str(metadata.get("thinking_level", config.scout.thinking_level))
     proxy_settings = {
         "proxy": config.media.proxy.model_dump(mode="json"),
         "audio": config.media.audio.model_dump(mode="json"),
@@ -550,7 +565,7 @@ def build_experiment_identity(
         model=model,
         billing_mode=config.scout.billing_mode,
         media_resolution=config.scout.media_resolution,
-        thinking_level=config.scout.thinking_level,
+        thinking_level=thinking_identity,
         prompt_version=prompt_version,
         provider_schema_version=config.scout.schema_version,
         canonicalization_version=session_map.canonicalization_version,

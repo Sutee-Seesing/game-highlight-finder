@@ -385,7 +385,7 @@ def test_gemini_fake_transport_lifecycle_cache_and_cleanup(
     assert transport.last_request is not None
     assert transport.last_request["input"][0]["resolution"] == "low"
     assert "media_resolution" not in transport.last_request["generation_config"]
-    assert transport.last_request["generation_config"]["thinking_level"] == "minimal"
+    assert "thinking_level" not in transport.last_request["generation_config"]
     assert transport.last_request["store"] is False
     second = generate_gemini_scout(
         ingest.source,
