@@ -13,6 +13,7 @@ from game_highlight_finder.providers.base import (
     ProviderUsageEstimate,
 )
 from game_highlight_finder.providers.gemini import (
+    GEMINI_MODEL_IDS,
     FakeGeminiTransport,
     GeminiCleanupError,
     GeminiConfigurationError,
@@ -29,6 +30,7 @@ from game_highlight_finder.providers.gemini import (
 )
 
 __all__ = [
+    "GEMINI_MODEL_IDS",
     "MAX_USAGE_TOKENS_PER_DIMENSION",
     "FakeGeminiTransport",
     "GeminiCleanupError",

@@ -33,8 +33,8 @@ PROXY_CONFIG_FINGERPRINT_VERSION = 1
 LOCAL_SIGNALS_CACHE_VERSION = 1
 LOCAL_SIGNALS_CONFIG_FINGERPRINT_VERSION = 1
 SCOUT_CACHE_VERSION = 1
-SCOUT_CONFIG_FINGERPRINT_VERSION = 1
-GEMINI_PROVIDER_CACHE_VERSION = 2
+SCOUT_CONFIG_FINGERPRINT_VERSION = 2
+GEMINI_PROVIDER_CACHE_VERSION = 3
 
 
 @dataclass(frozen=True)
@@ -327,6 +327,10 @@ def scout_config_fingerprint(config: AppConfig, *, fixture_sha256: str | None = 
         "thinking_level": config.scout.thinking_level,
         "reserved_thinking_tokens": config.scout.reserved_thinking_tokens,
         "prompt_version": config.scout.prompt_version,
+        "window_duration_seconds": config.scout.window_duration_seconds,
+        "window_overlap_seconds": config.scout.window_overlap_seconds,
+        "max_windows": config.scout.max_windows,
+        "window_prompt_version": config.scout.window_prompt_version,
     }
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()
@@ -408,6 +412,10 @@ def gemini_provider_cache_payload(
         "max_output_tokens": config.scout.max_output_tokens,
         "thinking_level": config.scout.thinking_level,
         "reserved_thinking_tokens": config.scout.reserved_thinking_tokens,
+        "window_duration_seconds": config.scout.window_duration_seconds,
+        "window_overlap_seconds": config.scout.window_overlap_seconds,
+        "max_windows": config.scout.max_windows,
+        "window_prompt_version": config.scout.window_prompt_version,
     }
 
 

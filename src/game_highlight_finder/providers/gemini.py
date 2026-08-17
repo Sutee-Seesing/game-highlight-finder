@@ -35,6 +35,7 @@ from game_highlight_finder.storage.atomic import atomic_write_json, read_json
 
 GEMINI_PROVIDER = "gemini"
 GEMINI_MODEL_ID = "gemini-3.5-flash-lite"
+GEMINI_MODEL_IDS = ("gemini-2.5-flash-lite", GEMINI_MODEL_ID)
 
 
 class GeminiProviderError(Exception):
@@ -295,6 +296,21 @@ class GeminiProvider(ProviderAdapter):
             models=(
                 ProviderModel(
                     provider=GEMINI_PROVIDER,
+                    model_id="gemini-2.5-flash-lite",
+                    billing_modes=("standard",),
+                    capabilities=ProviderCapabilities(
+                        video_input=True,
+                        audio_input=True,
+                        structured_output=True,
+                        file_upload=True,
+                        usage_metadata=True,
+                        remote_file_deletion=True,
+                        batch_execution=False,
+                        async_execution=False,
+                    ),
+                ),
+                ProviderModel(
+                    provider=GEMINI_PROVIDER,
                     model_id=GEMINI_MODEL_ID,
                     billing_modes=("standard",),
                     capabilities=ProviderCapabilities(
@@ -333,9 +349,9 @@ class GeminiProvider(ProviderAdapter):
             raise GeminiConfigurationError(
                 f"Gemini adapter cannot execute provider {request.provider!r}."
             )
-        if request.model_id != GEMINI_MODEL_ID or request.billing_mode != "standard":
+        if request.model_id not in GEMINI_MODEL_IDS or request.billing_mode != "standard":
             raise GeminiConfigurationError(
-                "Gemini M5 requires the exact stable model and Standard billing mode."
+                "Gemini Scout requires a supported model and Standard billing mode."
             )
         if media_resolution != "low":
             raise GeminiConfigurationError(
@@ -1185,6 +1201,7 @@ def _payload_path(payload: Mapping[str, Any], key: str) -> Path | None:
 
 __all__ = [
     "GEMINI_MODEL_ID",
+    "GEMINI_MODEL_IDS",
     "GEMINI_PROVIDER",
     "FakeGeminiTransport",
     "GeminiCleanupError",

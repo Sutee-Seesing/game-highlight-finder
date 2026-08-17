@@ -8,6 +8,14 @@ from game_highlight_finder.benchmark.aggregate import (
     experiment_fingerprint,
     render_markdown,
 )
+from game_highlight_finder.benchmark.calibration import (
+    CALIBRATION_CASE_IDS,
+    CALIBRATION_MODEL_IDS,
+    CalibrationPlan,
+    build_calibration_plan,
+    verify_ground_truth_lock,
+    write_calibration_artifacts,
+)
 from game_highlight_finder.benchmark.evaluator import (
     deterministic_temporal_match,
     evaluate_session,
@@ -40,6 +48,8 @@ from game_highlight_finder.benchmark.template import create_annotation_template
 __all__ = [
     "ANNOTATION_SCHEMA_VERSION",
     "BENCHMARK_SCHEMA_VERSION",
+    "CALIBRATION_CASE_IDS",
+    "CALIBRATION_MODEL_IDS",
     "EVALUATION_POLICY_VERSION",
     "EVALUATOR_VERSION",
     "AnnotatedHighlight",
@@ -52,6 +62,7 @@ __all__ = [
     "BenchmarkResultRef",
     "BenchmarkResultSet",
     "BoringInterval",
+    "CalibrationPlan",
     "EvaluationPolicy",
     "ExperimentIdentity",
     "Importance",
@@ -60,6 +71,7 @@ __all__ = [
     "aggregate_dataset",
     "aggregate_evaluations",
     "aggregate_manifest",
+    "build_calibration_plan",
     "compute_evaluation_policy_fingerprint",
     "create_annotation_template",
     "deterministic_temporal_match",
@@ -68,4 +80,6 @@ __all__ = [
     "experiment_fingerprint",
     "render_markdown",
     "validate_annotations_file",
+    "verify_ground_truth_lock",
+    "write_calibration_artifacts",
 ]

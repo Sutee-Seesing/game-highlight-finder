@@ -16,6 +16,10 @@ import typer
 
 from game_highlight_finder.benchmark.aggregate import aggregate_comparison, aggregate_manifest
 from game_highlight_finder.benchmark.annotation_server import AnnotationServer
+from game_highlight_finder.benchmark.calibration import (
+    build_calibration_plan,
+    write_calibration_artifacts,
+)
 from game_highlight_finder.benchmark.evaluator import (
     evaluate_session,
     load_annotations,
@@ -511,6 +515,95 @@ def benchmark_validate(
 ) -> None:
     """Validate a private annotation document without provider calls."""
     _execute(ctx, lambda _options: _benchmark_validate(annotations))
+
+
+@benchmark_app.command("plan-calibration")
+def benchmark_plan_calibration(
+    ctx: typer.Context,
+    dataset: Annotated[Path, typer.Argument(help="Locked M8 real-gameplay dataset manifest.")],
+    lock: Annotated[
+        Path | None,
+        typer.Option("--lock", help="Owner-confirmed ground-truth lock JSON."),
+    ] = None,
+    output: Annotated[
+        Path | None,
+        typer.Option("--output", help="Private calibration plan JSON output path."),
+    ] = None,
+    comparison_output: Annotated[
+        Path | None,
+        typer.Option("--comparison-output", help="Private future comparison manifest path."),
+    ] = None,
+    fx_usd_thb: Annotated[
+        str | None,
+        typer.Option(
+            "--fx-usd-thb", help="Optional local USD/THB planning rate; no refresh is made."
+        ),
+    ] = None,
+) -> None:
+    """Plan the two locked Gemini calibration arms without provider calls or uploads."""
+    _execute(
+        ctx,
+        lambda options: _benchmark_plan_calibration(
+            options, dataset, lock, output, comparison_output, fx_usd_thb
+        ),
+    )
+
+
+def _benchmark_plan_calibration(
+    options: RuntimeOptions,
+    dataset_path: Path,
+    lock_path: Path | None,
+    output: Path | None,
+    comparison_output: Path | None,
+    fx_usd_thb: str | None,
+) -> None:
+    config = _load(options).config
+    plan = build_calibration_plan(
+        dataset_path,
+        config,
+        lock_path=lock_path,
+        fx_usd_thb=fx_usd_thb,
+    )
+    data_dir = config.storage.data_dir.expanduser().resolve()
+    plan_path = (
+        output or data_dir / "benchmarks" / "private" / "m8b2_calibration_plan.json"
+    ).resolve()
+    comparison_path = (
+        comparison_output
+        or data_dir / "benchmarks" / "private" / "m8b2_calibration_comparison.json"
+    ).resolve()
+    write_calibration_artifacts(plan, plan_path, comparison_path)
+    typer.echo(
+        "[PASS] M8B2A calibration plan ready (provider/API calls: ZERO; media uploads: ZERO)"
+    )
+    typer.echo(f"Benchmark: {plan.benchmark_id}")
+    typer.echo(f"Calibration cases: {', '.join(plan.calibration_case_ids)}")
+    typer.echo(f"Validation sealed: {len(plan.validation_case_ids_sealed)} case(s)")
+    typer.echo(
+        f"Model A: {plan.arms[0].model} | windows={plan.arms[0].planned_scout_windows} "
+        f"| requests={plan.arms[0].planned_provider_requests}"
+    )
+    typer.echo(
+        f"Model B: {plan.arms[1].model} | windows={plan.arms[1].planned_scout_windows} "
+        f"| requests={plan.arms[1].planned_provider_requests}"
+    )
+    for arm in plan.arms:
+        thb = (
+            str(arm.estimated_paid_equivalent_cost_thb)
+            if arm.estimated_paid_equivalent_cost_thb is not None
+            else "unavailable (no FX snapshot supplied)"
+        )
+        typer.echo(
+            f"{arm.model}: media_ms={arm.planned_media_duration_ms} "
+            f"input_exposure={arm.usage_estimate.input_video_tokens + arm.usage_estimate.input_audio_tokens} "
+            f"paid_equivalent_usd={arm.estimated_paid_equivalent_cost_usd} paid_equivalent_thb={thb}"
+        )
+    typer.echo("Free-tier intent: YES | paid fallback authorized: NO")
+    typer.echo(
+        "RAW upload planned: NO | audio retained: YES | review proxies as provider inputs: NO"
+    )
+    typer.echo(f"Private calibration plan: {plan_path}")
+    typer.echo(f"Private comparison manifest: {comparison_path}")
 
 
 def _benchmark_validate(annotations_path: Path) -> None:

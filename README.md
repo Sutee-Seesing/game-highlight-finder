@@ -240,7 +240,13 @@ is 720p maximum, 30 fps maximum, 1000 kbps H.264 video, 96 kbps AAC, yuv420p, an
 `--small` selects a compact 540p profile, while `--allow-cpu-fallback` is an explicit
 exception. Source SHA-256, read-only source fingerprints, audio presence, and a strict
 250 ms duration tolerance are validated. These proxies are private review conveniences,
-not benchmark sources, and M8B2 remains **NOT RUN**.
+not benchmark sources. The offline `highlight benchmark plan-calibration <dataset.json>`
+command is the M8B2A preparation path: it verifies the owner-confirmed lock and plans
+only `gemini-2.5-flash-lite` versus `gemini-3.5-flash-lite` on calibration cases. It
+uses the production analysis-proxy/window policy (not review proxies), retains audio,
+keeps validation sealed, records Free Tier intent with no paid fallback, and makes zero
+provider calls or media uploads. M8B2 live calibration is **NOT RUN**; selection is
+quality-first before cost or convenience.
 
 ## Development and tests
 

@@ -261,6 +261,25 @@ lower-cost Gemini baseline on the same sources, annotations, evaluation policy, 
 window/proxy/extraction/ranking settings, and only the model dimension changed. This
 is a future plan, not an executed or implemented provider comparison.
 
+## M8B2A calibration preparation (offline, prepared)
+
+M8B2A prepares exactly two calibration arms—`gemini-2.5-flash-lite` and
+`gemini-3.5-flash-lite`—over the same two locked calibration cases. The local
+`highlight benchmark plan-calibration <dataset.json>` command verifies source,
+annotation, split, aggregate-count, and evaluation-policy identities, then derives
+the current production Scout prompt/schema/window/media plan and a versioned
+paid-equivalent pricing reference. It does not call a provider, use credentials,
+upload media, run validation, or tune prompts/thresholds.
+
+The first live run is intended to use Free Tier when the owner's account is eligible;
+paid fallback is not authorized. Review proxies remain human-review conveniences and
+are not provider inputs; raw originals remain prohibited, while production-derived
+analysis windows retain audio. Actual settled cost and paid-equivalent cost are
+separate fields, and the pricing reference must be reverified from official Google
+documentation before any live paid-equivalent comparison. Quality is the primary
+selection principle, with cost used only when quality is effectively close. M8B2 live
+calibration remains **NOT RUN** and validation remains sealed.
+
 Before full M8 acceptance, at least one representative 1–4 hour source must run
 through analysis → report → evaluation while checking resume, source immutability,
 budget, storage, and review ratio. M8A intentionally does not run that holdout.

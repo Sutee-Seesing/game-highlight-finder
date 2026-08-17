@@ -205,8 +205,19 @@ For external/manual review without moving the multi-gigabyte originals, use
 writes private MP4 copies under the configured data directory, requires NVENC
 (`h264_nvenc`) by default, preserves the full source timeline, retains audio, and
 rejects source mutation or proxy duration drift over 250 ms. Review proxies are not
-authoritative benchmark sources and do not change M8 experiment identity; M8B2 remains
-**NOT RUN**.
+authoritative benchmark sources and do not change M8 experiment identity.
+
+### M8B2A calibration preparation
+
+M8B2A is prepared only as an offline, calibration-only comparison between
+`gemini-2.5-flash-lite` and `gemini-3.5-flash-lite`. The `benchmark plan-calibration`
+command verifies the owner-confirmed ground-truth lock, freezes the accepted Scout
+prompt/schema/window configuration, and writes private future result-set templates.
+It makes no Gemini/API calls and uploads no media; future provider inputs must use the
+production analysis-proxy/window pipeline, never the human review proxies or raw
+originals. Free Tier is the intended first-run policy, paid fallback is unauthorized,
+validation remains sealed, and quality is the selection principle. M8B2 live calibration
+is still **NOT RUN**.
 
 ### M8A comparison hardening
 
