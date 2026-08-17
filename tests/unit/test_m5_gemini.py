@@ -153,6 +153,16 @@ def test_gemini_defaults_are_fake_and_secret_safe() -> None:
 
 def test_exact_gemini_pricing_is_versioned_and_freshness_is_fail_closed() -> None:
     catalog = production_pricing_catalog()
+    lite_25 = catalog.lookup(
+        "gemini", "gemini-2.5-flash-lite", "standard", now=NOW, max_age_days=30
+    )
+    assert lite_25.input_rates_by_modality == {
+        "text": Decimal("0.10"),
+        "image": Decimal("0.10"),
+        "video": Decimal("0.10"),
+        "audio": Decimal("0.30"),
+    }
+    assert lite_25.output_rate == Decimal("0.40")
     entry = catalog.lookup("gemini", "gemini-3.5-flash-lite", "standard", now=NOW, max_age_days=30)
     assert entry.input_rates_by_modality == {
         "text": Decimal("0.30"),
