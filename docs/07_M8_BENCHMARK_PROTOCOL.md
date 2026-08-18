@@ -277,8 +277,13 @@ are not provider inputs; raw originals remain prohibited, while production-deriv
 analysis windows retain audio. Actual settled cost and paid-equivalent cost are
 separate fields, and the pricing reference must be reverified from official Google
 documentation before any live paid-equivalent comparison. Quality is the primary
-selection principle, with cost used only when quality is effectively close. M8B2 live
-calibration remains **NOT RUN** and validation remains sealed.
+selection principle, with cost used only when quality is effectively close. M8B2 v1
+and v2 stopped without a completed model prediction. Offline v2 request forensics found
+strong evidence of a model/API compatibility issue: per-content `resolution` is
+Gemini-3-only in Interactions, while the 2.5 arm had serialized `resolution: "low"`.
+The model-aware adapter now omits that field for 2.5, retains `low` for 3.5, updates
+usage reservations for 2.5 default video resolution, and advances the clean experiment
+identity to `v3`. No v3 provider call has run; validation remains sealed.
 
 Before full M8 acceptance, at least one representative 1–4 hour source must run
 through analysis → report → evaluation while checking resume, source immutability,
@@ -288,8 +293,10 @@ budget, storage, and review ratio. M8A intentionally does not run that holdout.
 
 M8A benchmark foundation and pre-benchmark hardening: complete after offline
 synthetic tests and local static validation. M8B1 real-gameplay dataset preparation:
-complete locally, with human annotation pending. M8B2 provider benchmarking: **NOT
-RUN**. V1 defaults: **NOT LOCKED**. M9 remains separately authorized and **NOT
-STARTED**.
+complete locally, with owner-confirmed ground truth locked before provider predictions.
+M8B2 provider benchmarking: **INCOMPLETE** after historical v1/v2 compatibility failures;
+clean v3 is prepared but **NOT RUN**. Validation remains sealed. V1 defaults: **NOT
+LOCKED**. M9 remains separately authorized and **NOT STARTED**.
 
-Real provider/API calls during M8A and M8B1: **ZERO**.
+Real provider/API calls during M8A and M8B1: **ZERO**. Historical M8B2 calls remain
+private audit evidence and are not counted as completed benchmark predictions.

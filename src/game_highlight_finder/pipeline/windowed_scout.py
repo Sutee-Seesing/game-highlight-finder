@@ -32,6 +32,7 @@ from game_highlight_finder.media.tools import tool_identity
 from game_highlight_finder.pipeline.gemini_contract import gemini_window_scout_schema
 from game_highlight_finder.pipeline.gemini_scout import (
     build_gemini_registry,
+    effective_gemini_media_resolution,
     effective_gemini_thinking,
     estimate_gemini_usage,
 )
@@ -442,6 +443,8 @@ def aggregate_window_preflight(
             audio_present=source.selected_audio_stream is not None,
             max_output_tokens=config.scout.max_output_tokens,
             reserved_thinking_tokens=thinking.reserved_thinking_tokens,
+            model=config.scout.model,
+            media_resolution=config.scout.media_resolution,
         )
         request = CostRequest(
             call_id=f"preflight-{window.window_id}",
@@ -718,6 +721,8 @@ def _run_gemini_windowed_scout(
             audio_present=source.selected_audio_stream is not None,
             max_output_tokens=config.scout.max_output_tokens,
             reserved_thinking_tokens=thinking.reserved_thinking_tokens,
+            model=config.scout.model,
+            media_resolution=config.scout.media_resolution,
         )
         request = CostRequest(
             call_id=f"gemini-window-{cache_key[:44]}",
@@ -937,6 +942,7 @@ def _window_request_payload(
     source: SourceAsset, window: ScoutWindow, config: AppConfig, prompt: str, schema_digest: str
 ) -> dict[str, Any]:
     thinking = effective_gemini_thinking(config)
+    media = effective_gemini_media_resolution(config)
     return {
         "source_sha256": source.sha256,
         "window_id": window.window_id,
@@ -948,6 +954,9 @@ def _window_request_payload(
         "model": config.scout.model,
         "billing_mode": config.scout.billing_mode,
         "media_resolution": config.scout.media_resolution,
+        "wire_media_resolution": media.wire_level,
+        "effective_media_resolution": media.effective_mode,
+        "media_resolution_policy": media.policy,
         "configured_thinking_level": thinking.configured_level,
         "thinking_level": thinking.wire_level,
         "effective_thinking_mode": thinking.effective_mode,
@@ -1222,6 +1231,7 @@ def _canonicalize_window_envelope(
     config: AppConfig,
 ) -> SessionMap:
     thinking = effective_gemini_thinking(config)
+    media = effective_gemini_media_resolution(config)
     session_map = canonicalize_scout_response(
         envelope.output_text.encode("utf-8"),
         session_id=window.session_id,
@@ -1237,6 +1247,10 @@ def _canonicalize_window_envelope(
                 "backend": "gemini",
                 "model": envelope.model,
                 "interaction_id": envelope.interaction_id or "unknown",
+                "media_resolution": media.configured_level,
+                "wire_media_resolution": media.wire_level or "omitted",
+                "effective_media_resolution": media.effective_mode,
+                "media_resolution_policy": media.policy,
                 "configured_thinking_level": thinking.configured_level,
                 "thinking_level": thinking.wire_level or "omitted",
                 "effective_thinking_mode": thinking.effective_mode,

@@ -63,8 +63,11 @@ from game_highlight_finder.providers.gemini import (
     usage_from_envelope,
 )
 from game_highlight_finder.providers.gemini_capabilities import (
+    MODEL_COMPATIBLE_MEDIA_RESOLUTION,
     MODEL_DEFAULT_MINIMUM_THINKING,
+    GeminiMediaResolutionConfig,
     GeminiThinkingConfig,
+    resolve_gemini_media_resolution,
     resolve_gemini_thinking_config,
 )
 from game_highlight_finder.storage.atomic import atomic_write_json, read_json
@@ -90,6 +93,9 @@ class GeminiPreflightResult(BaseModel):
     model: str
     billing_mode: str
     media_resolution: str
+    wire_media_resolution: str | None
+    effective_media_resolution: str
+    media_resolution_policy: str = MODEL_COMPATIBLE_MEDIA_RESOLUTION
     thinking_level: str | None
     reserved_thinking_tokens: int
     effective_thinking_mode: str
@@ -113,6 +119,15 @@ def effective_gemini_thinking(config: AppConfig) -> GeminiThinkingConfig:
             config.scout.thinking_level,
             config.scout.reserved_thinking_tokens,
         )
+    except ValueError as exc:
+        raise ValidationError(str(exc)) from exc
+
+
+def effective_gemini_media_resolution(config: AppConfig) -> GeminiMediaResolutionConfig:
+    """Resolve model-aware Interactions media semantics before cost/provider work."""
+
+    try:
+        return resolve_gemini_media_resolution(config.scout.model, config.scout.media_resolution)
     except ValueError as exc:
         raise ValidationError(str(exc)) from exc
 
@@ -149,13 +164,15 @@ def estimate_gemini_usage(
     audio_present: bool,
     max_output_tokens: int,
     reserved_thinking_tokens: int,
+    model: str = "gemini-3.5-flash-lite",
+    media_resolution: str = "low",
 ) -> ProviderUsageEstimate:
-    """Conservatively estimate low-resolution video plus bounded text context.
+    """Conservatively estimate model-compatible video plus bounded text context.
 
-    Google's current video guidance is approximately 66 vision tokens/second
-    plus 32 audio tokens/second at low resolution.  Prompt/schema text and the
-    complete configured response and local thinking reservation allowances are
-    reserved as well.  The latter is not a provider-enforced hard ceiling.
+    Gemini 3 can request low resolution per content item (about 66 vision
+    tokens/second). Interactions does not document that field for Gemini 2.5,
+    so 2.5 uses the provider default (about 258 vision tokens/second). Audio is
+    estimated at 32 tokens/second.
     """
 
     if duration_ms <= 0:
@@ -164,13 +181,17 @@ def estimate_gemini_usage(
         raise ValidationError("Gemini output and thinking reservation cannot be negative")
     if max_output_tokens + reserved_thinking_tokens > MAX_USAGE_TOKENS_PER_DIMENSION:
         raise ValidationError("Gemini output and thinking reservation exceed the safety bound")
+    try:
+        media = resolve_gemini_media_resolution(model, media_resolution)
+    except ValueError as exc:
+        raise ValidationError(str(exc)) from exc
     seconds = (duration_ms + 999) // 1000
     schema_bytes = len(schema_json_for(response_schema).encode("utf-8"))
     text_tokens = max(1, (len(prompt.encode("utf-8")) + 3) // 4)
     text_tokens += max(1, (schema_bytes + 3) // 4) + 128
     return ProviderUsageEstimate(
         input_text_tokens=min(10_000_000, text_tokens),
-        input_video_tokens=min(10_000_000, seconds * 66),
+        input_video_tokens=min(10_000_000, seconds * media.estimated_video_tokens_per_second),
         input_audio_tokens=min(10_000_000, seconds * 32 if audio_present else 0),
         output_tokens=max_output_tokens,
         thinking_tokens=reserved_thinking_tokens,
@@ -190,6 +211,7 @@ def preflight_gemini_scout(
     _validate_window(source, config)
     _, _, semantic_payload, estimate = _request_parts(source, proxy, local_signals, config)
     thinking = effective_gemini_thinking(config)
+    media = effective_gemini_media_resolution(config)
     service = cost_service or _build_cost_service(config)
     request = CostRequest(
         call_id="preflight-gemini",
@@ -219,6 +241,9 @@ def preflight_gemini_scout(
         model=config.scout.model,
         billing_mode=config.scout.billing_mode,
         media_resolution=config.scout.media_resolution,
+        wire_media_resolution=media.wire_level,
+        effective_media_resolution=media.effective_mode,
+        media_resolution_policy=media.policy,
         thinking_level=thinking.wire_level,
         reserved_thinking_tokens=thinking.reserved_thinking_tokens,
         effective_thinking_mode=thinking.effective_mode,
@@ -565,6 +590,7 @@ def _request_parts(
     config: AppConfig,
 ) -> tuple[str, dict[str, Any], dict[str, Any], ProviderUsageEstimate]:
     thinking = effective_gemini_thinking(config)
+    media = effective_gemini_media_resolution(config)
     summary = summarize_local_signals(local_signals)
     prompt = build_gemini_prompt(
         duration_ms=source.duration_ms,
@@ -580,6 +606,8 @@ def _request_parts(
         audio_present=bool(summary.get("audio_present")),
         max_output_tokens=config.scout.max_output_tokens,
         reserved_thinking_tokens=thinking.reserved_thinking_tokens,
+        model=config.scout.model,
+        media_resolution=config.scout.media_resolution,
     )
     payload = {
         "prompt_version": config.scout.prompt_version,
@@ -587,6 +615,9 @@ def _request_parts(
         "schema_hash": schema_hash(),
         "schema_version": config.scout.schema_version,
         "media_resolution": config.scout.media_resolution,
+        "wire_media_resolution": media.wire_level,
+        "effective_media_resolution": media.effective_mode,
+        "media_resolution_policy": media.policy,
         "input_duration_ms": source.duration_ms,
         "proxy_artifact_sha256": hash_file(proxy.proxy_path),
         "local_signals_summary_hash": _hash_json(summary),
@@ -636,6 +667,7 @@ def _canonicalize_envelope(
     thinking: GeminiThinkingConfig,
     max_response_bytes: int,
 ) -> SessionMap:
+    media = resolve_gemini_media_resolution(envelope.model, media_resolution)
     session_map = canonicalize_scout_response(
         envelope.output_text.encode("utf-8"),
         session_id=_session_id(source),
@@ -653,6 +685,9 @@ def _canonicalize_envelope(
                 "model": envelope.model,
                 "interaction_id": envelope.interaction_id or "unknown",
                 "media_resolution": media_resolution,
+                "wire_media_resolution": media.wire_level or "omitted",
+                "effective_media_resolution": media.effective_mode,
+                "media_resolution_policy": media.policy,
                 "configured_thinking_level": thinking.configured_level,
                 "thinking_level": thinking.wire_level or "omitted",
                 "effective_thinking_mode": thinking.effective_mode,

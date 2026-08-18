@@ -35,7 +35,9 @@ from game_highlight_finder.pipeline.gemini_scout import estimate_gemini_usage
 from game_highlight_finder.pipeline.windowed_scout import build_window_prompt
 from game_highlight_finder.providers.base import ProviderUsageEstimate
 from game_highlight_finder.providers.gemini_capabilities import (
+    MODEL_COMPATIBLE_MEDIA_RESOLUTION,
     MODEL_DEFAULT_MINIMUM_THINKING,
+    resolve_gemini_media_resolution,
     resolve_gemini_thinking_config,
 )
 from game_highlight_finder.storage.atomic import atomic_write_json, read_json
@@ -56,7 +58,7 @@ EXPECTED_AGGREGATE_COUNTS = {
     "optional": 1,
     "boring_intervals": 4,
 }
-CALIBRATION_EXPERIMENT_REVISION = "v2"
+CALIBRATION_EXPERIMENT_REVISION = "v3"
 
 
 def _sha256_json(value: object) -> str:
@@ -240,6 +242,7 @@ class CalibrationArmPlan(BenchmarkModel):
     cache_hits_known: int = Field(ge=0)
     usage_estimate: ProviderUsageEstimate
     effective_thinking_config: dict[str, Any] = Field(default_factory=dict, max_length=32)
+    effective_media_config: dict[str, Any] = Field(default_factory=dict, max_length=32)
     estimated_paid_equivalent_cost_usd: Decimal
     estimated_paid_equivalent_cost_thb: Decimal | None = None
     actual_settled_cost_thb: Decimal | None = None
@@ -487,6 +490,7 @@ def _shared_config(
         "backend": "gemini",
         "billing_mode": scout.billing_mode,
         "media_resolution": scout.media_resolution,
+        "media_resolution_policy": MODEL_COMPATIBLE_MEDIA_RESOLUTION,
         "thinking_policy": MODEL_DEFAULT_MINIMUM_THINKING,
         "configured_thinking_level": scout.thinking_level,
         "thinking_level": scout.thinking_level,
@@ -638,6 +642,7 @@ def build_calibration_plan(
             model_config.scout.thinking_level,
             model_config.scout.reserved_thinking_tokens,
         )
+        media = resolve_gemini_media_resolution(model_id, model_config.scout.media_resolution)
         usage_items: list[ProviderUsageEstimate] = []
         for case_plan in case_plans:
             for window in case_plan.windows:
@@ -655,6 +660,8 @@ def build_calibration_plan(
                         audio_present=window.audio_retained,
                         max_output_tokens=model_config.scout.max_output_tokens,
                         reserved_thinking_tokens=thinking.reserved_thinking_tokens,
+                        model=model_id,
+                        media_resolution=model_config.scout.media_resolution,
                     )
                 )
         usage = _sum_usage(usage_items)
@@ -666,6 +673,7 @@ def build_calibration_plan(
                 "policy_fingerprint": verification.policy_fingerprint,
                 "model": model_id,
                 "thinking": thinking.payload(),
+                "media": media.payload(),
                 "shared_config_fingerprint": shared_fingerprint,
                 "source_revision": verification.source_sha256,
                 "annotation_revision": verification.annotation_sha256,
@@ -690,6 +698,7 @@ def build_calibration_plan(
                 cache_hits_known=0,
                 usage_estimate=usage,
                 effective_thinking_config=thinking.payload(),
+                effective_media_config=media.payload(),
                 estimated_paid_equivalent_cost_usd=estimated_usd,
                 estimated_paid_equivalent_cost_thb=estimated_thb,
                 audio_retained=all(case.audio_retained for case in case_plans),

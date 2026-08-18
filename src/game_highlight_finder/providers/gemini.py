@@ -34,6 +34,7 @@ from game_highlight_finder.providers.base import (
 )
 from game_highlight_finder.providers.gemini_capabilities import (
     GEMINI_MODEL_IDS,
+    resolve_gemini_media_resolution,
     resolve_gemini_thinking_config,
     validate_wire_thinking_level,
 )
@@ -270,22 +271,28 @@ class GenAITransport:
             validate_wire_thinking_level(model, thinking_level)
         except ValueError as exc:
             raise GeminiConfigurationError(str(exc), may_have_dispatched=False) from exc
+        try:
+            media = resolve_gemini_media_resolution(model, media_resolution)
+        except ValueError as exc:
+            raise GeminiConfigurationError(str(exc), may_have_dispatched=False) from exc
         generation_config: dict[str, Any] = {
             "max_output_tokens": max_output_tokens,
         }
         generation_config.update(
             {"thinking_level": thinking_level} if thinking_level is not None else {}
         )
+        video_input: dict[str, Any] = {
+            "type": "video",
+            "uri": remote_uri,
+            "mime_type": "video/mp4",
+        }
+        if media.wire_level is not None:
+            video_input["resolution"] = media.wire_level
         try:
             return self._client.interactions.create(
                 model=model,
                 input=[
-                    {
-                        "type": "video",
-                        "uri": remote_uri,
-                        "mime_type": "video/mp4",
-                        "resolution": media_resolution,
-                    },
+                    video_input,
                     {"type": "text", "text": prompt},
                 ],
                 response_format={
@@ -828,15 +835,19 @@ class FakeGeminiTransport:
 
     def create_interaction(self, **kwargs: Any) -> Any:
         self.generation_count += 1
+        model = str(kwargs.get("model"))
+        media = resolve_gemini_media_resolution(model, str(kwargs.get("media_resolution") or "low"))
+        video_input: dict[str, Any] = {
+            "type": "video",
+            "uri": kwargs.get("remote_uri"),
+            "mime_type": "video/mp4",
+        }
+        if media.wire_level is not None:
+            video_input["resolution"] = media.wire_level
         request = {
-            "model": kwargs.get("model"),
+            "model": model,
             "input": [
-                {
-                    "type": "video",
-                    "uri": kwargs.get("remote_uri"),
-                    "mime_type": "video/mp4",
-                    "resolution": kwargs.get("media_resolution"),
-                },
+                video_input,
                 {"type": "text", "text": kwargs.get("prompt", "")},
             ],
             "response_format": {

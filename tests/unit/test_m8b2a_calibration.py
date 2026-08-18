@@ -9,6 +9,7 @@ from typer.testing import CliRunner
 
 from game_highlight_finder.benchmark.calibration import (
     CALIBRATION_CASE_IDS,
+    CALIBRATION_EXPERIMENT_REVISION,
     CALIBRATION_MODEL_IDS,
     EXPECTED_AGGREGATE_COUNTS,
     build_calibration_plan,
@@ -242,6 +243,18 @@ def test_lock_verification_and_calibration_plan_exclude_validation(tmp_path: Pat
     assert plan.arms[0].planned_scout_windows == plan.arms[1].planned_scout_windows
     assert plan.arms[0].shared_config_fingerprint == plan.arms[1].shared_config_fingerprint
     assert plan.arms[0].experiment_fingerprint != plan.arms[1].experiment_fingerprint
+    assert CALIBRATION_EXPERIMENT_REVISION == "v3"
+    assert all(arm.result_set_id.endswith("-v3") for arm in plan.arms)
+    assert plan.arms[0].effective_media_config["wire_level"] is None
+    assert plan.arms[0].effective_media_config["effective_mode"] == "default_unspecified"
+    assert plan.arms[0].effective_media_config["estimated_video_tokens_per_second"] == 258
+    assert plan.arms[1].effective_media_config["wire_level"] == "low"
+    assert plan.arms[1].effective_media_config["effective_mode"] == "low"
+    assert plan.arms[1].effective_media_config["estimated_video_tokens_per_second"] == 66
+    assert (
+        plan.arms[0].usage_estimate.input_video_tokens
+        > plan.arms[1].usage_estimate.input_video_tokens
+    )
     assert plan.free_tier_intent is True
     assert plan.paid_fallback_authorized is False
     assert plan.actual_provider_calls == 0

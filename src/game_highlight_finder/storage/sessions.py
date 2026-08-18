@@ -23,6 +23,7 @@ from game_highlight_finder.domain.models import (
 )
 from game_highlight_finder.errors import StorageError, ValidationError
 from game_highlight_finder.providers.gemini_capabilities import (
+    resolve_gemini_media_resolution,
     resolve_gemini_thinking_config,
 )
 from game_highlight_finder.storage.atomic import atomic_write_json, read_json
@@ -36,8 +37,8 @@ PROXY_CONFIG_FINGERPRINT_VERSION = 1
 LOCAL_SIGNALS_CACHE_VERSION = 1
 LOCAL_SIGNALS_CONFIG_FINGERPRINT_VERSION = 1
 SCOUT_CACHE_VERSION = 1
-SCOUT_CONFIG_FINGERPRINT_VERSION = 3
-GEMINI_PROVIDER_CACHE_VERSION = 4
+SCOUT_CONFIG_FINGERPRINT_VERSION = 4
+GEMINI_PROVIDER_CACHE_VERSION = 5
 
 
 @dataclass(frozen=True)
@@ -321,6 +322,9 @@ def scout_config_fingerprint(config: AppConfig, *, fixture_sha256: str | None = 
             config.scout.thinking_level,
             config.scout.reserved_thinking_tokens,
         ).payload()
+        media_payload: object = resolve_gemini_media_resolution(
+            config.scout.model, config.scout.media_resolution
+        ).payload()
     except ValueError:
         if config.scout.backend != "fake":
             raise
@@ -332,6 +336,13 @@ def scout_config_fingerprint(config: AppConfig, *, fixture_sha256: str | None = 
             "effective_mode": config.scout.thinking_level,
             "reserved_thinking_tokens": config.scout.reserved_thinking_tokens,
         }
+        media_payload = {
+            "policy": "LOCAL_FAKE",
+            "model": config.scout.model,
+            "configured_level": config.scout.media_resolution,
+            "wire_level": config.scout.media_resolution,
+            "effective_mode": config.scout.media_resolution,
+        }
     payload = {
         "fingerprint_version": SCOUT_CONFIG_FINGERPRINT_VERSION,
         "backend": config.scout.backend,
@@ -342,6 +353,7 @@ def scout_config_fingerprint(config: AppConfig, *, fixture_sha256: str | None = 
         "model": config.scout.model,
         "billing_mode": config.scout.billing_mode,
         "media_resolution": config.scout.media_resolution,
+        "media": media_payload,
         "max_duration_seconds": config.scout.max_duration_seconds,
         "max_output_tokens": config.scout.max_output_tokens,
         "thinking": thinking_payload,
@@ -417,6 +429,7 @@ def gemini_provider_cache_payload(
         config.scout.thinking_level,
         config.scout.reserved_thinking_tokens,
     )
+    media = resolve_gemini_media_resolution(config.scout.model, config.scout.media_resolution)
     return {
         "cache_version": GEMINI_PROVIDER_CACHE_VERSION,
         "source_sha256": source.sha256,
@@ -427,6 +440,7 @@ def gemini_provider_cache_payload(
         "model": config.scout.model,
         "billing_mode": config.scout.billing_mode,
         "media_resolution": config.scout.media_resolution,
+        "media": media.payload(),
         "prompt_version": config.scout.prompt_version,
         "prompt_hash": prompt_hash,
         "schema_version": config.scout.schema_version,

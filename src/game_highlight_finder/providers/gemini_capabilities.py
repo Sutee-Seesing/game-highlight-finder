@@ -13,8 +13,31 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 MODEL_DEFAULT_MINIMUM_THINKING = "MODEL_DEFAULT_MINIMUM_THINKING"
+MODEL_COMPATIBLE_MEDIA_RESOLUTION = "MODEL_COMPATIBLE_MEDIA_RESOLUTION"
 
 GEMINI_MODEL_IDS = ("gemini-2.5-flash-lite", "gemini-3.5-flash-lite")
+
+
+@dataclass(frozen=True)
+class GeminiMediaResolutionConfig:
+    """Resolved Interactions-API media-resolution behavior for one model."""
+
+    model: str
+    configured_level: str
+    wire_level: str | None
+    effective_mode: str
+    estimated_video_tokens_per_second: int
+    policy: str = MODEL_COMPATIBLE_MEDIA_RESOLUTION
+
+    def payload(self) -> dict[str, object]:
+        return {
+            "policy": self.policy,
+            "model": self.model,
+            "configured_level": self.configured_level,
+            "wire_level": self.wire_level,
+            "effective_mode": self.effective_mode,
+            "estimated_video_tokens_per_second": self.estimated_video_tokens_per_second,
+        }
 
 
 @dataclass(frozen=True)
@@ -114,3 +137,36 @@ def validate_wire_thinking_level(model: str, wire_level: str | None) -> None:
             f"Unsupported wire thinking level {wire_level!r} for {model}; omit the field "
             "for the model-default minimum policy."
         )
+
+
+def resolve_gemini_media_resolution(
+    model: str,
+    configured_level: str = "low",
+) -> GeminiMediaResolutionConfig:
+    """Resolve media resolution without sending unsupported Interactions fields.
+
+    Per-content ``resolution`` is documented only for Gemini 3 models. Gemini
+    2.5 Flash-Lite therefore omits it and uses the provider default. The video
+    guide estimates 258 vision tokens/second at default resolution and 66 at
+    low resolution.
+    """
+
+    if model not in GEMINI_MODEL_IDS:
+        raise ValueError(f"Unsupported Gemini model for media-resolution policy: {model!r}")
+    if configured_level != "low":
+        raise ValueError(f"Unsupported Gemini media resolution: {configured_level!r}")
+    if model == "gemini-2.5-flash-lite":
+        return GeminiMediaResolutionConfig(
+            model=model,
+            configured_level=configured_level,
+            wire_level=None,
+            effective_mode="default_unspecified",
+            estimated_video_tokens_per_second=258,
+        )
+    return GeminiMediaResolutionConfig(
+        model=model,
+        configured_level=configured_level,
+        wire_level=configured_level,
+        effective_mode=configured_level,
+        estimated_video_tokens_per_second=66,
+    )

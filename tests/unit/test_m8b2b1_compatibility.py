@@ -3,6 +3,8 @@ from pathlib import Path
 
 import pytest
 
+from game_highlight_finder.pipeline.gemini_contract import gemini_window_scout_schema
+from game_highlight_finder.pipeline.gemini_scout import estimate_gemini_usage
 from game_highlight_finder.providers.base import ProviderRequest, ProviderUsageEstimate
 from game_highlight_finder.providers.gemini import (
     FakeGeminiTransport,
@@ -12,6 +14,7 @@ from game_highlight_finder.providers.gemini import (
     diagnose_gemini_exception,
 )
 from game_highlight_finder.providers.gemini_capabilities import (
+    resolve_gemini_media_resolution,
     resolve_gemini_thinking_config,
 )
 
@@ -177,3 +180,144 @@ def test_diagnostic_serialization_is_secret_safe() -> None:
     serialized = json.dumps(diagnostic.as_dict())
     assert "AIza" not in serialized
     assert "example.invalid" not in serialized
+
+
+def test_media_resolution_is_model_aware_for_interactions_api() -> None:
+    model_25 = resolve_gemini_media_resolution("gemini-2.5-flash-lite", "low")
+    model_35 = resolve_gemini_media_resolution("gemini-3.5-flash-lite", "low")
+    assert model_25.wire_level is None
+    assert model_25.effective_mode == "default_unspecified"
+    assert model_25.estimated_video_tokens_per_second == 258
+    assert model_35.wire_level == "low"
+    assert model_35.effective_mode == "low"
+    assert model_35.estimated_video_tokens_per_second == 66
+
+
+@pytest.mark.parametrize(
+    ("model", "expected_resolution"),
+    [
+        ("gemini-2.5-flash-lite", None),
+        ("gemini-3.5-flash-lite", "low"),
+    ],
+)
+def test_genai_transport_emits_resolution_only_for_gemini3(
+    model: str, expected_resolution: str | None
+) -> None:
+    class Interactions:
+        def __init__(self) -> None:
+            self.kwargs: dict[str, object] | None = None
+
+        def create(self, **kwargs: object) -> dict[str, object]:
+            self.kwargs = kwargs
+            return {"status": "completed"}
+
+    class Client:
+        def __init__(self) -> None:
+            self.interactions = Interactions()
+
+    client = Client()
+    transport = object.__new__(GenAITransport)
+    transport._client = client  # type: ignore[attr-defined]
+    transport.create_interaction(
+        model=model,
+        remote_uri="https://example.invalid/file",
+        prompt="x",
+        response_schema={"type": "object"},
+        media_resolution="low",
+        max_output_tokens=10,
+        thinking_level=None,
+        store=False,
+    )
+    assert client.interactions.kwargs is not None
+    inputs = client.interactions.kwargs["input"]
+    assert isinstance(inputs, list)
+    video = inputs[0]
+    assert isinstance(video, dict)
+    if expected_resolution is None:
+        assert "resolution" not in video
+    else:
+        assert video["resolution"] == expected_resolution
+
+
+def test_usage_estimate_reflects_model_compatible_video_resolution() -> None:
+    common = {
+        "duration_ms": 10_000,
+        "prompt": "x",
+        "response_schema": {"type": "object"},
+        "audio_present": False,
+        "max_output_tokens": 10,
+        "reserved_thinking_tokens": 0,
+        "media_resolution": "low",
+    }
+    model_25 = estimate_gemini_usage(model="gemini-2.5-flash-lite", **common)
+    model_35 = estimate_gemini_usage(model="gemini-3.5-flash-lite", **common)
+    assert model_25.input_video_tokens == 2_580
+    assert model_35.input_video_tokens == 660
+
+
+def test_fake_transport_mirrors_model_specific_resolution_wire_shape(tmp_path: Path) -> None:
+    proxy_root = tmp_path / "proxy"
+    proxy_root.mkdir()
+    proxy_path = proxy_root / "analysis_proxy.mp4"
+    proxy_path.write_bytes(b"proxy")
+    for model, expected in (
+        ("gemini-2.5-flash-lite", None),
+        ("gemini-3.5-flash-lite", "low"),
+    ):
+        transport = FakeGeminiTransport()
+        request = ProviderRequest(
+            call_id=f"media-{model}",
+            provider="gemini",
+            model_id=model,
+            billing_mode="standard",
+            stage="scout",
+            usage_estimate=ProviderUsageEstimate(input_video_tokens=1, output_tokens=1),
+            request_payload={},
+        )
+        GeminiProvider(transport=transport).execute(
+            request,
+            proxy_path=proxy_path,
+            session_proxy_root=proxy_root,
+            prompt="x",
+            response_schema={"type": "object"},
+            media_resolution="low",
+            max_output_tokens=10,
+            thinking_level=None,
+        )
+        assert transport.last_request is not None
+        video = transport.last_request["input"][0]
+        if expected is None:
+            assert "resolution" not in video
+        else:
+            assert video["resolution"] == expected
+
+
+def test_window_scout_schema_stays_within_small_supported_subset() -> None:
+    allowed = {"type", "properties", "required", "items", "enum"}
+    structural_keys: set[str] = set()
+
+    def walk(value: object) -> None:
+        if isinstance(value, dict):
+            for key, child in value.items():
+                if key in allowed:
+                    structural_keys.add(key)
+                elif key.startswith("$") or key in {
+                    "anyOf",
+                    "oneOf",
+                    "allOf",
+                    "default",
+                    "examples",
+                    "const",
+                    "pattern",
+                    "exclusiveMinimum",
+                    "exclusiveMaximum",
+                    "unevaluatedProperties",
+                }:
+                    raise AssertionError(f"unsupported schema keyword: {key}")
+                walk(child)
+        elif isinstance(value, list):
+            for child in value:
+                walk(child)
+
+    walk(gemini_window_scout_schema())
+    assert structural_keys == allowed

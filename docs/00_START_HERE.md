@@ -216,8 +216,12 @@ prompt/schema/window configuration, and writes private future result-set templat
 It makes no Gemini/API calls and uploads no media; future provider inputs must use the
 production analysis-proxy/window pipeline, never the human review proxies or raw
 originals. Free Tier is the intended first-run policy, paid fallback is unauthorized,
-validation remains sealed, and quality is the selection principle. M8B2 live calibration
-is still **NOT RUN**.
+validation remains sealed, and quality is the selection principle. Historical M8B2 v1
+and v2 attempts produced no completed prediction and remain preserved as ambiguous
+provider history. Offline HTTP-400 forensics found strong evidence that v2 sent the
+Gemini-3-only per-content `resolution` field to Gemini 2.5 Flash-Lite. The adapter now
+omits that field for 2.5, retains `low` for 3.5, and prepares clean calibration revision
+`v3`; no v3 provider call has been run and validation remains sealed.
 
 ### M8A comparison hardening
 
