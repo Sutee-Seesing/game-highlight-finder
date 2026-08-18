@@ -947,6 +947,29 @@ def delete_remote_file(
                 ) from exc
 
 
+def _normalize_structured_output_text(output_text: str) -> str:
+    """Remove one whole-response Markdown JSON fence and nothing else.
+
+    Gemini Interactions can return fenced JSON even when ``response_format``
+    requests JSON.  The canonical parser remains strict JSON, so normalize
+    only the presentation wrapper when the entire trimmed response is exactly
+    one `````json`` (or unlabelled `````) fence.  Prose or mixed content is
+    intentionally left untouched and will still fail closed downstream.
+    """
+
+    stripped = output_text.strip()
+    if not stripped.startswith("```") or not stripped.endswith("```"):
+        return output_text
+    first_newline = stripped.find("\n")
+    if first_newline < 0:
+        return output_text
+    opener = stripped[:first_newline].strip().lower()
+    if opener not in {"```", "```json"}:
+        return output_text
+    inner = stripped[first_newline + 1 : -3].strip()
+    return inner
+
+
 def sanitize_interaction_response(
     response: Any,
     *,
@@ -983,6 +1006,7 @@ def sanitize_interaction_response(
             "Gemini structured output exceeds the configured byte limit",
             may_have_dispatched=True,
         )
+    output_text = _normalize_structured_output_text(output_text)
     usage = _usage_dict(response)
     interaction_id = _field(response, "id", None) or _field(response, "interaction_id", None)
     finish_reason = _field(response, "finish_reason", None)

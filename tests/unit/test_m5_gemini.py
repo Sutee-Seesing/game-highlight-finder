@@ -316,6 +316,31 @@ def test_interactions_cached_usage_requires_breakdown_and_is_not_double_charged(
         )
 
 
+def test_sanitized_response_strips_one_whole_json_markdown_fence() -> None:
+    envelope = sanitize_interaction_response(
+        {
+            "status": "completed",
+            "output_text": '```json\n{"ok":true}\n```',
+            "usage": {"prompt_token_count": 1, "candidates_token_count": 1},
+        },
+        model="gemini-2.5-flash-lite",
+        remote_file_name=None,
+        max_bytes=1024,
+    )
+    assert envelope.output_text == '{"ok":true}'
+
+
+def test_sanitized_response_does_not_strip_mixed_prose_and_fence() -> None:
+    raw = 'Result follows:\n```json\n{"ok":true}\n```'
+    envelope = sanitize_interaction_response(
+        {"status": "completed", "output_text": raw, "usage": {}},
+        model="gemini-2.5-flash-lite",
+        remote_file_name=None,
+        max_bytes=1024,
+    )
+    assert envelope.output_text == raw
+
+
 def test_sanitized_response_excludes_thought_steps() -> None:
     envelope = sanitize_interaction_response(
         {
