@@ -883,6 +883,11 @@ def _analyze(
         config = config.model_copy(
             update={"scout": config.scout.model_copy(update={"allow_remote_upload": True})}
         )
+    if dry_run and m6:
+        raise ConfigError(
+            "--dry-run with --m6 is not yet supported; refusing provider execution. "
+            "No provider call or upload was made."
+        )
     if m6 and stop_after.strip().lower().replace("-", "_") not in {"report", "rank"}:
         if config.scout.backend == "gemini" and not config.scout.allow_remote_upload:
             raise ConfigError("M6 Gemini requires --allow-remote-upload.")

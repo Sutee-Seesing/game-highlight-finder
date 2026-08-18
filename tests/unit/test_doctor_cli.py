@@ -50,3 +50,37 @@ def test_analyze_reports_missing_source_for_m2_stop_boundary(tmp_path: Path) -> 
 
     assert result.exit_code == 2
     assert "[FAIL] source/input" in result.output
+
+
+def test_m6_dry_run_fails_closed_before_pipeline_or_provider(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    called = False
+
+    def unexpected_pipeline(*_args: object, **_kwargs: object) -> object:
+        nonlocal called
+        called = True
+        raise AssertionError("M6 pipeline must not run for --dry-run --m6")
+
+    monkeypatch.setattr("game_highlight_finder.cli.analyze_m6_source", unexpected_pipeline)
+    result = runner.invoke(
+        app,
+        [
+            "--data-dir",
+            str(tmp_path / "data"),
+            "analyze",
+            str(tmp_path / "synthetic.mp4"),
+            "--scout-backend",
+            "gemini",
+            "--allow-remote-upload",
+            "--dry-run",
+            "--m6",
+            "--stop-after",
+            "scout",
+        ],
+    )
+
+    assert result.exit_code == 2
+    assert called is False
+    assert "refusing provider execution" in result.output
+    assert "No provider call or upload was made" in result.output
