@@ -186,6 +186,54 @@ def test_command_builders_use_integer_seconds_and_never_shell() -> None:
     assert all(isinstance(arg, str) for arg in accurate)
 
 
+def test_nvenc_window_and_accurate_extraction_defaults_are_gpu_first() -> None:
+    config = AppConfig()
+    window = build_window_proxy_command(
+        Path("ffmpeg"),
+        Path("analysis.mp4"),
+        Path("window.mp4"),
+        proxy_start_ms=0,
+        duration_ms=2_000,
+        has_audio=True,
+        video_codec=config.media.proxy.video_codec,
+        preset=config.media.proxy.preset,
+    )
+    extraction = build_extraction_command(
+        Path("ffmpeg"),
+        Path("source.mp4"),
+        Path("candidate.mp4"),
+        start_ms=0,
+        end_ms=2_000,
+        extraction=config.media.extraction,
+        has_audio=True,
+    )
+    assert "h264_nvenc" in window and "p4" in window
+    assert "h264_nvenc" in extraction and "p5" in extraction
+    assert "-rc" in extraction and "vbr" in extraction
+    assert "-cq" in extraction and "18" in extraction
+    assert "-b:v" in extraction and "0" in extraction
+    assert "-crf" not in extraction
+
+
+def test_accurate_extraction_retains_explicit_libx264_fallback() -> None:
+    config = AppConfig()
+    extraction_config = config.media.extraction.model_copy(
+        update={"video_codec": "libx264", "preset": "medium"}
+    )
+    command = build_extraction_command(
+        Path("ffmpeg"),
+        Path("source.mp4"),
+        Path("candidate.mp4"),
+        start_ms=0,
+        end_ms=2_000,
+        extraction=extraction_config,
+        has_audio=False,
+    )
+    assert "libx264" in command
+    assert "-crf" in command and "18" in command
+    assert "-cq" not in command
+
+
 def test_fake_window_scout_is_observable_and_deterministic() -> None:
     source_id = "src_" + "a" * 16
     window = plan_scout_windows(5_000, session_id="session", source_id=source_id).windows[0]

@@ -215,7 +215,7 @@ class GenAITransport:
                 f"Gemini API key environment variable {api_key_env} is not set."
             )
         try:
-            from google import genai  # type: ignore[import-not-found]
+            from google import genai  # type: ignore[import-not-found, unused-ignore]
         except ImportError as exc:  # pragma: no cover - exercised when optional extra is absent
             raise GeminiConfigurationError(
                 "The optional google-genai dependency is not installed.",

@@ -45,9 +45,32 @@ class ProxyConfig(StrictModel):
     video_bitrate_kbps: int = Field(default=600, ge=100, le=20_000)
     audio_bitrate_kbps: int = Field(default=64, ge=16, le=512)
     fps: float = Field(default=30.0, gt=0, le=120)
-    video_codec: Literal["libx264"] = "libx264"
+    video_codec: Literal["h264_nvenc", "libx264"] = "h264_nvenc"
     audio_codec: Literal["aac"] = "aac"
-    preset: Literal["ultrafast", "superfast", "veryfast", "faster", "fast", "medium"] = "veryfast"
+    preset: Literal[
+        "p1",
+        "p2",
+        "p3",
+        "p4",
+        "p5",
+        "p6",
+        "p7",
+        "ultrafast",
+        "superfast",
+        "veryfast",
+        "faster",
+        "fast",
+        "medium",
+    ] = "p4"
+
+    @model_validator(mode="after")
+    def encoder_preset_matches_codec(self) -> ProxyConfig:
+        nvenc = self.preset.startswith("p") and self.preset[1:].isdigit()
+        if self.video_codec == "h264_nvenc" and not nvenc:
+            raise ValueError("h264_nvenc proxy requires an NVENC p1-p7 preset")
+        if self.video_codec == "libx264" and nvenc:
+            raise ValueError("libx264 proxy requires an x264 speed preset")
+        return self
 
 
 class AudioConfig(StrictModel):
@@ -71,9 +94,23 @@ class ExtractionConfig(StrictModel):
     post_roll_seconds: int = Field(default=5, ge=0, le=60)
     minimum_duration_seconds: int = Field(default=1, ge=1, le=900)
     maximum_duration_seconds: int = Field(default=900, ge=1, le=900)
-    video_codec: Literal["libx264"] = "libx264"
+    video_codec: Literal["h264_nvenc", "libx264"] = "h264_nvenc"
     crf: int = Field(default=18, ge=0, le=51)
-    preset: Literal["ultrafast", "superfast", "veryfast", "faster", "fast", "medium"] = "medium"
+    preset: Literal[
+        "p1",
+        "p2",
+        "p3",
+        "p4",
+        "p5",
+        "p6",
+        "p7",
+        "ultrafast",
+        "superfast",
+        "veryfast",
+        "faster",
+        "fast",
+        "medium",
+    ] = "p5"
     audio_codec: Literal["aac"] = "aac"
     thumbnail: bool = True
     thumbnail_width: int = Field(default=320, ge=32, le=1920)
@@ -84,6 +121,11 @@ class ExtractionConfig(StrictModel):
     def duration_bounds_ordered(self) -> ExtractionConfig:
         if self.maximum_duration_seconds < self.minimum_duration_seconds:
             raise ValueError("maximum extraction duration must be at least minimum duration")
+        nvenc = self.preset.startswith("p") and self.preset[1:].isdigit()
+        if self.video_codec == "h264_nvenc" and not nvenc:
+            raise ValueError("h264_nvenc extraction requires an NVENC p1-p7 preset")
+        if self.video_codec == "libx264" and nvenc:
+            raise ValueError("libx264 extraction requires an x264 speed preset")
         return self
 
 

@@ -320,6 +320,8 @@ def build_window_proxy_command(
     proxy_start_ms: int,
     duration_ms: int,
     has_audio: bool,
+    video_codec: str = "h264_nvenc",
+    preset: str = "p4",
 ) -> list[str]:
     """Cut a Scout window from the committed analysis proxy only."""
 
@@ -340,9 +342,9 @@ def build_window_proxy_command(
         "-map",
         "0:v:0",
         "-c:v",
-        "libx264",
+        video_codec,
         "-preset",
-        "veryfast",
+        preset,
         "-pix_fmt",
         "yuv420p",
     ]
@@ -409,18 +411,14 @@ def build_extraction_command(
         else:
             command.append("-an")
     else:
-        command.extend(
-            [
-                "-c:v",
-                str(getattr(extraction, "video_codec", "libx264")),
-                "-crf",
-                str(getattr(extraction, "crf", 18)),
-                "-preset",
-                str(getattr(extraction, "preset", "medium")),
-                "-pix_fmt",
-                "yuv420p",
-            ]
-        )
+        video_codec = str(getattr(extraction, "video_codec", "h264_nvenc"))
+        preset = str(getattr(extraction, "preset", "p5"))
+        command.extend(["-c:v", video_codec, "-preset", preset])
+        if video_codec == "h264_nvenc":
+            command.extend(["-rc", "vbr", "-cq", str(getattr(extraction, "crf", 18)), "-b:v", "0"])
+        else:
+            command.extend(["-crf", str(getattr(extraction, "crf", 18))])
+        command.extend(["-pix_fmt", "yuv420p"])
         if has_audio:
             command.extend(["-c:a", str(getattr(extraction, "audio_codec", "aac"))])
         else:

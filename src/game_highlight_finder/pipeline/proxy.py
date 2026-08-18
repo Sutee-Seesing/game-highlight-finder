@@ -261,9 +261,9 @@ def validate_proxy_probe(
     proxy_ratio = width / height
     if abs(proxy_ratio - source_ratio) / source_ratio > 0.02:
         raise ValidationError("Proxy aspect ratio differs materially from the source.")
-    expected_codecs: set[str] = {config.media.proxy.video_codec}
-    if config.media.proxy.video_codec == "libx264":
-        expected_codecs.add("h264")
+    # ffprobe reports the encoded bitstream codec (h264), not the FFmpeg encoder
+    # implementation name (libx264 or h264_nvenc).
+    expected_codecs: set[str] = {"h264"}
     if video.get("codec_name") not in expected_codecs:
         raise ValidationError(
             f"Proxy video codec is {video.get('codec_name')!r}; expected "

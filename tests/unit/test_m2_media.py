@@ -59,8 +59,24 @@ def test_ffmpeg_commands_are_argument_arrays_and_preserve_unicode_paths() -> Non
     assert str(source) in command
     assert str(output) in command
     assert "shell=True" not in command
+    assert "h264_nvenc" in command
+    assert "p4" in command
     audio = build_audio_command(Path("C:/tools/ffmpeg.exe"), source, output, config)
     assert "-map" in audio and "0:a:0" in audio
+
+
+def test_proxy_encoder_defaults_to_nvenc_and_cpu_fallback_is_explicit() -> None:
+    default = AppConfig().media.proxy
+    assert default.video_codec == "h264_nvenc"
+    assert default.preset == "p4"
+
+    cpu = ProxyConfig(video_codec="libx264", preset="veryfast")
+    assert cpu.video_codec == "libx264"
+
+    with pytest.raises(ValueError, match="NVENC p1-p7"):
+        ProxyConfig(video_codec="h264_nvenc", preset="veryfast")
+    with pytest.raises(ValueError, match="x264 speed preset"):
+        ProxyConfig(video_codec="libx264", preset="p4")
 
 
 def test_progress_parser_reports_percent_and_completion() -> None:

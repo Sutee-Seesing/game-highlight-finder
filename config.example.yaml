@@ -21,9 +21,9 @@ media:
     video_bitrate_kbps: 600
     audio_bitrate_kbps: 64
     fps: 30
-    video_codec: libx264
+    video_codec: h264_nvenc
     audio_codec: aac
-    preset: veryfast
+    preset: p4
   audio:
     sample_rate_hz: 16000
     channels: 1
@@ -35,9 +35,9 @@ media:
     post_roll_seconds: 5
     minimum_duration_seconds: 1
     maximum_duration_seconds: 900
-    video_codec: libx264
+    video_codec: h264_nvenc
     crf: 18
-    preset: medium
+    preset: p5
     audio_codec: aac
     thumbnail: true
     thumbnail_width: 320

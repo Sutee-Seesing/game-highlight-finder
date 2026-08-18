@@ -265,6 +265,8 @@ def prepare_scout_windows(
                 proxy_start_ms=start_proxy_ms,
                 duration_ms=planned.duration_ms,
                 has_audio=proxy.metadata.audio_present,
+                video_codec=config.media.proxy.video_codec,
+                preset=config.media.proxy.preset,
             ),
             duration_ms=planned.duration_ms,
             timeout_seconds=config.tools.ffmpeg_timeout_seconds,
