@@ -145,7 +145,7 @@ def test_gemini_defaults_are_fake_and_secret_safe() -> None:
     assert config.scout.backend == "fake"
     assert config.scout.model == "gemini-3.5-flash-lite"
     assert config.scout.max_output_tokens == 4_096
-    assert config.scout.window_prompt_version == "gemini-scout-window-v3"
+    assert config.scout.window_prompt_version == "gemini-scout-window-v6"
     redacted = config_payload(config)
     assert "GEMINI_API_KEY" not in json.dumps(redacted)
     assert config_payload(config, redacted=False)["scout"]["api_key_env"] == "GEMINI_API_KEY"

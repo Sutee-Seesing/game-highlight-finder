@@ -21,6 +21,10 @@ from pydantic import Field, field_validator, model_validator
 from game_highlight_finder.benchmark.evaluator import (
     validate_annotations_file,
 )
+from game_highlight_finder.benchmark.identity import (
+    M8_DATASET_BENCHMARK_ID,
+    M8_LOCKED_ANNOTATION_BENCHMARK_ID,
+)
 from game_highlight_finder.benchmark.models import (
     BenchmarkCase,
     BenchmarkDataset,
@@ -49,7 +53,7 @@ CALIBRATION_MODEL_IDS: tuple[CalibrationModel, CalibrationModel] = (
     "gemini-2.5-flash-lite",
     "gemini-3.5-flash-lite",
 )
-EXPECTED_BENCHMARK_ID = "m8-real-v1"
+EXPECTED_BENCHMARK_ID = M8_DATASET_BENCHMARK_ID
 EXPECTED_POLICY_FINGERPRINT = "13f2a750beb4e8bfb3a8288e6974db38aa4354c6d8e456c95716bf4f680853b2"
 EXPECTED_AGGREGATE_COUNTS = {
     "highlights": 10,
@@ -58,7 +62,7 @@ EXPECTED_AGGREGATE_COUNTS = {
     "optional": 1,
     "boring_intervals": 4,
 }
-CALIBRATION_EXPERIMENT_REVISION = "v8"
+CALIBRATION_EXPERIMENT_REVISION = "v11"
 
 
 def _sha256_json(value: object) -> str:
@@ -374,6 +378,10 @@ def verify_ground_truth_lock(dataset_path: Path, lock_path: Path) -> Calibration
         summary = validate_annotations_file(annotation_path)
         if summary.case_id != case_id:
             raise ValidationError(f"Annotation case identity mismatch for {case_id}.")
+        if summary.benchmark_id != M8_LOCKED_ANNOTATION_BENCHMARK_ID:
+            raise ValidationError(
+                f"Locked annotation benchmark identity mismatch for {case_id}."
+            )
         if summary.annotation_sha256 != locked.get("annotation_sha256"):
             raise ValidationError(f"Annotation SHA-256 mismatch for {case_id}.")
         if summary.source_duration_ms <= 0:

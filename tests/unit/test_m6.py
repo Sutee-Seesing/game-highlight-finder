@@ -54,14 +54,14 @@ def _window_response(
     }
 
 
-def test_window_prompt_v3_prioritizes_recall_and_compact_nonduplicated_output() -> None:
+def test_window_prompt_v6_prioritizes_recall_and_compact_nonduplicated_output() -> None:
     source_id = "src_" + "a" * 16
     window = plan_scout_windows(20_000, session_id="session", source_id=source_id).windows[0]
     prompt = build_window_prompt(
         source_duration_ms=20_000,
         window=window,
         local_signal_summary={"loudness_peak_db": -4.0},
-        prompt_version="gemini-scout-window-v3",
+        prompt_version="gemini-scout-window-v6",
     )
     assert "entire supplied video AND audio window" in prompt
     assert "STILL return worthwhile top-level candidates" in prompt
@@ -70,6 +70,12 @@ def test_window_prompt_v3_prioritizes_recall_and_compact_nonduplicated_output() 
     assert "hints only, not ground truth" in prompt
     assert "clutch/skill/smart play" in prompt
     assert "friend interactions" in prompt
+    assert "equal attention to visual gameplay payoff" in prompt
+    assert "audio-heavy and is only a seek hint" in prompt
+    assert "Rank clear visual gameplay outcomes ahead" in prompt
+    assert "require a visible anchor" in prompt
+    assert "meaningful visual sequence" in prompt
+    assert "not the full source duration and not a default 900-second scale" in prompt
     assert "schema_version to exactly 1" in prompt
     assert "top-level candidates array" in prompt
     assert "matches[].candidates array empty" in prompt
@@ -118,6 +124,59 @@ def test_window_relative_canonicalization_preserves_absolute_event() -> None:
     assert session_map.candidates[0].event_start_ms == 12_000
     assert session_map.candidates[0].event_end_ms == 13_000
     assert session_map.candidates[0].source_window_ids == ["scout_window_" + "b" * 16]
+
+
+def test_window_relative_canonicalization_drops_timestamps_outside_requested_window() -> None:
+    payload = _window_response(
+        duration_ms=1_800_000,
+        start_ms=0,
+        end_ms=600_000,
+        event_start=905_000,
+        event_end=922_000,
+    )
+    payload["candidates"].append(
+        {
+            "start_ms": 10_000,
+            "end_ms": 12_000,
+            "category": "CLUTCH",
+            "score": 8.0,
+            "confidence": 0.9,
+            "reason": "valid in-window candidate",
+            "evidence": [],
+        }
+    )
+    session_map = canonicalize_scout_response(
+        payload,
+        session_id="session",
+        source_id="src_" + "a" * 16,
+        source_duration_ms=1_800_000,
+        source_window_id="scout_window_" + "b" * 16,
+        source_window_start_ms=0,
+        source_window_end_ms=600_000,
+    )
+    assert len(session_map.candidates) == 1
+    assert all(item.event_end_ms <= 600_000 for item in session_map.candidates)
+    assert "dropped out-of-window candidate fragment at index 0" in session_map.warnings
+
+
+def test_window_relative_canonicalization_rejects_mismatched_requested_bounds() -> None:
+    payload = _window_response(
+        duration_ms=20_000,
+        start_ms=10_000,
+        end_ms=20_000,
+        event_start=12_000,
+        event_end=13_000,
+    )
+    with pytest.raises(ValidationError, match="do not match"):
+        canonicalize_scout_response(
+            payload,
+            session_id="session",
+            source_id="src_" + "a" * 16,
+            source_duration_ms=20_000,
+            source_window_id="scout_window_" + "b" * 16,
+            source_window_start_ms=0,
+            source_window_end_ms=10_000,
+        )
 
 
 def test_reconcile_stitches_overlap_and_deduplicates_candidate() -> None:
@@ -204,11 +263,21 @@ def test_command_builders_use_integer_seconds_and_never_shell() -> None:
         extraction=Extraction(),
         has_audio=False,
     )
+    accurate_whole_seconds = build_extraction_command(
+        Path("ffmpeg"),
+        Path("raw source.mp4"),
+        Path("candidate-whole-seconds.mp4"),
+        start_ms=535_000,
+        end_ms=555_000,
+        extraction=Extraction(),
+        has_audio=False,
+    )
     thumbnail = build_thumbnail_command(
         Path("ffmpeg"), Path("candidate.mp4"), Path("thumb.jpg"), at_ms=1_001
     )
     assert "1.001" in window and "2.003" in window
     assert "1.001" in accurate and "2.003" in accurate
+    assert accurate_whole_seconds[accurate_whole_seconds.index("-t") + 1] == "20"
     assert "-c:v" in accurate and "libx264" in accurate
     assert "-frames:v" in thumbnail and "1.001" in thumbnail
     assert all(isinstance(arg, str) for arg in accurate)

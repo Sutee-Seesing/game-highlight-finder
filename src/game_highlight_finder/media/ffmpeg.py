@@ -309,7 +309,10 @@ def _format_ms_seconds(milliseconds: int) -> str:
 
     if isinstance(milliseconds, bool) or not isinstance(milliseconds, int) or milliseconds < 0:
         raise ValueError("milliseconds must be a non-negative integer")
-    return format(Decimal(milliseconds) / Decimal(1000), "f").rstrip("0").rstrip(".") or "0"
+    formatted = format(Decimal(milliseconds) / Decimal(1000), "f")
+    if "." in formatted:
+        formatted = formatted.rstrip("0").rstrip(".")
+    return formatted or "0"
 
 
 def build_window_proxy_command(

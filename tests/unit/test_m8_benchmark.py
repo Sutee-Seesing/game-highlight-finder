@@ -10,6 +10,7 @@ from typer.testing import CliRunner
 
 from game_highlight_finder.benchmark.aggregate import (
     aggregate_comparison,
+    aggregate_dataset,
     aggregate_evaluations,
     experiment_fingerprint,
     render_markdown,
@@ -18,6 +19,7 @@ from game_highlight_finder.benchmark.evaluator import (
     deterministic_temporal_match,
     validate_annotations_file,
 )
+from game_highlight_finder.benchmark.identity import benchmark_identity_compatible
 from game_highlight_finder.benchmark.models import (
     AnnotatedHighlight,
     BenchmarkAnnotations,
@@ -516,6 +518,87 @@ def test_dataset_policy_mismatch_and_legacy_migration_are_fail_closed(tmp_path: 
     with pytest.raises(Exception, match="policy"):
         aggregate_evaluations([evaluation, mismatch], benchmark_id="synthetic")
     del tmp_path
+
+
+def test_locked_m8_private_annotation_id_is_compatible_only_by_lock_hashes(
+    tmp_path: Path,
+) -> None:
+    benchmark_root = tmp_path / "benchmarks"
+    dataset_dir = benchmark_root / "datasets"
+    annotation_dir = benchmark_root / "annotations"
+    private_dir = benchmark_root / "private"
+    result_dir = dataset_dir / "results"
+    for path in (dataset_dir, annotation_dir, private_dir, result_dir):
+        path.mkdir(parents=True)
+    annotation_path = annotation_dir / "case-a.json"
+    annotation_path.write_bytes(b"immutable locked annotation bytes")
+    annotation_hash = hashlib.sha256(annotation_path.read_bytes()).hexdigest()
+    source_hash = "1" * 64
+    case = BenchmarkCase(
+        case_id="case-a",
+        source_path=tmp_path / "private" / "case-a.mkv",
+        expected_source_sha256=source_hash,
+        annotation_path=Path("../annotations/case-a.json"),
+        game_profile="synthetic",
+        split=BenchmarkSplit.CALIBRATION,
+    )
+    dataset = BenchmarkDataset(
+        benchmark_id="m8-real-v1",
+        name="locked identity fixture",
+        cases=(case,),
+        evaluation_policy=EvaluationPolicy(),
+    )
+    dataset_path = dataset_dir / "m8-real-v1.json"
+    atomic_write_json(dataset_path, dataset.model_dump(mode="json"))
+    lock_path = private_dir / "m8-real-v1-ground-truth-lock.json"
+    atomic_write_json(
+        lock_path,
+        {
+            "cases": [
+                {
+                    "case_id": "case-a",
+                    "split": "calibration",
+                    "source_sha256": source_hash,
+                    "annotation_sha256": annotation_hash,
+                }
+            ]
+        },
+    )
+    evaluation = _rebind_evaluation(
+        _evaluation("case-a", BenchmarkSplit.CALIBRATION, tp=1, fp=0, fn=0),
+        case_id="case-a",
+        source_sha256=source_hash,
+        annotation_sha256=annotation_hash,
+        benchmark_id="m8-private",
+    )
+    result_path = result_dir / "case-a.json"
+    atomic_write_json(result_path, evaluation.model_dump(mode="json"))
+
+    assert benchmark_identity_compatible(
+        dataset_path,
+        dataset,
+        case,
+        evaluation_benchmark_id="m8-private",
+        evaluation_case_id="case-a",
+        evaluation_source_sha256=source_hash,
+        evaluation_annotation_sha256=annotation_hash,
+        expected_annotation_sha256=annotation_hash,
+        lock_path=lock_path,
+    )
+    assert not benchmark_identity_compatible(
+        dataset_path,
+        dataset,
+        case,
+        evaluation_benchmark_id="m8-private",
+        evaluation_case_id="case-a",
+        evaluation_source_sha256=source_hash,
+        evaluation_annotation_sha256="2" * 64,
+        expected_annotation_sha256=annotation_hash,
+        lock_path=lock_path,
+    )
+    aggregate = aggregate_dataset(dataset_path)
+    assert aggregate.aggregate.benchmark_id == "m8-real-v1"
+    assert aggregate.aggregate.per_case[0].benchmark_id == "m8-real-v1"
 
 
 def test_multi_experiment_comparison_is_separate_and_count_weighted(tmp_path: Path) -> None:

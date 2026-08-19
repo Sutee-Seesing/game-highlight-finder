@@ -21,10 +21,12 @@ from game_highlight_finder.benchmark.calibration import (
     write_calibration_artifacts,
 )
 from game_highlight_finder.benchmark.evaluator import (
+    annotation_sha256,
     evaluate_session,
     load_annotations,
     validate_annotations_file,
 )
+from game_highlight_finder.benchmark.identity import benchmark_identity_compatible
 from game_highlight_finder.benchmark.models import BenchmarkDataset, BenchmarkSplit
 from game_highlight_finder.benchmark.review_proxy import (
     ReviewProxyBatchResult,
@@ -676,8 +678,9 @@ def _benchmark_evaluate(
     loaded_annotations = load_annotations(annotations_path)
     declared_policy = None
     if dataset_manifest is not None:
+        dataset_path = dataset_manifest.expanduser().resolve()
         try:
-            raw_dataset = read_json(dataset_manifest)
+            raw_dataset = read_json(dataset_path)
             if not isinstance(raw_dataset, dict):
                 raise ValueError("dataset manifest must be an object")
             dataset = BenchmarkDataset.model_validate(raw_dataset)
@@ -694,8 +697,20 @@ def _benchmark_evaluate(
                 f"Annotation case {loaded_annotations.case_id} is not declared by the dataset."
             )
         case = matching_cases[0]
-        if loaded_annotations.benchmark_id != dataset.benchmark_id:
-            raise ConfigError("Annotation benchmark ID does not match the dataset manifest.")
+        expected_annotation_hash = annotation_sha256(annotations_path)
+        if not benchmark_identity_compatible(
+            dataset_path,
+            dataset,
+            case,
+            evaluation_benchmark_id=loaded_annotations.benchmark_id,
+            evaluation_case_id=loaded_annotations.case_id,
+            evaluation_source_sha256=loaded_annotations.source_sha256,
+            evaluation_annotation_sha256=expected_annotation_hash,
+            expected_annotation_sha256=expected_annotation_hash,
+        ):
+            raise ConfigError(
+                "Annotation benchmark identity does not match the declared case and lock."
+            )
         if loaded_annotations.game_profile != case.game_profile:
             raise ConfigError("Annotation game profile does not match the dataset manifest.")
         if split_value is not case.split:
@@ -714,6 +729,17 @@ def _benchmark_evaluate(
         assert declared_policy is not None
         if evaluation.source_sha256 != case.expected_source_sha256:
             raise ConfigError("Completed session source hash does not match the dataset case.")
+        if not benchmark_identity_compatible(
+            dataset_path,
+            dataset,
+            case,
+            evaluation_benchmark_id=evaluation.benchmark_id,
+            evaluation_case_id=evaluation.case_id,
+            evaluation_source_sha256=evaluation.source_sha256,
+            evaluation_annotation_sha256=evaluation.annotation_sha256,
+            expected_annotation_sha256=annotation_sha256(annotations_path),
+        ):
+            raise ConfigError("Completed evaluation benchmark identity does not match the case.")
         if evaluation.evaluation_policy_fingerprint != declared_policy.fingerprint():
             raise ConfigError("Evaluation policy fingerprint does not match the dataset case.")
     target = (

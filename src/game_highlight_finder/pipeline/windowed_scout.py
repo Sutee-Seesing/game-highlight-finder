@@ -375,7 +375,7 @@ def build_window_prompt(
     source_duration_ms: int,
     window: ScoutWindow,
     local_signal_summary: Mapping[str, Any],
-    prompt_version: str = "gemini-scout-window-v3",
+    prompt_version: str = "gemini-scout-window-v6",
 ) -> str:
     summary = json.dumps(
         dict(local_signal_summary), ensure_ascii=False, sort_keys=True, separators=(",", ":")
@@ -404,6 +404,33 @@ def build_window_prompt(
                 "hints."
             ),
             (
+                "Give equal attention to visual gameplay payoff: visible fights, precise plays, "
+                "surprising outcomes, failures, and reactions can be worthwhile even when they "
+                "are quiet or the audio is ambiguous."
+            ),
+            (
+                "The local signal summary may be audio-heavy and is only a seek hint, never a "
+                "candidate list. Watch the video around scene-activity changes and visible HUD "
+                "or objective changes; do not let loudness or laughter substitute for visual "
+                "inspection."
+            ),
+            (
+                "Rank clear visual gameplay outcomes ahead of generic voice-chat banter or "
+                "routine menu, lobby, hiding, or searching activity. Audio-only candidates need "
+                "an unusually distinctive event; ordinary laughter or talking is not enough."
+            ),
+            (
+                "Actively look for visible objective progress, player finds or eliminations, "
+                "close escapes, sudden failures, round outcomes, and other state changes even "
+                "when nobody reacts aloud."
+            ),
+            (
+                "For a gameplay candidate, require a visible anchor whenever gameplay is on "
+                "screen. Do not emit routine chat, laughter, banter, menu interaction, hiding, "
+                "or searching as a highlight by itself; audio-only material must be an unusual "
+                "self-contained payoff, not a quota filler."
+            ),
+            (
                 "If match or round boundaries are uncertain, return zero matches if needed "
                 "but STILL return worthwhile top-level candidates; uncertain segmentation "
                 "must not suppress highlights."
@@ -422,6 +449,12 @@ def build_window_prompt(
                 "Do not reduce a multi-step clutch, chase, fail, joke, or reaction to an "
                 "isolated frame if the setup or aftermath is needed to understand why it is "
                 "worth watching."
+            ),
+            (
+                "For each candidate, make event start_ms/end_ms cover the meaningful visual "
+                "sequence from its first useful setup through its immediate outcome, not merely "
+                "the exact impact or kill marker. When uncertain, use a modestly wider interval "
+                "inside the window and put extra context in setup_start_ms/payoff_end_ms."
             ),
             "Candidate categories must use only values allowed by the supplied schema.",
             (
@@ -442,6 +475,12 @@ def build_window_prompt(
                 "All match, candidate, evidence, setup, and payoff timestamps are "
                 "window-relative integer milliseconds in the inclusive range "
                 f"0-{window.duration_ms}."
+            ),
+            (
+                "The local timestamp scale is the supplied window duration, not the full source "
+                "duration and not a default 900-second scale. Before emitting each item, verify "
+                "that every timestamp is inside this exact local range; omit any item you cannot "
+                "place inside the supplied window."
             ),
             (
                 f"Set window_start_ms={window.source_start_ms} and "
@@ -693,6 +732,8 @@ def run_windowed_scout(
             created_at=source.created_at,
             max_response_bytes=config.scout.response_max_bytes,
             source_window_id=window.window_id,
+            source_window_start_ms=window.source_start_ms,
+            source_window_end_ms=window.source_end_ms,
         )
         atomic_write_json(canonical_path, model_json(session_map))
         atomic_write_json(request_meta_path, {"cache_key": cache_key, "request": request_payload})
@@ -1307,6 +1348,8 @@ def _canonicalize_window_envelope(
         created_at=source.created_at,
         max_response_bytes=config.scout.response_max_bytes,
         source_window_id=window.window_id,
+        source_window_start_ms=window.source_start_ms,
+        source_window_end_ms=window.source_end_ms,
     ).model_copy(
         update={
             "scout_backend": "gemini",

@@ -13,6 +13,10 @@ from pathlib import Path
 from pydantic import BaseModel, ConfigDict
 
 from game_highlight_finder.benchmark.evaluator import annotation_sha256, load_evaluation
+from game_highlight_finder.benchmark.identity import (
+    benchmark_identity_compatible,
+    rebind_evaluation_to_dataset,
+)
 from game_highlight_finder.benchmark.models import (
     AggregateGroup,
     BenchmarkAggregate,
@@ -400,8 +404,19 @@ def aggregate_dataset(
             raise ValidationError(
                 f"Source identity mismatch blocks comparison for case {case.case_id}."
             )
-        if evaluation.benchmark_id != dataset.benchmark_id or evaluation.case_id != case.case_id:
+        if evaluation.case_id != case.case_id:
             raise ValidationError(f"Benchmark case identity mismatch for case {case.case_id}.")
+        if not benchmark_identity_compatible(
+            dataset_path,
+            dataset,
+            case,
+            evaluation_benchmark_id=evaluation.benchmark_id,
+            evaluation_case_id=evaluation.case_id,
+            evaluation_source_sha256=evaluation.source_sha256,
+            evaluation_annotation_sha256=evaluation.annotation_sha256,
+            expected_annotation_sha256=expected_annotation_hash,
+        ):
+            raise ValidationError(f"Benchmark identity mismatch for case {case.case_id}.")
         if evaluation.split is not case.split:
             raise ValidationError(f"Calibration/validation split mismatch for case {case.case_id}.")
         if evaluation.game_profile != case.game_profile:
@@ -422,7 +437,9 @@ def aggregate_dataset(
             raise ValidationError(
                 f"Evaluation policy settings mismatch blocks comparison for case {case.case_id}."
             )
-        evaluations.append(evaluation)
+        evaluations.append(
+            rebind_evaluation_to_dataset(evaluation, dataset_benchmark_id=dataset.benchmark_id)
+        )
     aggregate = aggregate_evaluations(evaluations, benchmark_id=dataset.benchmark_id)
     json_target = (
         (output_path or dataset_path.parent / "results" / "aggregate.json").expanduser().resolve()
@@ -515,7 +532,16 @@ def _validate_result_set(
             raise ValidationError(
                 f"Evaluation case ID mismatch for result set {result_set.result_set_id}."
             )
-        if evaluation.benchmark_id != dataset.benchmark_id:
+        if not benchmark_identity_compatible(
+            dataset_path,
+            dataset,
+            case,
+            evaluation_benchmark_id=evaluation.benchmark_id,
+            evaluation_case_id=evaluation.case_id,
+            evaluation_source_sha256=evaluation.source_sha256,
+            evaluation_annotation_sha256=evaluation.annotation_sha256,
+            expected_annotation_sha256=expected_annotation_hash,
+        ):
             raise ValidationError(f"Evaluation benchmark ID mismatch for case {case_id}.")
         if evaluation.source_sha256 != case.expected_source_sha256:
             raise ValidationError(f"Source hash mismatch blocks comparison for case {case_id}.")
@@ -541,7 +567,9 @@ def _validate_result_set(
                 f"Result set {result_set.result_set_id} mixes experiment configurations; "
                 "comparison is blocked."
             )
-        evaluations.append(evaluation)
+        evaluations.append(
+            rebind_evaluation_to_dataset(evaluation, dataset_benchmark_id=dataset.benchmark_id)
+        )
     assert experiment_fingerprint_value is not None
     if (
         result_set.experiment_fingerprint is not None

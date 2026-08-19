@@ -1,0 +1,43 @@
+{
+  "task_id": "m8-autonomous-remediation-2026-08-19",
+  "current_phase": "blocked_before_calibration_freeze",
+  "last_checkpoint": "v11 case02 first call ended incomplete and the hard ledger correctly marked it AMBIGUOUS with reserved exposure 2.601384 THB; raw output was not canonicalized or reclassified. Remote cleanup metadata says deleted. Same-revision retry is forbidden, and the remaining exposure cannot safely fund a clean retry plus both one-time sealed validation calls.",
+  "tests": {
+    "focused": "13 passed in latest temporal-salvage regression; prior remediation-focused runs also passed",
+    "full_pytest": "255 passed in 134.08s",
+    "ruff": "passed",
+    "mypy_source": "passed",
+    "git_diff_check": "passed"
+  },
+  "provider_attempts": {
+    "this_task_generation_attempts": 6,
+    "this_task_generation_cap": 8,
+    "historical_v8_generation_attempts": 2,
+    "historical_v8_settled_calls": 2,
+    "historical_v8_remote_cleanup_receipts": 2,
+    "v9_settled_clean_generation_attempts": 2,
+    "v10_settled_clean_generation_attempts": 2,
+    "v11_settled_clean_generation_attempts": 1,
+    "v11_ambiguous_attempts": 1,
+    "v9_ambiguous_attempts": 0,
+    "v9_remote_cleanup_receipts": 2,
+    "v10_remote_cleanup_receipts": 2,
+    "v11_remote_cleanup_receipts": 2
+  },
+  "exposure": {
+    "this_task_settled_thb": "9.391976",
+    "this_task_ambiguous_reserved_thb": "2.601384",
+    "this_task_worst_case_exposure_thb": "11.993360",
+    "this_task_cap_thb": "15",
+    "historical_v8_settled_thb": "3.776656",
+    "fx_usd_thb": "33.067",
+    "fx_captured_at": "2026-08-19T11:58:00Z",
+    "fx_source": "chatgpt_currency_exchange_rate_source"
+  },
+  "git": {
+    "head": "9aace577a8d7bfe2be7c9afc525089e81bb09de1",
+    "branch": "main",
+    "push_status": "not_started"
+  },
+  "blocker": "M8 cannot freeze calibration or run sealed validation: v11 case02 ended AMBIGUOUS after an incomplete Gemini response; same-revision replay is forbidden, and a clean retry plus both one-time validation calls would exceed the remaining paid-equivalent exposure budget. Local remediation and all required verification are complete."
+}

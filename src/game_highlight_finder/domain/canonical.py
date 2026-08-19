@@ -83,6 +83,7 @@ def normalize_timestamp_ms(
     offset_ms: int = 0,
     field: str = "timestamp",
     allow_end_clamp: bool = False,
+    relative_duration_ms: int | None = None,
 ) -> tuple[int, str | None]:
     """Convert one provider integer timestamp to source-relative milliseconds once."""
 
@@ -90,6 +91,13 @@ def normalize_timestamp_ms(
         raise ValidationError(f"{field} must be an integer number of milliseconds")
     if value < 0:
         raise ValidationError(f"{field} cannot be negative")
+    if relative_duration_ms is not None:
+        if isinstance(relative_duration_ms, bool) or not isinstance(relative_duration_ms, int):
+            raise ValidationError("relative_duration_ms must be an integer")
+        if relative_duration_ms <= 0:
+            raise ValidationError("relative_duration_ms must be positive")
+        if value > relative_duration_ms:
+            raise ValidationError(f"{field} exceeds window duration")
     normalized = value + offset_ms
     if normalized < 0:
         raise ValidationError(f"{field} resolves before the source timeline")
@@ -108,6 +116,7 @@ def normalize_interval(
     offset_ms: int = 0,
     field: str = "interval",
     max_duration_ms: int | None = None,
+    relative_duration_ms: int | None = None,
 ) -> tuple[int, int, list[str]]:
     """Normalize and validate a half-open ``[start_ms, end_ms)`` interval."""
 
@@ -116,6 +125,7 @@ def normalize_interval(
         duration_ms=duration_ms,
         offset_ms=offset_ms,
         field=f"{field}.start_ms",
+        relative_duration_ms=relative_duration_ms,
     )
     end, end_action = normalize_timestamp_ms(
         end_ms,
@@ -123,6 +133,7 @@ def normalize_interval(
         offset_ms=offset_ms,
         field=f"{field}.end_ms",
         allow_end_clamp=True,
+        relative_duration_ms=relative_duration_ms,
     )
     if end <= start:
         raise ValidationError(f"{field} must use a non-empty half-open interval")
@@ -203,6 +214,8 @@ def canonicalize_scout_response(
     created_at: datetime | None = None,
     max_response_bytes: int = MAX_SCOUT_RESPONSE_BYTES,
     source_window_id: str | None = None,
+    source_window_start_ms: int | None = None,
+    source_window_end_ms: int | None = None,
 ) -> SessionMap:
     """Turn one untrusted Scout response into a deterministic canonical map."""
 
@@ -210,13 +223,49 @@ def canonicalize_scout_response(
         raise ValidationError("source_duration_ms must be an integer")
     if source_duration_ms <= 0:
         raise ValidationError("source_duration_ms must be positive")
+    if (source_window_start_ms is None) != (source_window_end_ms is None):
+        raise ValidationError("source window bounds must be supplied together")
+    if source_window_start_ms is not None and source_window_end_ms is not None:
+        if (
+            isinstance(source_window_start_ms, bool)
+            or not isinstance(source_window_start_ms, int)
+            or isinstance(source_window_end_ms, bool)
+            or not isinstance(source_window_end_ms, int)
+        ):
+            raise ValidationError("source window bounds must be integers")
+        if (
+            source_window_start_ms < 0
+            or source_window_end_ms <= source_window_start_ms
+            or source_window_end_ms > source_duration_ms
+        ):
+            raise ValidationError("source window bounds must be within the source duration")
     response = parse_scout_response(raw, max_bytes=max_response_bytes)
     if response.source_duration_ms != source_duration_ms:
         raise ValidationError(
             "Scout response duration does not match the authoritative source duration."
         )
     offset = source_offset_ms
+    relative_duration_ms: int | None = None
     if response.time_basis == "window_relative":
+        if source_window_start_ms is not None and source_window_end_ms is not None:
+            if response.window_end_ms is None:
+                raise ValidationError("window-relative Scout response must include window_end_ms")
+            if (
+                response.window_start_ms != source_window_start_ms
+                or response.window_end_ms != source_window_end_ms
+            ):
+                raise ValidationError(
+                    "Scout response window bounds do not match the authoritative request window"
+                )
+        elif response.window_end_ms is None:
+            # Preserve the legacy M3 fixture contract when no authoritative
+            # request window was supplied.  The M6 window runner always passes
+            # the expected bounds and therefore takes the strict branch above.
+            relative_duration_ms = None
+        if response.window_end_ms is not None:
+            if response.window_end_ms > source_duration_ms:
+                raise ValidationError("Scout response window end exceeds source duration")
+            relative_duration_ms = response.window_end_ms - response.window_start_ms
         offset += response.window_start_ms
         if (
             response.window_end_ms is not None
@@ -247,6 +296,7 @@ def canonicalize_scout_response(
             duration_ms=source_duration_ms,
             offset_ms=offset,
             field=f"matches[{match_number}]",
+            relative_duration_ms=relative_duration_ms,
         )
         ordinal = match_fragment.ordinal if match_fragment.ordinal is not None else match_number
         match_id = deterministic_match_id(
@@ -265,6 +315,7 @@ def canonicalize_scout_response(
                     duration_ms=source_duration_ms,
                     offset_ms=offset,
                     field=f"matches[{match_number}].evidence",
+                    relative_duration_ms=relative_duration_ms,
                 ),
                 source_window_ids=[source_window_id or "fake-window"],
                 warnings=actions,
@@ -308,6 +359,14 @@ def canonicalize_scout_response(
     seen_semantics: set[tuple[object, ...]] = set()
     seen_provider_candidate_ids: set[str] = set()
     for candidate_number, (fragment, candidate_match_id, _match_index) in enumerate(fragments):
+        if (
+            relative_duration_ms is not None
+            and _candidate_has_timestamp_outside_window(fragment, relative_duration_ms)
+        ):
+            warnings.append(
+                f"dropped out-of-window candidate fragment at index {candidate_number}"
+            )
+            continue
         provider_candidate_id = fragment.provider_id or fragment.candidate_id
         if provider_candidate_id:
             if provider_candidate_id in seen_provider_candidate_ids:
@@ -320,6 +379,7 @@ def canonicalize_scout_response(
             offset_ms=offset,
             field=f"candidates[{candidate_number}]",
             max_duration_ms=MAX_CANDIDATE_DURATION_MS,
+            relative_duration_ms=relative_duration_ms,
         )
         category = fragment.category.strip().upper()
         if not 0 <= fragment.score <= 10:
@@ -340,6 +400,7 @@ def canonicalize_scout_response(
             duration_ms=source_duration_ms,
             offset_ms=offset,
             field=f"candidates[{candidate_number}].setup_start_ms",
+            relative_duration_ms=relative_duration_ms,
         )
         payoff = _optional_timestamp(
             fragment.payoff_end_ms,
@@ -347,6 +408,7 @@ def canonicalize_scout_response(
             offset_ms=offset,
             field=f"candidates[{candidate_number}].payoff_end_ms",
             allow_end_clamp=True,
+            relative_duration_ms=relative_duration_ms,
         )
         if setup is not None and setup > start:
             raise ValidationError(f"candidates[{candidate_number}] setup starts after the event")
@@ -379,6 +441,7 @@ def canonicalize_scout_response(
                     duration_ms=source_duration_ms,
                     offset_ms=offset,
                     field=f"candidates[{candidate_number}].evidence",
+                    relative_duration_ms=relative_duration_ms,
                 ),
                 source_window_ids=[source_window_id or "fake-window"],
                 clip_start_ms=setup if setup is not None else start,
@@ -462,6 +525,23 @@ def _candidate_match_id(
     return containing_match_id or resolved
 
 
+def _candidate_has_timestamp_outside_window(
+    candidate: ScoutCandidateFragment, relative_duration_ms: int
+) -> bool:
+    timestamps = [
+        candidate.start_ms,
+        candidate.end_ms,
+        candidate.setup_start_ms,
+        candidate.payoff_end_ms,
+    ]
+    for evidence in candidate.evidence:
+        timestamps.extend((evidence.start_ms, evidence.end_ms))
+    return any(
+        timestamp is not None and timestamp > relative_duration_ms
+        for timestamp in timestamps
+    )
+
+
 def _optional_timestamp(
     value: int | None,
     *,
@@ -469,6 +549,7 @@ def _optional_timestamp(
     offset_ms: int,
     field: str,
     allow_end_clamp: bool = False,
+    relative_duration_ms: int | None = None,
 ) -> int | None:
     if value is None:
         return None
@@ -478,12 +559,18 @@ def _optional_timestamp(
         offset_ms=offset_ms,
         field=field,
         allow_end_clamp=allow_end_clamp,
+        relative_duration_ms=relative_duration_ms,
     )
     return normalized
 
 
 def _canonical_evidence(
-    evidence: list[ScoutEvidence], *, duration_ms: int, offset_ms: int, field: str
+    evidence: list[ScoutEvidence],
+    *,
+    duration_ms: int,
+    offset_ms: int,
+    field: str,
+    relative_duration_ms: int | None = None,
 ) -> list[Evidence]:
     result: list[Evidence] = []
     for index, item in enumerate(evidence):
@@ -492,6 +579,7 @@ def _canonical_evidence(
             duration_ms=duration_ms,
             offset_ms=offset_ms,
             field=f"{field}[{index}].start_ms",
+            relative_duration_ms=relative_duration_ms,
         )
         end = _optional_timestamp(
             item.end_ms,
@@ -499,6 +587,7 @@ def _canonical_evidence(
             offset_ms=offset_ms,
             field=f"{field}[{index}].end_ms",
             allow_end_clamp=True,
+            relative_duration_ms=relative_duration_ms,
         )
         if start is not None and end is not None and end <= start:
             raise ValidationError(f"{field}[{index}] has an invalid interval")
