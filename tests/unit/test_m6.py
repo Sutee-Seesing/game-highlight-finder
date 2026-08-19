@@ -14,7 +14,7 @@ from game_highlight_finder.media.ffmpeg import (
     build_thumbnail_command,
     build_window_proxy_command,
 )
-from game_highlight_finder.pipeline.windowed_scout import FakeWindowScout
+from game_highlight_finder.pipeline.windowed_scout import FakeWindowScout, build_window_prompt
 
 
 def _window_response(
@@ -52,6 +52,27 @@ def _window_response(
         "warnings": [],
         "metadata": {"backend": "fake-window"},
     }
+
+
+def test_window_prompt_v2_prioritizes_highlight_recall_without_ground_truth_leakage() -> None:
+    source_id = "src_" + "a" * 16
+    window = plan_scout_windows(20_000, session_id="session", source_id=source_id).windows[0]
+    prompt = build_window_prompt(
+        source_duration_ms=20_000,
+        window=window,
+        local_signal_summary={"loudness_peak_db": -4.0},
+        prompt_version="gemini-scout-window-v2",
+    )
+    assert "entire supplied video AND audio window" in prompt
+    assert "STILL return worthwhile top-level candidates" in prompt
+    assert "Prefer recall for clearly salient moments" in prompt
+    assert "setup <= start < end <= payoff" in prompt
+    assert "hints only, not ground truth" in prompt
+    assert "clutch/skill/smart play" in prompt
+    assert "friend interactions" in prompt
+    assert "m8-real" not in prompt
+    assert "MUST_CATCH" not in prompt
+    assert "WORTH_REVIEW" not in prompt
 
 
 def test_window_planner_is_bounded_contiguous_and_deterministic() -> None:

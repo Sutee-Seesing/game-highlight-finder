@@ -375,7 +375,7 @@ def build_window_prompt(
     source_duration_ms: int,
     window: ScoutWindow,
     local_signal_summary: Mapping[str, Any],
-    prompt_version: str = "gemini-scout-window-v1",
+    prompt_version: str = "gemini-scout-window-v2",
 ) -> str:
     summary = json.dumps(
         dict(local_signal_summary), ensure_ascii=False, sort_keys=True, separators=(",", ":")
@@ -384,14 +384,58 @@ def build_window_prompt(
         [
             f"Game Highlight Finder window Scout {prompt_version}.",
             "Return only JSON matching the supplied schema; do not emit hidden reasoning.",
+            (
+                "Inspect the entire supplied video AND audio window before deciding "
+                "there are no highlights."
+            ),
+            (
+                "Primary objective: find moments a human short-form editor would plausibly "
+                "want to review or share, while avoiding routine gameplay."
+            ),
+            (
+                "Strong candidates include clutch/skill/smart play, funny or failed moments, "
+                "visible or audible reactions, friend interactions, surprising/WTF events, "
+                "and tension with a payoff."
+            ),
+            (
+                "Treat voice chat, laughter, shouting, surprise, and other audible reactions "
+                "as real evidence when audio is present; do not judge only from local signal "
+                "hints."
+            ),
+            (
+                "If match or round boundaries are uncertain, return zero matches if needed "
+                "but STILL return worthwhile top-level candidates; uncertain segmentation "
+                "must not suppress highlights."
+            ),
+            (
+                "Prefer recall for clearly salient moments: when a plausible strong event is "
+                "visible or audible, include it with appropriately lower confidence rather "
+                "than omitting it; never invent an event or timestamp."
+            ),
+            (
+                "Preserve the useful story arc. Candidate start_ms/end_ms should cover the "
+                "core event; setup_start_ms and payoff_end_ms should extend to causally useful "
+                "setup/reaction when present, with setup <= start < end <= payoff."
+            ),
+            (
+                "Do not reduce a multi-step clutch, chase, fail, joke, or reaction to an "
+                "isolated frame if the setup or aftermath is needed to understand why it is "
+                "worth watching."
+            ),
+            "Candidate categories must use only values allowed by the supplied schema.",
             "Timestamps inside this request are window-relative integer milliseconds.",
-            "The full source timeline is authoritative; overlapping windows are "
-            "reconciled locally.",
-            "Do not duplicate a boundary event unless evidence supports it; zero "
-            "candidates is valid.",
+            (
+                "The full source timeline is authoritative; overlapping windows are "
+                "reconciled locally."
+            ),
+            "Do not duplicate the same boundary event unless evidence supports separate moments.",
+            (
+                "Return zero candidates only after scanning the whole window and finding no "
+                "plausible worthwhile moment."
+            ),
             f"Full source duration_ms: {source_duration_ms}",
             f"Window absolute bounds_ms: {window.source_start_ms}-{window.source_end_ms}",
-            f"Bounded local signals: {summary}",
+            f"Bounded local signals (hints only, not ground truth): {summary}",
         ]
     )
 

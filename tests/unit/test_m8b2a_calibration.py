@@ -243,8 +243,8 @@ def test_lock_verification_and_calibration_plan_exclude_validation(tmp_path: Pat
     assert plan.arms[0].planned_scout_windows == plan.arms[1].planned_scout_windows
     assert plan.arms[0].shared_config_fingerprint == plan.arms[1].shared_config_fingerprint
     assert plan.arms[0].experiment_fingerprint != plan.arms[1].experiment_fingerprint
-    assert CALIBRATION_EXPERIMENT_REVISION == "v5"
-    assert all(arm.result_set_id.endswith("-v5") for arm in plan.arms)
+    assert CALIBRATION_EXPERIMENT_REVISION == "v6"
+    assert all(arm.result_set_id.endswith("-v6") for arm in plan.arms)
     assert plan.arms[0].effective_media_config["wire_level"] is None
     assert plan.arms[0].effective_media_config["effective_mode"] == "default_unspecified"
     assert plan.arms[0].effective_media_config["estimated_video_tokens_per_second"] == 258
