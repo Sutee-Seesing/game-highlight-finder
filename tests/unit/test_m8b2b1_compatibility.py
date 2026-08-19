@@ -190,7 +190,15 @@ def test_media_resolution_is_model_aware_for_interactions_api() -> None:
     assert model_25.estimated_video_tokens_per_second == 258
     assert model_35.wire_level == "low"
     assert model_35.effective_mode == "low"
-    assert model_35.estimated_video_tokens_per_second == 66
+    assert model_35.estimated_video_tokens_per_second == 70
+    high_25 = resolve_gemini_media_resolution("gemini-2.5-flash-lite", "high")
+    high_35 = resolve_gemini_media_resolution("gemini-3.5-flash-lite", "high")
+    assert high_25.wire_level is None
+    assert high_25.effective_mode == "default_unspecified"
+    assert high_25.estimated_video_tokens_per_second == 258
+    assert high_35.wire_level == "high"
+    assert high_35.effective_mode == "high"
+    assert high_35.estimated_video_tokens_per_second == 280
 
 
 @pytest.mark.parametrize(
@@ -239,6 +247,40 @@ def test_genai_transport_emits_resolution_only_for_gemini3(
         assert video["resolution"] == expected_resolution
 
 
+def test_genai_transport_emits_high_resolution_for_gemini3() -> None:
+    class Interactions:
+        def __init__(self) -> None:
+            self.kwargs: dict[str, object] | None = None
+
+        def create(self, **kwargs: object) -> dict[str, object]:
+            self.kwargs = kwargs
+            return {"status": "completed"}
+
+    class Client:
+        def __init__(self) -> None:
+            self.interactions = Interactions()
+
+    client = Client()
+    transport = object.__new__(GenAITransport)
+    transport._client = client  # type: ignore[attr-defined]
+    transport.create_interaction(
+        model="gemini-3.5-flash-lite",
+        remote_uri="https://example.invalid/file",
+        prompt="x",
+        response_schema={"type": "object"},
+        media_resolution="high",
+        max_output_tokens=10,
+        thinking_level=None,
+        store=False,
+    )
+    assert client.interactions.kwargs is not None
+    inputs = client.interactions.kwargs["input"]
+    assert isinstance(inputs, list)
+    video = inputs[0]
+    assert isinstance(video, dict)
+    assert video["resolution"] == "high"
+
+
 def test_usage_estimate_reflects_model_compatible_video_resolution() -> None:
     common = {
         "duration_ms": 10_000,
@@ -252,7 +294,12 @@ def test_usage_estimate_reflects_model_compatible_video_resolution() -> None:
     model_25 = estimate_gemini_usage(model="gemini-2.5-flash-lite", **common)
     model_35 = estimate_gemini_usage(model="gemini-3.5-flash-lite", **common)
     assert model_25.input_video_tokens == 2_580
-    assert model_35.input_video_tokens == 660
+    assert model_35.input_video_tokens == 700
+    high_35 = estimate_gemini_usage(
+        model="gemini-3.5-flash-lite",
+        **{**common, "media_resolution": "high"},
+    )
+    assert high_35.input_video_tokens == 2_800
 
 
 def test_fake_transport_mirrors_model_specific_resolution_wire_shape(tmp_path: Path) -> None:

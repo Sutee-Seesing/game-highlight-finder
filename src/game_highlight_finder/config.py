@@ -171,7 +171,7 @@ class ScoutConfig(StrictModel):
     billing_mode: Literal["standard"] = "standard"
     allow_remote_upload: bool = False
     api_key_env: str = Field(default="GEMINI_API_KEY", min_length=3, max_length=64)
-    media_resolution: Literal["low"] = "low"
+    media_resolution: Literal["low", "high"] = "low"
     max_duration_seconds: int = Field(default=900, ge=1, le=10_800)
     max_output_tokens: int = Field(default=4_096, ge=1, le=65_536)
     thinking_level: Literal["minimal", "low", "medium", "high"] = "minimal"

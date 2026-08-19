@@ -58,7 +58,7 @@ EXPECTED_AGGREGATE_COUNTS = {
     "optional": 1,
     "boring_intervals": 4,
 }
-CALIBRATION_EXPERIMENT_REVISION = "v7"
+CALIBRATION_EXPERIMENT_REVISION = "v8"
 
 
 def _sha256_json(value: object) -> str:

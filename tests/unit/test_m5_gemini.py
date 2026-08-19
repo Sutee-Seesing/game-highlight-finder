@@ -42,7 +42,6 @@ from game_highlight_finder.pipeline.proxy import generate_proxy
 from game_highlight_finder.providers.base import ProviderUsageActual, ProviderUsageEstimate
 from game_highlight_finder.providers.gemini import (
     FakeGeminiTransport,
-    GeminiConfigurationError,
     GeminiInteractionEnvelope,
     GeminiMissingUsageError,
     GeminiPrivacyError,
@@ -136,7 +135,7 @@ def test_prompt_and_schema_are_deterministic_and_non_quota() -> None:
         max_output_tokens=100,
         reserved_thinking_tokens=50,
     )
-    assert usage.input_video_tokens == 660
+    assert usage.input_video_tokens == 700
     assert usage.input_audio_tokens == 320
     assert usage.billable_output_tokens == 150
 
@@ -682,7 +681,7 @@ def test_provider_upload_rejects_raw_path(tmp_path: Path) -> None:
         provider.execute(ProviderRequest.model_validate(request))
 
 
-def test_provider_rejects_resolution_fallback_before_upload(tmp_path: Path) -> None:
+def test_provider_supports_high_resolution_for_gemini3(tmp_path: Path) -> None:
     proxy_root = tmp_path / "proxy"
     proxy_root.mkdir()
     proxy_path = proxy_root / "analysis_proxy.mp4"
@@ -699,12 +698,13 @@ def test_provider_rejects_resolution_fallback_before_upload(tmp_path: Path) -> N
         request_payload={"prompt": "x", "response_schema": {"type": "object"}},
     )
     transport = FakeGeminiTransport()
-    with pytest.raises(GeminiConfigurationError):
-        GeminiProvider(transport=transport).execute(
-            request,
-            proxy_path=proxy_path,
-            session_proxy_root=proxy_root,
-            media_resolution="high",
-            thinking_level="minimal",
-        )
-    assert transport.upload_count == 0
+    result = GeminiProvider(transport=transport).execute(
+        request,
+        proxy_path=proxy_path,
+        session_proxy_root=proxy_root,
+        media_resolution="high",
+        thinking_level="minimal",
+    )
+    assert result.provider == "gemini"
+    assert transport.last_request is not None
+    assert transport.last_request["input"][0]["resolution"] == "high"

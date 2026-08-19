@@ -147,15 +147,20 @@ def resolve_gemini_media_resolution(
 
     Per-content ``resolution`` is documented only for Gemini 3 models. Gemini
     2.5 Flash-Lite therefore omits it and uses the provider default. The video
-    guide estimates 258 vision tokens/second at default resolution and 66 at
-    low resolution.
+    guide estimates 258 vision tokens/second for the Gemini 2.5 default.
+    Current Gemini 3 media-resolution guidance uses about 70 tokens/second for
+    low video and 280 tokens/second for high video.
     """
 
     if model not in GEMINI_MODEL_IDS:
         raise ValueError(f"Unsupported Gemini model for media-resolution policy: {model!r}")
-    if configured_level != "low":
+    if configured_level not in {"low", "high"}:
         raise ValueError(f"Unsupported Gemini media resolution: {configured_level!r}")
     if model == "gemini-2.5-flash-lite":
+        # Per-content resolution is unavailable on Gemini 2.5.  Omit the
+        # field regardless of the requested quality tier and record the
+        # provider default explicitly so fingerprints never claim a wire
+        # setting that was not sent.
         return GeminiMediaResolutionConfig(
             model=model,
             configured_level=configured_level,
@@ -163,10 +168,11 @@ def resolve_gemini_media_resolution(
             effective_mode="default_unspecified",
             estimated_video_tokens_per_second=258,
         )
+    tokens_per_second = 280 if configured_level == "high" else 70
     return GeminiMediaResolutionConfig(
         model=model,
         configured_level=configured_level,
         wire_level=configured_level,
         effective_mode=configured_level,
-        estimated_video_tokens_per_second=66,
+        estimated_video_tokens_per_second=tokens_per_second,
     )

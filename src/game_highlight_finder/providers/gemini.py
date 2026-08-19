@@ -263,10 +263,6 @@ class GenAITransport:
         # The SDK accepts the REST-shaped multimodal input.  We intentionally
         # pass one video followed by bounded text, as recommended by the
         # official video-understanding guide.
-        if media_resolution != "low":
-            raise GeminiConfigurationError(
-                "Gemini M5 requires the configured low media resolution; refusing fallback."
-            )
         try:
             validate_wire_thinking_level(model, thinking_level)
         except ValueError as exc:
@@ -557,10 +553,6 @@ class GeminiProvider(ProviderAdapter):
         if request.model_id not in GEMINI_MODEL_IDS or request.billing_mode != "standard":
             raise GeminiConfigurationError(
                 "Gemini Scout requires a supported model and Standard billing mode."
-            )
-        if media_resolution != "low":
-            raise GeminiConfigurationError(
-                "Gemini M5 cost estimates require low media resolution; refusing fallback."
             )
         configured_thinking_level = thinking_level or "minimal"
         try:
