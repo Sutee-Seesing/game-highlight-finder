@@ -173,7 +173,7 @@ class ScoutConfig(StrictModel):
     api_key_env: str = Field(default="GEMINI_API_KEY", min_length=3, max_length=64)
     media_resolution: Literal["low"] = "low"
     max_duration_seconds: int = Field(default=900, ge=1, le=10_800)
-    max_output_tokens: int = Field(default=2_048, ge=1, le=65_536)
+    max_output_tokens: int = Field(default=4_096, ge=1, le=65_536)
     thinking_level: Literal["minimal", "low", "medium", "high"] = "minimal"
     # Gemini exposes a qualitative thinking level rather than a numeric hard
     # thinking-token limit through Interactions.  This is therefore a local,
@@ -190,7 +190,7 @@ class ScoutConfig(StrictModel):
     window_overlap_seconds: int = Field(default=30, ge=0, le=3_599)
     max_windows: int = Field(default=1_024, ge=1, le=10_000)
     window_prompt_version: str = Field(
-        default="gemini-scout-window-v2", min_length=1, max_length=64
+        default="gemini-scout-window-v3", min_length=1, max_length=64
     )
 
     @field_validator("api_key_env")

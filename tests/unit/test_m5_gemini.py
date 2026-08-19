@@ -127,6 +127,7 @@ def test_prompt_and_schema_are_deterministic_and_non_quota() -> None:
     assert prompt == build_gemini_prompt(duration_ms=10_000, local_signal_summary={"active": 1})
     assert schema_hash() == schema_hash()
     assert gemini_scout_schema()["required"]
+    assert gemini_scout_schema()["properties"]["schema_version"]["enum"] == [1]
     usage = estimate_gemini_usage(
         duration_ms=10_000,
         prompt=prompt,
@@ -144,6 +145,8 @@ def test_gemini_defaults_are_fake_and_secret_safe() -> None:
     config = AppConfig()
     assert config.scout.backend == "fake"
     assert config.scout.model == "gemini-3.5-flash-lite"
+    assert config.scout.max_output_tokens == 4_096
+    assert config.scout.window_prompt_version == "gemini-scout-window-v3"
     redacted = config_payload(config)
     assert "GEMINI_API_KEY" not in json.dumps(redacted)
     assert config_payload(config, redacted=False)["scout"]["api_key_env"] == "GEMINI_API_KEY"

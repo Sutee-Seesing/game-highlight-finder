@@ -68,7 +68,7 @@ scout:
   api_key_env: GEMINI_API_KEY
   media_resolution: low
   max_duration_seconds: 900
-  max_output_tokens: 2048
+  max_output_tokens: 4096
   thinking_level: minimal
   reserved_thinking_tokens: 1024
   prompt_version: gemini-scout-v1
@@ -79,7 +79,7 @@ scout:
   window_duration_seconds: 900
   window_overlap_seconds: 30
   max_windows: 1024
-  window_prompt_version: gemini-scout-window-v2
+  window_prompt_version: gemini-scout-window-v3
 
 report:
   # Local deterministic shortlist; all candidates remain in the report.

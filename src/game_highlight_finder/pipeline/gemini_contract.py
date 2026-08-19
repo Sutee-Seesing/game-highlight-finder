@@ -76,7 +76,7 @@ def gemini_scout_schema() -> dict[str, Any]:
     return {
         "type": "object",
         "properties": {
-            "schema_version": {"type": "integer"},
+            "schema_version": {"type": "integer", "enum": [1]},
             "source_duration_ms": {"type": "integer"},
             "time_basis": {"type": "string", "enum": ["source_relative"]},
             "matches": {"type": "array", "items": match},

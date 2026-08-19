@@ -375,7 +375,7 @@ def build_window_prompt(
     source_duration_ms: int,
     window: ScoutWindow,
     local_signal_summary: Mapping[str, Any],
-    prompt_version: str = "gemini-scout-window-v2",
+    prompt_version: str = "gemini-scout-window-v3",
 ) -> str:
     summary = json.dumps(
         dict(local_signal_summary), ensure_ascii=False, sort_keys=True, separators=(",", ":")
@@ -384,6 +384,7 @@ def build_window_prompt(
         [
             f"Game Highlight Finder window Scout {prompt_version}.",
             "Return only JSON matching the supplied schema; do not emit hidden reasoning.",
+            "Set schema_version to exactly 1.",
             (
                 "Inspect the entire supplied video AND audio window before deciding "
                 "there are no highlights."
@@ -423,7 +424,29 @@ def build_window_prompt(
                 "worth watching."
             ),
             "Candidate categories must use only values allowed by the supplied schema.",
-            "Timestamps inside this request are window-relative integer milliseconds.",
+            (
+                "For this window Scout, put every Candidate Moment only in the top-level "
+                "candidates array and keep every matches[].candidates array empty; never "
+                "duplicate a candidate in both locations."
+            ),
+            (
+                "Use matches only for actual match or round boundaries, never as one wrapper "
+                "per highlight. If boundaries are uncertain, matches may be empty."
+            ),
+            (
+                "Keep the JSON concise: one candidate per distinct story/event and concise "
+                "evidence summaries. Do not repeat the same evidence in multiple places."
+            ),
+            "Return all distinct worthwhile candidates; there is no fixed candidate quota.",
+            (
+                "All match, candidate, evidence, setup, and payoff timestamps are "
+                "window-relative integer milliseconds in the inclusive range "
+                f"0-{window.duration_ms}."
+            ),
+            (
+                f"Set window_start_ms={window.source_start_ms} and "
+                f"window_end_ms={window.source_end_ms}; those two bounds are absolute source times."
+            ),
             (
                 "The full source timeline is authoritative; overlapping windows are "
                 "reconciled locally."

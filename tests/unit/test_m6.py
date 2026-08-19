@@ -54,14 +54,14 @@ def _window_response(
     }
 
 
-def test_window_prompt_v2_prioritizes_highlight_recall_without_ground_truth_leakage() -> None:
+def test_window_prompt_v3_prioritizes_recall_and_compact_nonduplicated_output() -> None:
     source_id = "src_" + "a" * 16
     window = plan_scout_windows(20_000, session_id="session", source_id=source_id).windows[0]
     prompt = build_window_prompt(
         source_duration_ms=20_000,
         window=window,
         local_signal_summary={"loudness_peak_db": -4.0},
-        prompt_version="gemini-scout-window-v2",
+        prompt_version="gemini-scout-window-v3",
     )
     assert "entire supplied video AND audio window" in prompt
     assert "STILL return worthwhile top-level candidates" in prompt
@@ -70,6 +70,13 @@ def test_window_prompt_v2_prioritizes_highlight_recall_without_ground_truth_leak
     assert "hints only, not ground truth" in prompt
     assert "clutch/skill/smart play" in prompt
     assert "friend interactions" in prompt
+    assert "schema_version to exactly 1" in prompt
+    assert "top-level candidates array" in prompt
+    assert "matches[].candidates array empty" in prompt
+    assert "never as one wrapper per highlight" in prompt
+    assert "one candidate per distinct story/event" in prompt
+    assert "inclusive range 0-20000" in prompt
+    assert "window_start_ms=0" in prompt and "window_end_ms=20000" in prompt
     assert "m8-real" not in prompt
     assert "MUST_CATCH" not in prompt
     assert "WORTH_REVIEW" not in prompt
