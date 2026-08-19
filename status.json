@@ -35,9 +35,9 @@
     "fx_source": "chatgpt_currency_exchange_rate_source"
   },
   "git": {
-    "head": "9aace577a8d7bfe2be7c9afc525089e81bb09de1",
+    "head": "c7f14f14c5161468cac191b404dad3c24cc0d3fa",
     "branch": "main",
-    "push_status": "not_started"
+    "push_status": "verified_equal_to_origin_main_before_status_follow_up"
   },
   "blocker": "M8 cannot freeze calibration or run sealed validation: v11 case02 ended AMBIGUOUS after an incomplete Gemini response; same-revision replay is forbidden, and a clean retry plus both one-time validation calls would exceed the remaining paid-equivalent exposure budget. Local remediation and all required verification are complete."
 }

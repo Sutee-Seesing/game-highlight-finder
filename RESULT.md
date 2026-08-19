@@ -108,4 +108,5 @@ cleanup accounting are complete. A future run needs a new authorized budget or
 attempt allowance before it can make a clean calibration retry and then execute
 both sealed validation cases exactly once.
 
-Commit and push parity are recorded in `status.json` after publication.
+The remediation commit was `c7f14f14c5161468cac191b404dad3c24cc0d3fa` and was
+verified equal to `origin/main`; the status follow-up records that checkpoint.
