@@ -1,112 +1,79 @@
-# M8 Autonomous Remediation + Benchmark Run
+# M8 Real-Gameplay Benchmark Checkpoint
 
-Date: 2026-08-19
-Task: `m8-autonomous-remediation-2026-08-19`
-Outcome: **BLOCKED before calibration freeze; no sealed validation calls were made.**
+Date: 2026-08-21
+Task: `m8-v13-live-validation-2026-08-21`
+Outcome: **SEALED VALIDATION EXECUTED; M8 QUALITY GATE NOT ACCEPTED.**
 
 ## Decision
 
-The run does not have an evidence-backed M8 pass. Calibration could not be
-frozen because the first v11 call for `m8-real-cal-02` ended with provider
-status `incomplete`; the hard cost ledger correctly recorded it as
-`AMBIGUOUS`, not as a completed prediction. A same-revision semantic retry is
-forbidden. The task had six generation attempts in this run, leaving only two
-of the eight allowed attempts, while a clean retry plus the two required
-one-time validation calls would require three attempts. The remaining
-paid-equivalent exposure is also insufficient for that sequence.
+The provider execution path, cost ledger, exactly-once controls, cleanup, local
+reconciliation/extraction, and benchmark evaluator all completed successfully. The
+locked validation quality is not good enough to lock V1 defaults or claim M8
+acceptance. The validation set is now observed and must not be used for prompt or
+threshold tuning as though it were still an untouched holdout.
 
-Validation therefore remains sealed and was intentionally not run.
+## Calibration checkpoint
 
-## Investigation and local remediation
+The accepted functional Scout semantics were frozen before sealed validation. The
+v12 retry changed the revision/cache namespace only; after normalizing that revision
+token, the prompt text matched the preceding frozen semantics exactly. Completed
+calibration evidence included v11 `m8-real-cal-01` (precision 0.200, recall 0.333,
+MUST_CATCH recall 0.000) and the clean v12 `m8-real-cal-02` retry (precision 0.000,
+recall 0.000). Historical ambiguous calls remain untouched audit evidence.
 
-- The locked v8 artifacts were audited before new calls. Both high-resolution
-  calls completed and were cleaned remotely, but their raw window-relative
-  outputs included impossible timestamps such as `905000` ms and `932000` ms
-  in roughly 600-second windows. The old canonical path rejected the whole
-  response.
-- The production source frames are 2560x1440. The v8 analysis proxy was
-  854x480 with audio retained; local source/proxy frame inspection showed
-  material HUD and detail loss. Provider `media_resolution: high` changes
-  provider tokenization, not the pixels in the uploaded proxy. Clean v9-v11
-  runs used a derived 1280x720 H.264/NVENC proxy with AAC audio retained.
-  Raw originals and full-timeline review proxies were not provider inputs.
-- Prompt v6 explicitly requires full-window visual inspection, visible anchors,
-  visual outcomes ahead of routine audio banter, and window-relative timestamps
-  inside the exact supplied bounds. It contains no locked timestamp or
-  category information.
-- The canonical trust boundary now validates authoritative requested window
-  bounds and rejects out-of-window timestamps for matches, candidates, setup,
-  payoff, and evidence. A candidate fragment with any impossible timestamp is
-  dropped with a warning while valid sibling candidates survive; it is not
-  clamped into a misleading event. Recovering v11 case01 dropped the invalid
-  905000-ms fragment and retained five valid candidates without another
-  provider call.
-- Fixed exact whole-second FFmpeg extraction formatting (`20_000` ms now
-  becomes `20`, not `2`).
-- Dataset `benchmark_id=m8-real-v1` versus immutable annotation
-  `benchmark_id=m8-private` compatibility is now fail-closed: it requires
-  matching case ID, split, source hash, annotation hash, and the corresponding
-  locked case entry. No annotation contents or hashes were changed.
+## Sealed v13 validation
 
-## Lock and calibration evidence
+Both authorized validation generation attempts ran exactly once with
+`gemini-3.5-flash-lite`, the frozen 1280x720 analysis-proxy path, retained audio,
+`media_resolution=high`, and the v13 identity namespace. No automatic retry ran.
+Both provider calls were `SETTLED`, and both remote media objects were deleted.
+Evaluation ran locally only after provider execution completed.
 
-The ground-truth lock verification passed: four cases, 10 highlights, three
-`MUST_CATCH`, six `WORTH_REVIEW`, one optional, and four boring intervals;
-owner-confirmed, locked before provider benchmarking, and no provider
-predictions in the lock.
+| Case | Precision | Recall | F1 | MUST recall | WORTH recall | Review ratio | Settled cost |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| `m8-real-val-01` | 0.200 | 0.333 | 0.250 | 0.000 | 0.500 | 13.49% | 1.900338 THB |
+| `m8-real-val-02` | 0.000 | 0.000 | N/A | N/A | 0.000 | 2.74% | 1.856908 THB |
 
-Completed clean calibration evaluations were:
+Across the two validation cases there were 1 TP, 7 FP, and 4 FN over 8
+predictions and 5 locked highlights: precision **0.125**, recall **0.200**, F1
+**0.154**, and locked MUST_CATCH recall **0.000**. Count-weighted review time was
+about **8.11%** of source duration. This is a product-quality failure, not an
+infrastructure or evaluator failure.
 
-| Revision | Case | Precision | Recall | MUST recall | WORTH recall | FP / predictions | Review ratio | Best-of useful recall |
-|---|---|---:|---:|---:|---:|---:|---:|---:|
-| v9 | cal-01 | 0.250 | 0.333 | 0.000 | 0.500 | 3 / 4 | 11.98% | 0.333 |
-| v9 | cal-02 | 0.000 | 0.000 | 0.000 | 0.000 | 4 / 4 | 15.31% | 0.000 |
-| v10 | cal-01 | 0.200 | 0.333 | 0.000 | 0.500 | 4 / 5 | 28.96% | 0.333 |
-| v10 | cal-02 | 0.000 | 0.000 | 0.000 | 0.000 | 2 / 2 | 13.23% | 0.000 |
-| v11 | cal-01 | 0.200 | 0.333 | 0.000 | 0.500 | 4 / 5 | 14.01% | 0.333 |
+## Cost and attempt accounting
 
-The v11 cal-01 median matched-event IoU was 0.3125, with median end-boundary
-error 8000 ms. Its four false positives were not inside boring annotations.
-The v11 cal-01 output still missed the locked MUST_CATCH moment. v11 cal-02
-has no completed evaluation: its partial response contained a routine audio
-candidate and an enormous out-of-window setup timestamp, then ended
-`incomplete`; its manifest remains pending and its cost remains ambiguous.
-
-## Provider accounting and cleanup
-
-- Task generation attempts: 6 / 8. This includes two settled v9 calls, two
-  settled v10 calls, one settled v11 call, and one v11 ambiguous call. A v9
-  released pre-generation ledger record was not counted as a generation
-  attempt; its provider-side recovery produced the settled call recorded above.
-- Settled task exposure: **9.391976 THB**.
-- v11 ambiguous reserved exposure: **2.601384 THB**; no settled amount was
-  invented. Worst-case tracked exposure is **11.993360 THB**, below the
-  15-THB cap, but not enough for the required three remaining calls.
-- FX snapshot used: 1 USD = 33.067 THB, captured
-  `2026-08-19T11:58:00Z`, source `chatgpt_currency_exchange_rate_source`.
-- Every v8-v11 provider attempt has local remote-file metadata with
-  `deletion_status: deleted`; requests used `store=false`. The provider
-  metadata's post-delete state field is retained as an audit snapshot and was
-  not treated as a deletion failure.
+- Authorized cumulative generation-attempt cap: **10**; used: **10 / 10**.
+- Known settled exposure across the v9-v13 task sequence: **15.041438 THB**.
+- Preserved ambiguous reserved exposure: v11 **2.601384 THB** plus v12
+  **2.586075 THB** = **5.187459 THB**.
+- Cumulative worst-case tracked exposure: **20.228897 THB**, below the authorized
+  **23 THB** cap.
+- v13 validation settled exposure: **3.757246 THB**.
+- No v13 call is reserved, in-flight, or ambiguous; both remote-file cleanup
+  receipts say `deleted`.
 
 ## Verification
 
-- Latest focused temporal-salvage regression: 13 passed.
-- Full pytest: **255 passed in 134.08s**.
-- Ruff: passed.
-- mypy on `src`: passed, 62 source files.
-- `git diff --check`: passed.
-- Private provider/benchmark artifacts remain untracked and uncommitted.
-  The pre-existing `.t/` directory was not touched or added.
+After sealed evaluation, the provider-free verification suite passed:
 
-## Blocker
+- Full pytest: **256 passed in 102.30s**.
+- Ruff: **passed**.
+- mypy: **passed, 62 source files**.
+- `git diff --check`: **passed**.
+- Private media, annotations, provider responses, ledgers, and benchmark artifacts
+  remain ignored/uncommitted.
 
-The remaining blocker is external provider completion plus the hard attempt
-and exposure limits, not a local evaluator or media-boundary defect. Local
-remediation, lock verification, regression coverage, and truthful ledger /
-cleanup accounting are complete. A future run needs a new authorized budget or
-attempt allowance before it can make a clean calibration retry and then execute
-both sealed validation cases exactly once.
+## Remaining M8 gate
 
-The remediation commit was `c7f14f14c5161468cac191b404dad3c24cc0d3fa` and was
-verified equal to `origin/main`; the status follow-up records that checkpoint.
+M8 is not accepted. The locked validation results miss the required quality bar, and
+the protocol also requires a representative 1–4 hour source to complete
+analysis -> report -> evaluation with resume, source-immutability, budget, storage,
+and review-ratio evidence. A real 63.48-minute OBS source has verified provenance and
+SHA-256, but no complete human-reviewed ground truth exists for the entire long source.
+The model must not fabricate that ground truth. A future quality iteration therefore
+needs a new calibration strategy and a fresh human-owned holdout before another
+scientifically valid acceptance claim.
+
+The production revision-planner change remains on feature branch
+`m8-v12-revision-planner` at `bbb696b273f6a1d3522f9d1939ec9efaa925d5b3` before
+this checkpoint update. No PR is created by this checkpoint.
