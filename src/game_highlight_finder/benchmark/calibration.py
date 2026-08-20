@@ -490,7 +490,11 @@ def _pricing_snapshot() -> CalibrationPricingSnapshot:
 
 
 def _shared_config(
-    config: AppConfig, *, prompt_fingerprint: str, schema_fingerprint: str
+    config: AppConfig,
+    *,
+    prompt_fingerprint: str,
+    schema_fingerprint: str,
+    experiment_revision: str,
 ) -> dict[str, Any]:
     scout = config.scout
     return {
@@ -517,7 +521,7 @@ def _shared_config(
         "audio_retained": True,
         "reconciliation_extraction_ranking": "accepted-production-pipeline-unchanged",
         "remote_upload_requires_explicit_future_authorization": True,
-        "experiment_revision": CALIBRATION_EXPERIMENT_REVISION,
+        "experiment_revision": experiment_revision,
     }
 
 
@@ -592,8 +596,22 @@ def build_calibration_plan(
     *,
     lock_path: Path | None = None,
     fx_usd_thb: Decimal | str | int | float | None = None,
+    experiment_revision: str = CALIBRATION_EXPERIMENT_REVISION,
 ) -> CalibrationPlan:
     """Build a deterministic, provider-free two-arm calibration plan."""
+
+    allowed_revision_characters = (
+        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_"
+    )
+    if (
+        not experiment_revision
+        or len(experiment_revision) > 64
+        or any(character not in allowed_revision_characters for character in experiment_revision)
+    ):
+        raise ValidationError(
+            "Calibration experiment revision must be a short alphanumeric, hyphen, or "
+            "underscore ID."
+        )
 
     dataset_path = dataset_path.expanduser().resolve()
     lock_path = lock_path or (
@@ -630,6 +648,7 @@ def build_calibration_plan(
         provisional_config,
         prompt_fingerprint=prompt_fingerprint,
         schema_fingerprint=schema_fingerprint,
+        experiment_revision=experiment_revision,
     )
     shared_fingerprint = _sha256_json(shared)
     pricing = _pricing_snapshot()
@@ -692,7 +711,7 @@ def build_calibration_plan(
                 arm="A" if ordinal == 0 else "B",
                 model=model_id,
                 label=model_id,
-                result_set_id=f"m8b2-cal-{model_id}-{CALIBRATION_EXPERIMENT_REVISION}",
+                result_set_id=f"m8b2-cal-{model_id}-{experiment_revision}",
                 shared_config_fingerprint=shared_fingerprint,
                 prompt_fingerprint=prompt_fingerprint,
                 schema_fingerprint=schema_fingerprint,
@@ -713,6 +732,7 @@ def build_calibration_plan(
             )
         )
     comparison = CalibrationComparisonManifest(
+        comparison_id=f"m8b2-calibration-comparison-{experiment_revision}",
         benchmark_id=EXPECTED_BENCHMARK_ID,
         evaluation_policy_fingerprint=verification.policy_fingerprint,
         case_ids=CALIBRATION_CASE_IDS,

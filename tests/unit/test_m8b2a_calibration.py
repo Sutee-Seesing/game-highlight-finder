@@ -278,6 +278,27 @@ def test_lock_verification_and_calibration_plan_exclude_validation(tmp_path: Pat
     )
 
 
+def test_calibration_plan_revision_namespace_is_explicit_and_deterministic(
+    tmp_path: Path,
+) -> None:
+    dataset_path, lock_path = _write_locked_fixture(tmp_path)
+    default_plan = build_calibration_plan(dataset_path, AppConfig(), lock_path=lock_path)
+    v12_plan = build_calibration_plan(
+        dataset_path,
+        AppConfig(),
+        lock_path=lock_path,
+        experiment_revision="v12",
+    )
+
+    assert v12_plan.shared_semantic_config["experiment_revision"] == "v12"
+    assert v12_plan.comparison_manifest.comparison_id.endswith("-v12")
+    assert all(arm.result_set_id.endswith("-v12") for arm in v12_plan.arms)
+    assert v12_plan.shared_config_fingerprint != default_plan.shared_config_fingerprint
+    assert [arm.experiment_fingerprint for arm in v12_plan.arms] != [
+        arm.experiment_fingerprint for arm in default_plan.arms
+    ]
+
+
 def test_calibration_plan_serializes_pricing_and_future_comparison_as_not_created(
     tmp_path: Path,
 ) -> None:
@@ -308,6 +329,8 @@ def test_provider_free_cli_dry_run_writes_private_plan(tmp_path: Path) -> None:
             str(output),
             "--comparison-output",
             str(comparison),
+            "--revision",
+            "v12",
         ],
     )
     assert result.exit_code == 0, result.stdout
@@ -316,7 +339,10 @@ def test_provider_free_cli_dry_run_writes_private_plan(tmp_path: Path) -> None:
     assert output.is_file()
     assert comparison.is_file()
     plan = read_json(output)
+    comparison_payload = read_json(comparison)
     assert plan["status"] == "PLANNED_NOT_EXECUTED"
+    assert plan["shared_semantic_config"]["experiment_revision"] == "v12"
+    assert comparison_payload["comparison_id"] == "m8b2-calibration-comparison-v12"
     assert plan["validation_case_ids_sealed"] == ["m8-real-val-01", "m8-real-val-02"]
     assert "GEMINI_API_KEY" not in json.dumps(plan)
     assert "review-proxies" not in json.dumps(plan)

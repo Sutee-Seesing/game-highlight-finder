@@ -17,6 +17,7 @@ import typer
 from game_highlight_finder.benchmark.aggregate import aggregate_comparison, aggregate_manifest
 from game_highlight_finder.benchmark.annotation_server import AnnotationServer
 from game_highlight_finder.benchmark.calibration import (
+    CALIBRATION_EXPERIMENT_REVISION,
     build_calibration_plan,
     write_calibration_artifacts,
 )
@@ -541,12 +542,19 @@ def benchmark_plan_calibration(
             "--fx-usd-thb", help="Optional local USD/THB planning rate; no refresh is made."
         ),
     ] = None,
+    revision: Annotated[
+        str,
+        typer.Option(
+            "--revision",
+            help="Fresh deterministic experiment revision label; planning remains provider-free.",
+        ),
+    ] = CALIBRATION_EXPERIMENT_REVISION,
 ) -> None:
     """Plan the two locked Gemini calibration arms without provider calls or uploads."""
     _execute(
         ctx,
         lambda options: _benchmark_plan_calibration(
-            options, dataset, lock, output, comparison_output, fx_usd_thb
+            options, dataset, lock, output, comparison_output, fx_usd_thb, revision
         ),
     )
 
@@ -558,6 +566,7 @@ def _benchmark_plan_calibration(
     output: Path | None,
     comparison_output: Path | None,
     fx_usd_thb: str | None,
+    revision: str,
 ) -> None:
     config = _load(options).config
     plan = build_calibration_plan(
@@ -565,6 +574,7 @@ def _benchmark_plan_calibration(
         config,
         lock_path=lock_path,
         fx_usd_thb=fx_usd_thb,
+        experiment_revision=revision,
     )
     data_dir = config.storage.data_dir.expanduser().resolve()
     plan_path = (
