@@ -1,6 +1,6 @@
 # Game Highlight Finder
 
-Game Highlight Finder is a local-first CLI for turning long gameplay recordings into a reviewable highlight library. The repository implements **Milestone 8A: a provider-neutral benchmark harness and annotation foundation** on top of the accepted M1–M7 foundation. Real gameplay benchmarking remains a separate M8B activity.
+Game Highlight Finder is a local-first CLI for turning long gameplay recordings into a reviewable highlight library. The repository includes the M8 benchmark foundation plus a bounded v13 provider-validation checkpoint on top of the accepted M1–M7 foundation. v13 completed execution/accounting but failed the quality gate, so M8 is **NOT ACCEPTED** and V1 defaults are **NOT LOCKED**; `docs/08_M8_V13_STATUS.md` is the authoritative current checkpoint.
 
 M3 keeps the M2 source/proxy/signal foundation and adds a versioned `Session -> Match -> Candidate` domain map. A deterministic Fake Scout produces bounded offline response fixtures, preserves raw Scout bytes separately from canonical data, and validates hostile output before assigning local deterministic IDs. Canonical timestamps are integer milliseconds with half-open intervals `[start_ms, end_ms)`.
 
@@ -219,10 +219,14 @@ equal-case/equal-annotation revision checks. `highlight benchmark aggregate` kee
 the legacy single-dataset workflow; `highlight benchmark compare` consumes a
 comparison manifest and reports separate calibration, validation, and combined
 groups per experiment. M8B1 real-gameplay discovery and private annotation preparation
-is complete locally; the corpus remains private and human ground truth is still
-required. M8B2 provider benchmarking is **NOT RUN**, V1 defaults are **NOT LOCKED**,
-and M9 is **NOT STARTED**. Real provider/API calls during all M8 work to date:
-**ZERO**. Product decisions use quality/fun first, then MUST_CATCH recall,
+is complete locally; the corpus remains private. The bounded v13 provider validation
+completed on two pre-locked validation cases (10/10 authorized attempts, settled
+calls, and remote cleanup passed), but failed the quality gate: 1 TP / 7 FP / 4 FN
+from 8 predictions and 5 annotations (precision .125, recall .200, MUST_CATCH recall
+0.0). M8 is therefore **NOT ACCEPTED** and V1 defaults are **NOT LOCKED**. The
+revealed validation cases must not be used for tuning; a future unbiased decision
+requires a fresh locked holdout. M9 is **NOT STARTED**. Product decisions use
+quality/fun first, then MUST_CATCH recall,
 precision/review burden, cost per source hour, and runtime/storage.
 
 `highlight benchmark annotate <annotation.json>` opens a tiny vanilla HTML/CSS/JS
@@ -244,9 +248,12 @@ not benchmark sources. The offline `highlight benchmark plan-calibration <datase
 command is the M8B2A preparation path: it verifies the owner-confirmed lock and plans
 only `gemini-2.5-flash-lite` versus `gemini-3.5-flash-lite` on calibration cases. It
 uses the production analysis-proxy/window policy (not review proxies), retains audio,
-keeps validation sealed, records Free Tier intent with no paid fallback, and makes zero
-provider calls or media uploads. M8B2 live calibration is **NOT RUN**; selection is
-quality-first before cost or convenience.
+keeps the validation split unavailable for calibration, records Free Tier intent with
+no paid fallback, and makes zero provider calls or media uploads. This command remains
+an offline preparation path; the historical v13 validation has already completed and
+must not be reused for tuning. Selection remains quality-first before cost or
+convenience. See `docs/08_M8_V13_STATUS.md` for the authoritative outcome and
+long-run evidence.
 
 ## Development and tests
 
@@ -306,8 +313,9 @@ resume. Raw provider response, redacted request metadata, remote deletion state,
 canonical output, and a derived `cost.json` are stored under the session. A paid
 result is reused on a verified cache hit; ambiguous outcomes are never retried
 automatically. M6 windowing/reconciliation/extraction is local-first with an
-accepted bounded Gemini window smoke. M7 reporting is implemented locally;
-later milestones remain unimplemented.
+accepted bounded Gemini window smoke. M7 reporting is implemented locally; M8 has
+executed bounded validation but is not accepted because v13 failed the quality gate.
+M9 remains not started.
 
 ## Known M3 limitations
 
@@ -316,9 +324,9 @@ later milestones remain unimplemented.
 - Moving a source after ingest is reported as missing; a relink command is future work.
 - Cache identity uses a fast path/size/mtime check and a stored authoritative SHA-256. A changed source creates a new session.
 - Lock recovery handles dead processes on the same host conservatively; unreadable or remote-host locks require manual inspection.
-- Gemini integration is implemented but live acceptance remains opt-in; the
-  accepted M6 smoke was synthetic and bounded. Reports and reviewer/ranking
-  workflows remain future work.
+- Gemini integration is implemented and remains explicit opt-in. The accepted M6
+  smoke was synthetic and bounded; M7 ranking/reporting is implemented. M8 v13
+  validation completed but failed quality, and M9 Reviewer work remains not started.
 - JSON schema migrations and force-stage controls are future work.
 
 See [docs/00_START_HERE.md](docs/00_START_HERE.md) for the full product plan.

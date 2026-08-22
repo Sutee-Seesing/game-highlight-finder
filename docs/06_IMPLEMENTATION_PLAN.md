@@ -135,12 +135,19 @@ Ruff and mypy clean; real Gemini API calls during maintenance: zero.
   zero provider/API calls.
 - M8B1 real-gameplay discovery and annotation preparation: **COMPLETE LOCALLY**.
   A bounded read-only inventory selected four private real-gameplay cases (two
-  calibration and two validation, roughly forty minutes) with original provenance,
-  derived-clip hashes, and empty human-owned templates. No gameplay, annotation, or
-  private source data is committed; human ground truth is still required.
-- M8B2 provider benchmark: **NOT RUN**. V1 defaults are **NOT LOCKED**. Product
-  decisions prioritize quality/fun, MUST_CATCH recall, precision/review burden, cost
-  per source hour, then runtime/storage.
+  calibration and two validation, roughly forty minutes) with original provenance
+  and derived-clip hashes. The initial templates were human-owned and empty; the
+  bounded v13 validation later used two pre-locked validation annotation sets. This
+  does not imply complete ground truth for every prepared case or for the separate
+  63.48-minute structural source. No private gameplay or annotations are committed.
+- M8B2 provider validation: **COMPLETED, QUALITY FAILED**. v13 evaluated two
+  pre-locked validation cases in 10/10 attempts; calls settled and remote cleanup
+  passed. Its 8 predictions produced 1 TP / 7 FP / 4 FN against 5 annotations
+  (precision .125, recall .200, MUST_CATCH recall 0.0). M8 is **NOT ACCEPTED** and
+  V1 defaults are **NOT LOCKED**. The revealed validation holdout is not tuning data;
+  another unbiased decision needs a fresh locked holdout. Product decisions prioritize
+  quality/fun, MUST_CATCH recall, precision/review burden, cost per source hour, then
+  runtime/storage.
 - M8B1.5 tiny local human annotation helper: **implemented and provider-free**.
   `highlight benchmark annotate <annotation.json>` binds only to `127.0.0.1`, supports
   range-streamed playback and timestamp buttons, keeps human edits in memory until
@@ -153,9 +160,17 @@ Ruff and mypy clean; real Gemini API calls during maintenance: zero.
   copies with H.264 NVENC/AAC by default. The helper validates audio, aspect/FPS/scale
   constraints, and a strict 250 ms duration tolerance; proxies are convenience files,
   not benchmark sources, and never alter production encoder defaults.
-- V1 defaults are **NOT LOCKED**. A representative 1–4 hour source must still run
-  through analysis → report → evaluation while checking resume, immutability,
-  budget, storage, and review ratio before full M8 acceptance.
+- V1 defaults are **NOT LOCKED**. The provider-free 63.48-minute structural long-run
+  is complete through report with Fake Scout and zero real Gemini calls: five windows,
+  five candidates, best-of 3, resume/report exit 0 in 1329.587s, and a warm-cache
+  rerun exit 0 in 260.907s with `report cache: HIT`. The original source remained
+  immutable (size 20,250,210,757; mtime `2026-06-17T16:02:07.2383233Z`; SHA-256
+  `d7c2c72db4c68ec419792888ad8138b8edba2e5d0e3482597ebf951f8da9572a`).
+  Session-generated storage was 3,246,248,308 bytes, including the preserved
+  636,747,824-byte interrupted proxy partial; all five clips total 55s review
+  (1.444037%), and best-of 3 totals 33s (0.866422%). Its quality evaluation remains
+  blocked because the full source has no legitimate complete human ground truth; do not
+  fabricate ground truth or reuse partial calibration annotations as full truth.
 
 #### M8A pre-benchmark hardening (accepted offline)
 
@@ -168,9 +183,11 @@ coverage, source/annotation revision identity, split/profile identity, and
 single-experiment result-set consistency are enforced. The aggregate report keeps
 raw-count weighting and labels each experiment's calibration, validation, and
 combined groups. Focused evaluator/metrics/privacy/CLI regression tests are
-committed. Real provider/API calls are **ZERO**; M8B2 and M9 are not started and V1
-defaults are not locked. M8B1 remains at `READY_FOR_HUMAN_ANNOTATION` until the owner
-fills and validates the private templates.
+committed. The statement that real provider/API calls were zero is historical to the
+offline hardening scope: v13 validation later completed and failed the quality gate.
+M9 is **NOT STARTED** and V1 defaults are **NOT LOCKED**. The revealed validation
+holdout cannot be tuned against; any future unbiased decision requires fresh locked
+human ground truth.
 
 ### M9 — Optional Reviewer
 
@@ -178,7 +195,7 @@ fills and validates the private templates.
 - Add keep/maybe/reject/merge suggestions without destructive rewrites.
 - Exit: measured improvement in shortlist precision justifies incremental cost; otherwise leave disabled.
 
-The original milestone order is adjusted so schemas/fake AI and budget controls precede real API integration. Cache/resume is foundational from M1 rather than added late, preventing paid-stage rework. M6, M7, M8A, and M8B1 preparation are complete; human annotation gates M8B2, and M9 remains separately authorized work.
+The original milestone order is adjusted so schemas/fake AI and budget controls precede real API integration. Cache/resume is foundational from M1 rather than added late, preventing paid-stage rework. M6, M7, M8A, and M8B1 preparation are complete. v13 completed the bounded validation but did not meet the quality gate; future validation requires a fresh locked holdout, and M9 remains separately authorized work.
 
 ## 3. Test strategy
 
@@ -258,9 +275,8 @@ Create a private annotation format for matches and candidate intervals. Evaluate
 
 ## 6. Definition of V1 done
 
-V1 is done only after a representative 1–4 hour recording completes through report generation, an interrupted run resumes without repeating paid completed work, the original hash remains unchanged, the cost ledger stays within the hard limit, all candidates are traceable to validated evidence and source intervals, and the owner can find useful clips by reviewing a small fraction of the VOD.
+The 63.48-minute provider-free structural run has now exercised the long-source operational criteria: report completion, interrupted-run recovery, warm-cache reuse, source immutability, bounded storage, traceable candidates, and a small review fraction. V1 is still **NOT DONE / NOT LOCKED** because product quality has not passed: v13 failed the quality gate and the structural long source lacks legitimate complete human ground truth. Final acceptance requires an unbiased quality pass against properly locked ground truth; the revealed v13 holdout cannot be used for tuning.
 
-## 7. Exact next action after M7 acceptance hardening
+## 7. Current next action after M8 v13
 
-M7 implementation and acceptance hardening are complete. M8 remains a separate
-future milestone and is not part of this handoff.
+M7 implementation and acceptance hardening are complete. M8 v13 completed bounded validation but is **NOT ACCEPTED**. Remediation must use calibration or new calibration data only; before another unbiased validation decision, prepare and lock a fresh holdout before predictions. No additional provider generation is authorized under the exhausted 10/10 attempt cap without new explicit attempt/exposure authorization. M9 remains **NOT STARTED**.

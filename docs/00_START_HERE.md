@@ -1,6 +1,6 @@
 # Game Highlight Finder — Start Here
 
-Status: Milestone 6 long-session reconciliation, extraction, and bounded live Gemini acceptance complete
+Status: M8 v13 validation completed but quality failed; 63.48-minute structural long-run complete through report; M8 NOT ACCEPTED / V1 NOT LOCKED
 Plan date: 2026-08-11  
 Working project path: `C:\Data\Works\Personal_Projects\Active_Products\game-highlight-finder`
 
@@ -189,9 +189,12 @@ API, or network. See [07_M8_BENCHMARK_PROTOCOL.md](07_M8_BENCHMARK_PROTOCOL.md).
 
 M8A benchmark foundation and pre-benchmark hardening: COMPLETE after offline
 synthetic validation. M8B1 real-gameplay discovery and private annotation preparation:
-COMPLETE locally; human ground truth is still required. M8B2 provider benchmarking:
-NOT RUN. V1 defaults: NOT LOCKED. M9: NOT STARTED. Real provider/API calls during
-M8A/M8B1: ZERO. Quality/fun is the primary product criterion, followed by MUST_CATCH
+COMPLETE locally. v13 provider validation completed on two pre-locked validation cases
+with 10/10 attempts, settled calls, and remote cleanup passed, but failed quality
+(8 predictions; 1 TP / 7 FP / 4 FN; precision .125, recall .200, MUST_CATCH recall
+0.0). M8 is NOT ACCEPTED and V1 defaults are NOT LOCKED. Revealed validation must not
+be used for tuning; a future unbiased decision needs a fresh locked holdout. M9: NOT
+STARTED. Quality/fun is the primary product criterion, followed by MUST_CATCH
 recall, precision/review burden, cost per source hour, and runtime/storage.
 
 Use `highlight benchmark annotate <annotation.json>` to open the small local-only
@@ -207,21 +210,24 @@ writes private MP4 copies under the configured data directory, requires NVENC
 rejects source mutation or proxy duration drift over 250 ms. Review proxies are not
 authoritative benchmark sources and do not change M8 experiment identity.
 
-### M8B2A calibration preparation
+### Historical M8B2A calibration preparation
 
-M8B2A is prepared only as an offline, calibration-only comparison between
+The M8B2A offline planner was originally prepared as a calibration-only comparison between
 `gemini-2.5-flash-lite` and `gemini-3.5-flash-lite`. The `benchmark plan-calibration`
 command verifies the owner-confirmed ground-truth lock, freezes the accepted Scout
 prompt/schema/window configuration, and writes private future result-set templates.
 It makes no Gemini/API calls and uploads no media; future provider inputs must use the
 production analysis-proxy/window pipeline, never the human review proxies or raw
-originals. Free Tier is the intended first-run policy, paid fallback is unauthorized,
-validation remains sealed, and quality is the selection principle. Historical M8B2 v1
+originals. Free Tier was the intended first-run policy at that stage and paid fallback was
+unauthorized. No additional provider generation is authorized under the exhausted
+10/10 attempt cap without new explicit authorization; quality remains the selection principle. The v13 validation holdout has been revealed
+and evaluated; it is permanently unavailable for tuning. Historical M8B2 v1
 and v2 attempts produced no completed prediction and remain preserved as ambiguous
 provider history. Offline HTTP-400 forensics found strong evidence that v2 sent the
 Gemini-3-only per-content `resolution` field to Gemini 2.5 Flash-Lite. The adapter now
-omits that field for 2.5, retains `low` for 3.5, and prepares clean calibration revision
-`v3`; no v3 provider call has been run and validation remains sealed.
+omits that field for 2.5 and retains `low` for 3.5. The earlier clean `v3` plan is
+historical: it was superseded by completed v13 validation, whose failed quality verdict
+leaves V1 unlocked and requires a fresh locked holdout for any future decision.
 
 ### M8A comparison hardening
 

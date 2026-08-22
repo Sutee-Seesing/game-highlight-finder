@@ -1,9 +1,8 @@
 # M8 v13 Current Status
 
 This note is the authoritative M8 status checkpoint for the `m8-v12-revision-planner`
-branch until older milestone text in README and the M8 planning documents is normalized.
-Historical statements such as `M8B2 NOT RUN`, `v3 NOT RUN`, or `validation remains sealed`
-are superseded by this checkpoint where they conflict.
+branch. Historical statements such as `M8B2 NOT RUN`, `v3 NOT RUN`, or `validation
+remains sealed` are superseded where they conflict.
 
 ## Sealed provider validation
 
@@ -46,19 +45,23 @@ These checks made no provider calls.
 
 ## Representative long-source requirement
 
-Full M8 acceptance still requires a representative 1-4 hour source through
-analysis -> report -> evaluation with resume, source immutability, budget, storage,
-and review-ratio evidence. A provider-free structural run was started on a roughly
-63.5-minute source using Fake Scout. An interrupted proxy attempt was recovered on the
-same session; the interrupted attempt was preserved as `FAILED / INTERRUPTED`, and a
-second proxy attempt completed together with local signals. The latest observed state
-before remote-control access became unavailable was downstream window preparation in
-progress. This checkpoint does **not** claim report or long-source evaluation complete.
+The provider-free 63.48-minute structural long-run is complete through report, using
+Fake Scout and zero real Gemini calls. Session `2026-06-17_unknown_d7c2c72db4c6` used
+a 3,808,767 ms source, produced 5 windows and 5 candidates, and selected best-of 3.
+The resume/report run exited 0 in 1329.587s. Its warm-cache rerun exited 0 in 260.907s
+with `report cache: HIT`.
 
-The long source does not yet have human-complete ground truth for its full duration.
-Partial annotations from a shorter derived calibration clip must not be treated as
-full-source truth. Structural pipeline evidence may be completed provider-free, but the
-long-source quality evaluation remains gated on genuine human review.
+The source remained immutable before and after: size **20,250,210,757**, mtime
+`2026-06-17T16:02:07.2383233Z`, and SHA-256
+`d7c2c72db4c68ec419792888ad8138b8edba2e5d0e3482597ebf951f8da9572a`.
+Session-generated storage was **3,246,248,308 bytes**, including the preserved
+**636,747,824-byte** interrupted proxy partial. All five clips total 55 seconds of
+review (**1.444037%** of source duration); best-of 3 totals 33 seconds
+(**0.866422%**).
+
+Structural long-run quality evaluation remains blocked because the full source has no
+legitimate complete human ground truth. Do not fabricate ground truth or reuse partial
+calibration annotations as full-source truth.
 
 ## Safety and next gate
 
@@ -68,7 +71,7 @@ long-source quality evaluation remains gated on genuine human review.
   reconciliation.
 - Keep private benchmark media, annotations, ledgers, predictions, and absolute source
   paths under ignored local `data/`; never commit them.
-- Finish the long-source structural run and warm-cache/source-immutability/storage
-  checks locally when remote access is available.
-- Normalize stale README / `00_START_HERE.md` / `06_IMPLEMENTATION_PLAN.md` /
-  `07_M8_BENCHMARK_PROTOCOL.md` status text after reviewing the local diff.
+- Do not represent the completed structural run as a quality evaluation; complete
+  full-source human ground truth is required first.
+- Preserve the completed resume, warm-cache, immutability, storage, and review-ratio
+  evidence with the private session artifacts.

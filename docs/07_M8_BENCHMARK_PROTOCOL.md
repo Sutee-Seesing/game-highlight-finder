@@ -94,7 +94,8 @@ or mutates the authoritative source. It verifies source SHA-256 before/after enc
 retains audio, validates MP4/H.264 output and a strict 250 ms duration delta, and
 persists a private cache manifest. Review-proxy timestamps are convenience guidance;
 annotation JSON remains tied to the authoritative benchmark source and integer-
-millisecond timeline. M8B2 remains **NOT RUN**.
+millisecond timeline. This provider-free helper does not change the completed v13
+validation result or make its revealed holdout available for tuning.
 
 All times are integer milliseconds on the original source timeline. Every interval is
 half-open, `[start_ms, end_ms)`, and must be inside the source. Ground-truth errors
@@ -237,33 +238,39 @@ M8B1 performed a bounded, read-only inventory of the owner's local gameplay reco
 and selected four real-gameplay cases (two calibration and two validation) totaling
 roughly forty minutes. The private corpus uses a profile-diverse competitive FPS pair;
 where a title could not be identified reliably from local evidence, the profile remains
-neutral for human confirmation. Each selected case has original-source provenance,
-content hashes, measured duration, and an empty annotation template. Long recordings
+neutral for human confirmation. Each selected case has original-source provenance, content hashes, and
+measured duration. The initial preparation created empty human-owned annotation templates;
+the bounded v13 validation later used two pre-locked validation annotation sets.
+Long recordings
 were cut into private stream-copy derivatives outside the source directory; keyframe
 approximation is recorded in provenance and the source recordings remain immutable.
 
 The inventory, derived clips, selection manifest, dataset manifest, and annotation
 templates stay under the configured ignored data directory. They are never committed,
 and tracked documentation contains no source paths, filenames, media, or annotations.
-Human owners must annotate genuine MUST_CATCH, WORTH_REVIEW, optional, modality, and
-boring intervals; the model and selection script do not write ground truth. M8B1 ends
-at `READY_FOR_HUMAN_ANNOTATION`. M8B2 provider benchmarking must wait until those
-annotations are complete and validated.
+Human owners remain the only source of genuine MUST_CATCH, WORTH_REVIEW, optional,
+modality, and boring-interval ground truth; the model and selection script do not write
+it. Historically M8B1 ended at `READY_FOR_HUMAN_ANNOTATION`. That gate was later
+satisfied for the two pre-locked v13 validation cases, but not for the separate
+63.48-minute structural source, which still lacks complete human ground truth.
 
-## Intended M8B2 private dataset (documented target only)
+## Historical M8B2 private-dataset target
 
-M8B2 should use the completed M8B1 cases after human annotation, retaining boring and
+The original M8B2 plan targeted the completed M8B1 cases after human annotation,
+retaining boring and
 high-event footage, audio/reaction coverage, and a contrasting profile. Try to cover an
 obvious visual highlight, subtle smart play, funny reaction, failure, clutch, boring
 interval, and overlapping setup/payoff story. Keep calibration and validation cases
 distinct from the start. Its first comparison is the current Gemini baseline versus a
 lower-cost Gemini baseline on the same sources, annotations, evaluation policy, prompt,
-window/proxy/extraction/ranking settings, and only the model dimension changed. This
-is a future plan, not an executed or implemented provider comparison.
+window/proxy/extraction/ranking settings, with only the model dimension changed. This
+paragraph records historical design intent; v13 later executed a bounded validation
+checkpoint and failed the quality gate.
 
-## M8B2A calibration preparation (offline, prepared)
+## Historical M8B2A calibration preparation
 
-M8B2A prepares exactly two calibration arms—`gemini-2.5-flash-lite` and
+The offline M8B2A planner was designed to prepare two calibration arms—
+`gemini-2.5-flash-lite` and
 `gemini-3.5-flash-lite`—over the same two locked calibration cases. The local
 `highlight benchmark plan-calibration <dataset.json>` command verifies source,
 annotation, split, aggregate-count, and evaluation-policy identities, then derives
@@ -271,8 +278,11 @@ the current production Scout prompt/schema/window/media plan and a versioned
 paid-equivalent pricing reference. It does not call a provider, use credentials,
 upload media, run validation, or tune prompts/thresholds.
 
-The first live run is intended to use Free Tier when the owner's account is eligible;
-paid fallback is not authorized. Review proxies remain human-review conveniences and
+The first live run was originally intended to use Free Tier when the owner's account
+was eligible; paid fallback was not authorized. The later v13 bounded validation used
+a separately authorized sequence. No further provider generation is authorized under
+the exhausted 10/10 attempt cap without new explicit attempt/exposure authorization.
+Review proxies remain human-review conveniences and
 are not provider inputs; raw originals remain prohibited, while production-derived
 analysis windows retain audio. Actual settled cost and paid-equivalent cost are
 separate fields, and the pricing reference must be reverified from official Google
@@ -282,21 +292,40 @@ and v2 stopped without a completed model prediction. Offline v2 request forensic
 strong evidence of a model/API compatibility issue: per-content `resolution` is
 Gemini-3-only in Interactions, while the 2.5 arm had serialized `resolution: "low"`.
 The model-aware adapter now omits that field for 2.5, retains `low` for 3.5, updates
-usage reservations for 2.5 default video resolution, and advances the clean experiment
-identity to `v3`. No v3 provider call has run; validation remains sealed.
+usage reservations for 2.5 default video resolution, and advanced the then-clean
+experiment identity to `v3`. This is historical context: v13 validation subsequently
+completed on two pre-locked cases. The holdout is now revealed and must not be used for
+tuning; its quality failure requires a fresh locked holdout for a future unbiased
+decision.
 
-Before full M8 acceptance, at least one representative 1–4 hour source must run
-through analysis → report → evaluation while checking resume, source immutability,
-budget, storage, and review ratio. M8A intentionally does not run that holdout.
+The provider-free representative long-source structural run is complete through
+report (Fake Scout; no real Gemini calls). It used session
+`2026-06-17_unknown_d7c2c72db4c6` on a 3,808,767 ms source: 5 windows, 5 candidates,
+and best-of 3. Resume/report exited 0 in 1329.587s; the warm-cache rerun exited 0 in
+260.907s with `report cache: HIT`. The source remained immutable before and after
+(size 20,250,210,757; mtime `2026-06-17T16:02:07.2383233Z`; SHA-256
+`d7c2c72db4c68ec419792888ad8138b8edba2e5d0e3482597ebf951f8da9572a`).
+Session-generated storage was 3,246,248,308 bytes, including a preserved
+636,747,824-byte interrupted proxy partial. The five clips total 55s review
+(1.444037%); best-of 3 totals 33s (0.866422%). Structural long-run quality evaluation
+remains blocked: this full source has no legitimate complete human ground truth, and
+partial calibration annotations must not be reused as full truth.
 
 ## Status and safety
 
 M8A benchmark foundation and pre-benchmark hardening: complete after offline
 synthetic tests and local static validation. M8B1 real-gameplay dataset preparation:
 complete locally, with owner-confirmed ground truth locked before provider predictions.
-M8B2 provider benchmarking: **INCOMPLETE** after historical v1/v2 compatibility failures;
-clean v3 is prepared but **NOT RUN**. Validation remains sealed. V1 defaults: **NOT
-LOCKED**. M9 remains separately authorized and **NOT STARTED**.
+M8B2 provider validation: **COMPLETED, QUALITY FAILED**. v13 completed two pre-locked
+validation cases, using the authorized 10/10 cumulative attempts; both calls settled
+and remote cleanup passed. Quality was 8 predictions, 5 annotations, 1 TP / 7 FP / 4
+FN (precision .125, recall .200, MUST_CATCH recall 0.0). M8 is **NOT ACCEPTED** and
+V1 defaults are **NOT LOCKED**. The revealed validation holdout is not tuning data; a
+future unbiased decision requires a fresh locked holdout. M9 remains separately
+authorized and **NOT STARTED**.
 
-Real provider/API calls during M8A and M8B1: **ZERO**. Historical M8B2 calls remain
-private audit evidence and are not counted as completed benchmark predictions.
+Real provider/API calls during M8A and M8B1: **ZERO**. v13 is the completed bounded
+M8B2 validation; its known settled cost is THB 3.757246, cumulative settled cost is
+THB 15.041438, and worst-case exposure is THB 20.228897 against the THB 23 cap.
+Historical M8B2 entries remain private audit evidence and unresolved ambiguity reserves
+must not be silently released or retried.
