@@ -26,7 +26,7 @@ GEMINI_37_MODEL_SOURCE = "https://ai.google.dev/gemini-api/docs/models/gemini-3.
 # not accidentally treat a just-verified entry as future-dated.
 GEMINI_PRICING_VERIFIED_AT = datetime(2026, 8, 12, 12, 0, tzinfo=UTC)
 GEMINI_CATALOG_VERSION = "google-gemini-2026-08-13-v1"
-GEMINI_37_CATALOG_VERSION = "google-gemini-2026-08-23-v2"
+GEMINI_37_CATALOG_VERSION = "google-gemini-2026-08-23-v3"
 GEMINI_37_PRICING_VERIFIED_AT = datetime(2026, 8, 23, 12, 0, tzinfo=UTC)
 
 
@@ -85,13 +85,15 @@ GEMINI_37_STANDARD_PRICING = PricingEntry(
         "video": Decimal("0.75"),
         "audio": Decimal("0.75"),
     },
+    cached_input_rate=Decimal("0.075"),
     output_rate=Decimal("3.75"),
     effective_from=datetime(2026, 8, 23, tzinfo=UTC),
     verified_at=GEMINI_37_PRICING_VERIFIED_AT,
     source=GEMINI_PRICING_SOURCE,
     catalog_version=GEMINI_37_CATALOG_VERSION,
     notes=(
-        "Google Developer API Standard paid tier; output rate includes thinking tokens. "
+        "Google Developer API Standard paid tier; cached input rate is $0.075 per "
+        "million tokens and output rate includes thinking tokens. "
         "Introductory promotional rates apply through 2026-12-31; reverify before "
         "using after that date. "
         f"Model capability source: {GEMINI_37_MODEL_SOURCE}."

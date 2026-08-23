@@ -200,6 +200,7 @@ def test_gemini_37_promotional_pricing_lookup_and_quote_keep_exact_identity(
         "video": Decimal("0.75"),
         "audio": Decimal("0.75"),
     }
+    assert entry.cached_input_rate == Decimal("0.075")
     assert entry.output_rate == Decimal("3.75")
     assert entry.catalog_version == GEMINI_37_CATALOG_VERSION
     assert "promotional" in entry.notes.lower()
@@ -223,6 +224,39 @@ def test_gemini_37_promotional_pricing_lookup_and_quote_keep_exact_identity(
     )
     assert quote.model == "gemini-3.7-flash"
     assert quote.pricing_snapshot.catalog_version == GEMINI_37_CATALOG_VERSION
+
+
+def test_gemini_37_settlement_supports_cached_input_tokens(
+    tmp_path: Path, ffmpeg_path: Path, ffprobe_path: Path
+) -> None:
+    now = datetime(2026, 8, 23, 12, 0, tzinfo=UTC)
+    config = _config(tmp_path, ffmpeg_path, ffprobe_path).model_copy(
+        update={
+            "scout": ScoutConfig(backend="gemini", model="gemini-3.7-flash", thinking_level="low")
+        }
+    )
+    service = _service(config)
+    request = CostRequest(
+        call_id="gemini-37-cached-input",
+        provider="gemini",
+        model="gemini-3.7-flash",
+        billing_mode="standard",
+        stage="scout",
+        usage_estimate=ProviderUsageEstimate(input_video_tokens=100_000, output_tokens=1_000),
+        request_payload={},
+    )
+    service.reserve(request, now=now)
+    service.mark_in_flight(request.call_id)
+    settled = service.settle(
+        request.call_id,
+        ProviderUsageActual(
+            input_video_tokens=100_000,
+            cached_input_tokens=90_000,
+            output_tokens=1_000,
+        ),
+    )
+    assert settled.status.value == "SETTLED"
+    assert settled.settled_cost_micro_thb is not None
 
 
 def test_usage_mapping_requires_authoritative_counts_and_bounds_thinking() -> None:
