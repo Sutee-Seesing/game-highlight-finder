@@ -372,6 +372,59 @@ def build_window_proxy_command(
     return command
 
 
+def build_slow_motion_proxy_command(
+    ffmpeg_path: Path,
+    input_path: Path,
+    output_path: Path,
+    *,
+    slowdown_factor: int,
+    has_audio: bool,
+    video_codec: str = "h264_nvenc",
+    preset: str = "p4",
+) -> list[str]:
+    """Slow a pre-cut candidate-local proxy while preserving mono audio."""
+
+    if slowdown_factor not in {1, 2, 4}:
+        raise ValueError("slowdown factor must be one of 1, 2, or 4")
+    command = [
+        str(ffmpeg_path),
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-y",
+        "-i",
+        str(input_path),
+        "-map",
+        "0:v:0",
+    ]
+    if slowdown_factor != 1:
+        command.extend(["-vf", f"setpts={slowdown_factor}*(PTS-STARTPTS)"])
+    command.extend(["-c:v", video_codec, "-preset", preset, "-pix_fmt", "yuv420p"])
+    if has_audio:
+        command.extend(["-map", "0:a:0?"])
+        if slowdown_factor != 1:
+            atempo = ",".join("atempo=0.5" for _ in range(slowdown_factor.bit_length() - 1))
+            command.extend(["-af", f"asetpts=PTS-STARTPTS,{atempo}"])
+        command.extend(["-c:a", "aac", "-ac", "1"])
+    else:
+        command.append("-an")
+    command.extend(
+        [
+            "-avoid_negative_ts",
+            "make_zero",
+            "-reset_timestamps",
+            "1",
+            "-movflags",
+            "+faststart",
+            "-progress",
+            "pipe:1",
+            "-nostats",
+            str(output_path),
+        ]
+    )
+    return command
+
+
 def build_extraction_command(
     ffmpeg_path: Path,
     source_path: Path,

@@ -271,3 +271,13 @@ source or annotation revision changes, split/profile changes, policy mismatches,
 and a result set that mixes semantic experiment configurations. Reports contain
 labels, hashes, and metrics only; private paths, media, credentials, and raw
 provider responses remain local.
+
+### Candidate-local boundary refinement (diagnostic scaffold)
+
+A provider-free v19 scaffold prepares a narrow context clip around an existing Scout candidate,
+then creates a 2x slow-motion proxy with audio preserved. This is intentionally not wired into
+the production pipeline yet. It exists to test whether higher effective temporal sampling can
+refine fast-action event boundaries without changing Scout detection semantics. Refiner output
+uses slowed-clip-relative timestamps, a strict bounded JSON schema, and deterministic mapping
+back to source time. A refinement must overlap the original Scout event or it is rejected as
+event drift.
