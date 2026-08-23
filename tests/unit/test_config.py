@@ -15,6 +15,7 @@ def test_config_defaults_are_resolved(tmp_path: Path) -> None:
     assert result.config.schema_version == 1
     assert result.config.storage.data_dir == (tmp_path / "data").resolve()
     assert result.config.tools.probe_timeout_seconds == 120
+    assert result.config.scout.window_prompt_version == "gemini-scout-window-v17"
     assert result.source_file is None
 
 

@@ -225,11 +225,13 @@ available exposure before an upload; cached windows are excluded. The M6 CLI
 defaults to Fake Scout; Gemini window execution requires explicit opt-in and
 uses the same per-window ledger/cache boundary validated by the bounded smoke.
 
-The window Scout prompt uses a detection-first coverage sweep, including the beginning,
+The v17 window Scout prompt uses a detection-first coverage sweep, including the beginning,
 middle, and end before a rescan: it captures concrete gameplay anchors before optional
 social or reaction moments. Reveal/fight/engagement candidates begin at the first useful
 setup and extend through the immediate shooting or outcome instead of collapsing to a
-later banner-only result. Its `score` is editorial
+later banner-only result. The provider contract emits only the core event interval for
+window candidates; optional setup/payoff timestamps remain supported by the canonical
+domain for legacy data, while local clip derivation supplies bounded pre/post-roll context. Its `score` is editorial
 short-form potential and its `confidence` is detection/timestamp/evidence certainty.
 The local v2 ranking preserves every canonical candidate and records these separately
 as `short_form_score` and `detection_confidence`; the current short-form score is not

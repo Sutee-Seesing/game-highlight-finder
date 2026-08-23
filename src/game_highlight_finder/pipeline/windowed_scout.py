@@ -375,7 +375,7 @@ def build_window_prompt(
     source_duration_ms: int,
     window: ScoutWindow,
     local_signal_summary: Mapping[str, Any],
-    prompt_version: str = "gemini-scout-window-v15",
+    prompt_version: str = "gemini-scout-window-v17",
 ) -> str:
     summary = json.dumps(
         dict(local_signal_summary), ensure_ascii=False, sort_keys=True, separators=(",", ":")
@@ -446,8 +446,9 @@ def build_window_prompt(
             ),
             (
                 "Preserve the useful story arc. Candidate start_ms/end_ms should cover the "
-                "core event; setup_start_ms and payoff_end_ms should extend to causally useful "
-                "setup/reaction when present, with setup <= start < end <= payoff."
+                "core event, including useful setup or reaction needed to understand it. Do not "
+                "emit setup_start_ms or payoff_end_ms in window Scout responses; local clip "
+                "derivation adds bounded context."
             ),
             (
                 "Do not reduce a multi-step clutch, chase, fail, joke, or reaction to an "
@@ -457,8 +458,8 @@ def build_window_prompt(
             (
                 "For each candidate, make event start_ms/end_ms cover the meaningful visual "
                 "sequence from its first useful setup through its immediate outcome, not merely "
-                "the exact impact or kill marker. When uncertain, use a modestly wider interval "
-                "inside the window and put extra context in setup_start_ms/payoff_end_ms."
+                "the exact impact or kill marker. When uncertain, use a modestly wider event "
+                "interval inside the window; local pre/post-roll adds extra clip context."
             ),
             (
                 "For a reveal, fight, or engagement chain, event start_ms must begin at the "

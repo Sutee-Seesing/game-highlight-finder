@@ -54,14 +54,14 @@ def _window_response(
     }
 
 
-def test_window_prompt_v15_is_detection_first_and_keeps_safe_compact_output() -> None:
+def test_window_prompt_v17_is_detection_first_and_keeps_safe_compact_output() -> None:
     source_id = "src_" + "a" * 16
     window = plan_scout_windows(20_000, session_id="session", source_id=source_id).windows[0]
     prompt = build_window_prompt(
         source_duration_ms=20_000,
         window=window,
         local_signal_summary={"loudness_peak_db": -4.0},
-        prompt_version="gemini-scout-window-v15",
+        prompt_version="gemini-scout-window-v17",
     )
     assert "entire supplied video AND audio window" in prompt
     assert "STILL return worthwhile top-level candidates" in prompt
@@ -76,7 +76,8 @@ def test_window_prompt_v15_is_detection_first_and_keeps_safe_compact_output() ->
     assert "score is editorial or short-form potential from 0 to 10" in prompt
     assert "confidence is certainty from 0 to 1" in prompt
     assert "Prefer lower score or confidence over omitting a real concrete anchor" in prompt
-    assert "setup <= start < end <= payoff" in prompt
+    assert "Do not emit setup_start_ms or payoff_end_ms" in prompt
+    assert "local pre/post-roll adds extra clip context" in prompt
     assert "hints only, not ground truth" in prompt
     assert "audio-heavy and is only a seek hint" in prompt
     assert "Generic laughter, menu interaction, banter, hiding, or searching alone" in prompt

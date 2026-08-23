@@ -101,10 +101,22 @@ def gemini_scout_schema() -> dict[str, Any]:
 
 
 def gemini_window_scout_schema() -> dict[str, Any]:
-    """Project the M6 window-relative contract for a provider request."""
+    """Project the compact M6 window-relative provider contract.
+
+    Window Scout intentionally omits optional setup/payoff timestamps. The
+    canonical domain still accepts them for legacy responses, while local clip
+    derivation supplies bounded pre/post-roll around the core event interval.
+    """
 
     schema = gemini_scout_schema()
     properties = schema["properties"]
+    for candidate_schema in (
+        properties["candidates"]["items"],
+        properties["matches"]["items"]["properties"]["candidates"]["items"],
+    ):
+        candidate_properties = candidate_schema["properties"]
+        candidate_properties.pop("setup_start_ms", None)
+        candidate_properties.pop("payoff_end_ms", None)
     properties["time_basis"] = {"type": "string", "enum": ["window_relative"]}
     properties["window_start_ms"] = {"type": "integer"}
     properties["window_end_ms"] = {"type": "integer"}

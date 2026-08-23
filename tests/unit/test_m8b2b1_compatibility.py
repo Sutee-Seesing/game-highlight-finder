@@ -3,7 +3,10 @@ from pathlib import Path
 
 import pytest
 
-from game_highlight_finder.pipeline.gemini_contract import gemini_window_scout_schema
+from game_highlight_finder.pipeline.gemini_contract import (
+    gemini_scout_schema,
+    gemini_window_scout_schema,
+)
 from game_highlight_finder.pipeline.gemini_scout import estimate_gemini_usage
 from game_highlight_finder.providers.base import ProviderRequest, ProviderUsageEstimate
 from game_highlight_finder.providers.gemini import (
@@ -353,6 +356,26 @@ def test_fake_transport_mirrors_model_specific_resolution_wire_shape(tmp_path: P
             assert "resolution" not in video
         else:
             assert video["resolution"] == expected
+
+
+def test_window_scout_schema_omits_optional_context_timestamps_only_at_provider_boundary() -> None:
+    base = gemini_scout_schema()
+    window = gemini_window_scout_schema()
+
+    base_top = base["properties"]["candidates"]["items"]["properties"]
+    window_top = window["properties"]["candidates"]["items"]["properties"]
+    base_nested = base["properties"]["matches"]["items"]["properties"]["candidates"]["items"][
+        "properties"
+    ]
+    window_nested = window["properties"]["matches"]["items"]["properties"]["candidates"]["items"][
+        "properties"
+    ]
+
+    for field in ("setup_start_ms", "payoff_end_ms"):
+        assert field in base_top
+        assert field in base_nested
+        assert field not in window_top
+        assert field not in window_nested
 
 
 def test_window_scout_schema_stays_within_small_supported_subset() -> None:
