@@ -101,6 +101,30 @@ def test_window_prompt_v17_is_detection_first_and_keeps_safe_compact_output() ->
     assert "590000" not in prompt
 
 
+def test_window_canonicalization_derives_match_ordinal_from_array_order() -> None:
+    payload = _window_response(
+        duration_ms=20_000,
+        start_ms=0,
+        end_ms=20_000,
+        event_start=12_000,
+        event_end=13_000,
+    )
+    match = payload["matches"][0]  # type: ignore[index]
+    del match["ordinal"]  # type: ignore[index]
+
+    session_map = canonicalize_scout_response(
+        payload,
+        session_id="session",
+        source_id="src_" + "a" * 16,
+        source_duration_ms=20_000,
+        source_window_id="scout_window_" + "b" * 16,
+        source_window_start_ms=0,
+        source_window_end_ms=20_000,
+    )
+
+    assert session_map.matches[0].ordinal == 0
+
+
 def test_window_planner_is_bounded_contiguous_and_deterministic() -> None:
     first = plan_scout_windows(900_001, session_id="session", source_id="src_" + "a" * 16)
     second = plan_scout_windows(900_001, session_id="session", source_id="src_" + "a" * 16)

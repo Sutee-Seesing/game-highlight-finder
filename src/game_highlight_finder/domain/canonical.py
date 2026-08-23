@@ -305,7 +305,7 @@ def canonicalize_scout_response(
         try:
             match = Match(
                 match_id=match_id,
-                ordinal=match_fragment.ordinal,
+                ordinal=ordinal,
                 start_ms=start,
                 end_ms=end,
                 label=match_fragment.label,
@@ -359,13 +359,10 @@ def canonicalize_scout_response(
     seen_semantics: set[tuple[object, ...]] = set()
     seen_provider_candidate_ids: set[str] = set()
     for candidate_number, (fragment, candidate_match_id, _match_index) in enumerate(fragments):
-        if (
-            relative_duration_ms is not None
-            and _candidate_has_timestamp_outside_window(fragment, relative_duration_ms)
+        if relative_duration_ms is not None and _candidate_has_timestamp_outside_window(
+            fragment, relative_duration_ms
         ):
-            warnings.append(
-                f"dropped out-of-window candidate fragment at index {candidate_number}"
-            )
+            warnings.append(f"dropped out-of-window candidate fragment at index {candidate_number}")
             continue
         provider_candidate_id = fragment.provider_id or fragment.candidate_id
         if provider_candidate_id:
@@ -537,8 +534,7 @@ def _candidate_has_timestamp_outside_window(
     for evidence in candidate.evidence:
         timestamps.extend((evidence.start_ms, evidence.end_ms))
     return any(
-        timestamp is not None and timestamp > relative_duration_ms
-        for timestamp in timestamps
+        timestamp is not None and timestamp > relative_duration_ms for timestamp in timestamps
     )
 
 
