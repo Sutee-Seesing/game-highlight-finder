@@ -16,14 +16,18 @@ from game_highlight_finder.cost.pricing import PricingCatalog
 
 GEMINI_MODEL_ID = "gemini-3.5-flash-lite"
 GEMINI_25_MODEL_ID = "gemini-2.5-flash-lite"
+GEMINI_37_MODEL_ID = "gemini-3.7-flash"
 GEMINI_PRICING_SOURCE = "https://ai.google.dev/gemini-api/docs/pricing"
 GEMINI_MODEL_SOURCE = "https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash-lite"
 GEMINI_25_MODEL_SOURCE = "https://ai.google.dev/gemini-api/docs/models/gemini-2.5-flash-lite"
+GEMINI_37_MODEL_SOURCE = "https://ai.google.dev/gemini-api/docs/models/gemini-3.7-flash"
 # The checkout's validation clock is 2026-08-13 Asia/Bangkok (2026-08-12
 # afternoon UTC).  Keep the snapshot behind that clock so freshness checks do
 # not accidentally treat a just-verified entry as future-dated.
 GEMINI_PRICING_VERIFIED_AT = datetime(2026, 8, 12, 12, 0, tzinfo=UTC)
 GEMINI_CATALOG_VERSION = "google-gemini-2026-08-13-v1"
+GEMINI_37_CATALOG_VERSION = "google-gemini-2026-08-23-v2"
+GEMINI_37_PRICING_VERIFIED_AT = datetime(2026, 8, 23, 12, 0, tzinfo=UTC)
 
 
 GEMINI_STANDARD_PRICING = PricingEntry(
@@ -70,17 +74,48 @@ GEMINI_25_STANDARD_PRICING = PricingEntry(
     ),
 )
 
+GEMINI_37_STANDARD_PRICING = PricingEntry(
+    provider="gemini",
+    model=GEMINI_37_MODEL_ID,
+    billing_mode="standard",
+    currency="USD",
+    input_rates_by_modality={
+        "text": Decimal("0.75"),
+        "image": Decimal("0.75"),
+        "video": Decimal("0.75"),
+        "audio": Decimal("0.75"),
+    },
+    output_rate=Decimal("3.75"),
+    effective_from=datetime(2026, 8, 23, tzinfo=UTC),
+    verified_at=GEMINI_37_PRICING_VERIFIED_AT,
+    source=GEMINI_PRICING_SOURCE,
+    catalog_version=GEMINI_37_CATALOG_VERSION,
+    notes=(
+        "Google Developer API Standard paid tier; output rate includes thinking tokens. "
+        "Introductory promotional rates apply through 2026-12-31; reverify before "
+        "using after that date. "
+        f"Model capability source: {GEMINI_37_MODEL_SOURCE}."
+    ),
+)
+
 
 def production_pricing_catalog() -> PricingCatalog:
-    """Return fresh pricing entries for the accepted M5 and M8B2 models."""
+    """Return exact production pricing entries for explicitly selectable Gemini models."""
 
-    return PricingCatalog([GEMINI_25_STANDARD_PRICING, GEMINI_STANDARD_PRICING])
+    return PricingCatalog(
+        [GEMINI_25_STANDARD_PRICING, GEMINI_STANDARD_PRICING, GEMINI_37_STANDARD_PRICING]
+    )
 
 
 __all__ = [
     "GEMINI_25_MODEL_ID",
     "GEMINI_25_MODEL_SOURCE",
     "GEMINI_25_STANDARD_PRICING",
+    "GEMINI_37_CATALOG_VERSION",
+    "GEMINI_37_MODEL_ID",
+    "GEMINI_37_MODEL_SOURCE",
+    "GEMINI_37_PRICING_VERIFIED_AT",
+    "GEMINI_37_STANDARD_PRICING",
     "GEMINI_CATALOG_VERSION",
     "GEMINI_MODEL_ID",
     "GEMINI_PRICING_SOURCE",

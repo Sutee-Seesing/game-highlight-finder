@@ -17,7 +17,10 @@ from game_highlight_finder.config import (
     config_payload,
 )
 from game_highlight_finder.cost.fx import FxSnapshot
-from game_highlight_finder.cost.production import production_pricing_catalog
+from game_highlight_finder.cost.production import (
+    GEMINI_37_CATALOG_VERSION,
+    production_pricing_catalog,
+)
 from game_highlight_finder.cost.service import CostRequest, CostService
 from game_highlight_finder.errors import (
     CostGateError,
@@ -183,6 +186,43 @@ def test_exact_gemini_pricing_is_versioned_and_freshness_is_fail_closed() -> Non
             now=NOW + timedelta(days=31),
             max_age_days=30,
         )
+
+
+def test_gemini_37_promotional_pricing_lookup_and_quote_keep_exact_identity(
+    tmp_path: Path, ffmpeg_path: Path, ffprobe_path: Path
+) -> None:
+    now = datetime(2026, 8, 23, 12, 0, tzinfo=UTC)
+    catalog = production_pricing_catalog()
+    entry = catalog.lookup("gemini", "gemini-3.7-flash", "standard", now=now, max_age_days=30)
+    assert entry.input_rates_by_modality == {
+        "text": Decimal("0.75"),
+        "image": Decimal("0.75"),
+        "video": Decimal("0.75"),
+        "audio": Decimal("0.75"),
+    }
+    assert entry.output_rate == Decimal("3.75")
+    assert entry.catalog_version == GEMINI_37_CATALOG_VERSION
+    assert "promotional" in entry.notes.lower()
+
+    config = _config(tmp_path, ffmpeg_path, ffprobe_path).model_copy(
+        update={
+            "scout": ScoutConfig(backend="gemini", model="gemini-3.7-flash", thinking_level="low")
+        }
+    )
+    quote = _service(config).quote(
+        CostRequest(
+            call_id="gemini-37-quote",
+            provider="gemini",
+            model="gemini-3.7-flash",
+            billing_mode="standard",
+            stage="scout",
+            usage_estimate=ProviderUsageEstimate(input_video_tokens=100, output_tokens=10),
+            request_payload={},
+        ),
+        now=now,
+    )
+    assert quote.model == "gemini-3.7-flash"
+    assert quote.pricing_snapshot.catalog_version == GEMINI_37_CATALOG_VERSION
 
 
 def test_usage_mapping_requires_authoritative_counts_and_bounds_thinking() -> None:

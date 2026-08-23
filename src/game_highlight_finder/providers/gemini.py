@@ -525,6 +525,21 @@ class GeminiProvider(ProviderAdapter):
                         async_execution=False,
                     ),
                 ),
+                ProviderModel(
+                    provider=GEMINI_PROVIDER,
+                    model_id="gemini-3.7-flash",
+                    billing_modes=("standard",),
+                    capabilities=ProviderCapabilities(
+                        video_input=True,
+                        audio_input=True,
+                        structured_output=True,
+                        file_upload=True,
+                        usage_metadata=True,
+                        remote_file_deletion=True,
+                        batch_execution=False,
+                        async_execution=False,
+                    ),
+                ),
             ),
         )
 

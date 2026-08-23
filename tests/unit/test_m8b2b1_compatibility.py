@@ -32,11 +32,21 @@ def test_model_default_minimum_thinking_is_capability_aware() -> None:
 
 
 def test_explicit_supported_levels_remain_model_specific() -> None:
-    for model in ("gemini-2.5-flash-lite", "gemini-3.5-flash-lite"):
+    for model in ("gemini-2.5-flash-lite", "gemini-3.5-flash-lite", "gemini-3.7-flash"):
         resolved = resolve_gemini_thinking_config(model, "low", 512)
         assert resolved.wire_level == "low"
         assert resolved.effective_mode == "low"
         assert resolved.reserved_thinking_tokens == 512
+
+
+def test_gemini_37_rejects_minimal_thinking_and_preserves_supported_levels() -> None:
+    with pytest.raises(ValueError, match="does not support thinking_level='minimal'"):
+        resolve_gemini_thinking_config("gemini-3.7-flash", "minimal")
+
+    for level in ("low", "medium", "high"):
+        resolved = resolve_gemini_thinking_config("gemini-3.7-flash", level, 512)
+        assert resolved.wire_level == level
+        assert resolved.effective_mode == level
 
 
 def test_genai_transport_rejects_unsupported_wire_minimal_before_client_dispatch() -> None:
@@ -199,6 +209,12 @@ def test_media_resolution_is_model_aware_for_interactions_api() -> None:
     assert high_35.wire_level == "high"
     assert high_35.effective_mode == "high"
     assert high_35.estimated_video_tokens_per_second == 280
+    low_37 = resolve_gemini_media_resolution("gemini-3.7-flash", "low")
+    high_37 = resolve_gemini_media_resolution("gemini-3.7-flash", "high")
+    assert low_37.wire_level == "low"
+    assert low_37.estimated_video_tokens_per_second == 70
+    assert high_37.wire_level == "high"
+    assert high_37.estimated_video_tokens_per_second == 280
 
 
 @pytest.mark.parametrize(

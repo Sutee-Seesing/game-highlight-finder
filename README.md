@@ -305,6 +305,13 @@ omits the wire field and uses its documented default-minimal behavior. Persisted
 request/cache identities include these effective semantics. Current usage metadata is
 parsed first, with strict conflict checks for legacy aliases.
 
+`gemini-3.7-flash` is also an explicitly selectable Standard-tier Scout model;
+it is not the application default. Its dated `google-gemini-2026-08-23-v2`
+catalog snapshot records introductory pricing through 2026-12-31: USD 0.75/M
+input tokens and USD 3.75/M output tokens including thinking. It follows Gemini
+3 media resolution (`low`/`high`, estimated at 70/280 video tokens per second),
+but rejects `thinking_level: minimal`; select `low`, `medium`, or `high`.
+
 M5 is one bounded request (maximum 900 seconds by default). It uses the Files API
 with `store=false` Interactions, structured JSON output, usage capture, persisted
 request/cache fingerprints, cost lifecycle `RESERVED -> IN_FLIGHT ->

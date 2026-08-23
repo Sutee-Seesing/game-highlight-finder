@@ -154,9 +154,11 @@ def _write_locked_fixture(tmp_path: Path) -> tuple[Path, Path]:
     return dataset_path, lock_path
 
 
-def test_gemini_descriptor_accepts_exactly_the_two_calibration_models() -> None:
+def test_gemini_descriptor_preserves_locked_calibration_models_and_supports_explicit_37() -> None:
     descriptor = gemini_provider_descriptor()
-    assert tuple(item.model_id for item in descriptor.models) == CALIBRATION_MODEL_IDS
+    model_ids = tuple(item.model_id for item in descriptor.models)
+    assert model_ids[: len(CALIBRATION_MODEL_IDS)] == CALIBRATION_MODEL_IDS
+    assert model_ids == (*CALIBRATION_MODEL_IDS, "gemini-3.7-flash")
     assert all(item.billing_modes == ("standard",) for item in descriptor.models)
     assert all(item.capabilities.audio_input for item in descriptor.models)
     assert all(item.capabilities.structured_output for item in descriptor.models)

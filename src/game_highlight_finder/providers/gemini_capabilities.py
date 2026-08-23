@@ -15,7 +15,7 @@ from dataclasses import dataclass
 MODEL_DEFAULT_MINIMUM_THINKING = "MODEL_DEFAULT_MINIMUM_THINKING"
 MODEL_COMPATIBLE_MEDIA_RESOLUTION = "MODEL_COMPATIBLE_MEDIA_RESOLUTION"
 
-GEMINI_MODEL_IDS = ("gemini-2.5-flash-lite", "gemini-3.5-flash-lite")
+GEMINI_MODEL_IDS = ("gemini-2.5-flash-lite", "gemini-3.5-flash-lite", "gemini-3.7-flash")
 
 
 @dataclass(frozen=True)
@@ -86,10 +86,11 @@ def resolve_gemini_thinking_config(
     """Resolve the baseline thinking policy for one supported Gemini model.
 
     ``minimal`` is retained as the application-level baseline input so old
-    config files remain readable.  For both accepted models it means the
+    config files remain readable. For the existing accepted models it means the
     documented model default at the wire boundary: thinking off for 2.5
-    Flash-Lite and minimal for 3.5 Flash-Lite.  Explicit ``low``/``medium``/
-    ``high`` values are sent unchanged to models that document them.
+    Flash-Lite and minimal for 3.5 Flash-Lite. Gemini 3.7 Flash does not
+    support ``minimal`` and fails closed; explicit ``low``/``medium``/``high``
+    values are sent unchanged.
     """
 
     if model not in GEMINI_MODEL_IDS:
@@ -107,6 +108,11 @@ def resolve_gemini_thinking_config(
                 wire_level=None,
                 effective_mode="default_off",
                 reserved_thinking_tokens=0,
+            )
+        if model == "gemini-3.7-flash":
+            raise ValueError(
+                "Gemini 3.7 Flash does not support thinking_level='minimal'; "
+                "select low, medium, or high."
             )
         return GeminiThinkingConfig(
             model=model,
