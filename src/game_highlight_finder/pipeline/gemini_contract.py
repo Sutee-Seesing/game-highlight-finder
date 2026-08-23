@@ -11,6 +11,10 @@ from game_highlight_finder.domain.models import CandidateCategory
 
 GEMINI_PROMPT_VERSION = "gemini-scout-v1"
 GEMINI_SCHEMA_VERSION = 1
+# ScoutConfig permits windows up to 3,600 seconds. Keep provider-side
+# relative timestamps bounded to the same ceiling so malformed generations
+# cannot emit pathological integers before local validation runs.
+MAX_WINDOW_RELATIVE_TIMESTAMP_MS = 3_600_000
 
 
 def gemini_scout_schema() -> dict[str, Any]:
@@ -101,27 +105,62 @@ def gemini_scout_schema() -> dict[str, Any]:
 
 
 def gemini_window_scout_schema() -> dict[str, Any]:
-    """Project the compact M6 window-relative provider contract.
+    """Project the strict M6 window-relative provider contract.
 
-    Window Scout intentionally omits optional setup/payoff timestamps. The
-    canonical domain still accepts them for legacy responses, while local clip
-    derivation supplies bounded pre/post-roll around the core event interval.
+    Window Scout omits optional setup/payoff timestamps and hardens the
+    remaining structured output with JSON Schema features supported by the
+    current Gemini API. The canonical domain remains backward-compatible.
     """
 
     schema = gemini_scout_schema()
     properties = schema["properties"]
-    for candidate_schema in (
+    candidate_schemas = (
         properties["candidates"]["items"],
         properties["matches"]["items"]["properties"]["candidates"]["items"],
-    ):
+    )
+    for candidate_schema in candidate_schemas:
         candidate_properties = candidate_schema["properties"]
         candidate_properties.pop("setup_start_ms", None)
         candidate_properties.pop("payoff_end_ms", None)
+        for field in ("start_ms", "end_ms"):
+            candidate_properties[field].update(minimum=0, maximum=MAX_WINDOW_RELATIVE_TIMESTAMP_MS)
+        candidate_properties["score"].update(minimum=0, maximum=10)
+        candidate_properties["confidence"].update(minimum=0, maximum=1)
+
+    match_schema = properties["matches"]["items"]
+    match_properties = match_schema["properties"]
+    for field in ("start_ms", "end_ms"):
+        match_properties[field].update(minimum=0, maximum=MAX_WINDOW_RELATIVE_TIMESTAMP_MS)
+    match_properties["confidence"].update(minimum=0, maximum=1)
+
+    evidence_schemas = (
+        properties["candidates"]["items"]["properties"]["evidence"]["items"],
+        match_properties["evidence"]["items"],
+    )
+    for evidence_schema in evidence_schemas:
+        evidence_properties = evidence_schema["properties"]
+        for field in ("start_ms", "end_ms"):
+            evidence_properties[field].update(minimum=0, maximum=MAX_WINDOW_RELATIVE_TIMESTAMP_MS)
+        evidence_properties["strength"].update(minimum=0, maximum=1)
+
+    properties["source_duration_ms"].update(minimum=0)
+    properties["window_start_ms"] = {"type": "integer", "minimum": 0}
+    properties["window_end_ms"] = {"type": "integer", "minimum": 0}
     properties["time_basis"] = {"type": "string", "enum": ["window_relative"]}
-    properties["window_start_ms"] = {"type": "integer"}
-    properties["window_end_ms"] = {"type": "integer"}
     required = schema["required"]
     required.extend(["window_start_ms", "window_end_ms"])
+
+    def forbid_extra_keys(value: object) -> None:
+        if isinstance(value, dict):
+            if value.get("type") == "object":
+                value["additionalProperties"] = False
+            for child in value.values():
+                forbid_extra_keys(child)
+        elif isinstance(value, list):
+            for child in value:
+                forbid_extra_keys(child)
+
+    forbid_extra_keys(schema)
     return schema
 
 

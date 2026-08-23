@@ -377,9 +377,27 @@ def test_window_scout_schema_omits_optional_context_timestamps_only_at_provider_
         assert field not in window_top
         assert field not in window_nested
 
+    assert window["additionalProperties"] is False
+    assert window_top["start_ms"] == {"type": "integer", "minimum": 0, "maximum": 3_600_000}
+    assert window_top["end_ms"] == {"type": "integer", "minimum": 0, "maximum": 3_600_000}
+    assert window_top["score"]["minimum"] == 0
+    assert window_top["score"]["maximum"] == 10
+    assert window_top["confidence"]["minimum"] == 0
+    assert window_top["confidence"]["maximum"] == 1
+    assert window["properties"]["matches"]["items"]["additionalProperties"] is False
+
 
 def test_window_scout_schema_stays_within_small_supported_subset() -> None:
-    allowed = {"type", "properties", "required", "items", "enum"}
+    allowed = {
+        "type",
+        "properties",
+        "required",
+        "items",
+        "enum",
+        "additionalProperties",
+        "minimum",
+        "maximum",
+    }
     structural_keys: set[str] = set()
 
     def walk(value: object) -> None:

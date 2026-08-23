@@ -190,7 +190,7 @@ class ScoutConfig(StrictModel):
     window_overlap_seconds: int = Field(default=30, ge=0, le=3_599)
     max_windows: int = Field(default=1_024, ge=1, le=10_000)
     window_prompt_version: str = Field(
-        default="gemini-scout-window-v17", min_length=1, max_length=64
+        default="gemini-scout-window-v18", min_length=1, max_length=64
     )
 
     @field_validator("api_key_env")

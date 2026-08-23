@@ -375,7 +375,7 @@ def build_window_prompt(
     source_duration_ms: int,
     window: ScoutWindow,
     local_signal_summary: Mapping[str, Any],
-    prompt_version: str = "gemini-scout-window-v17",
+    prompt_version: str = "gemini-scout-window-v18",
 ) -> str:
     summary = json.dumps(
         dict(local_signal_summary), ensure_ascii=False, sort_keys=True, separators=(",", ":")

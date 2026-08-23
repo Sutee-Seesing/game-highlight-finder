@@ -54,14 +54,14 @@ def _window_response(
     }
 
 
-def test_window_prompt_v17_is_detection_first_and_keeps_safe_compact_output() -> None:
+def test_window_prompt_v18_is_detection_first_and_keeps_safe_compact_output() -> None:
     source_id = "src_" + "a" * 16
     window = plan_scout_windows(20_000, session_id="session", source_id=source_id).windows[0]
     prompt = build_window_prompt(
         source_duration_ms=20_000,
         window=window,
         local_signal_summary={"loudness_peak_db": -4.0},
-        prompt_version="gemini-scout-window-v17",
+        prompt_version="gemini-scout-window-v18",
     )
     assert "entire supplied video AND audio window" in prompt
     assert "STILL return worthwhile top-level candidates" in prompt
