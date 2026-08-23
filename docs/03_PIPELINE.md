@@ -150,7 +150,7 @@ does not upload, instantiate the SDK, reserve a ledger call, or generate.
 
 ## 7. Long-video Scout strategy
 
-Do not send a four-hour proxy as one request. Plan windows from local signals and hard maximum duration, initially around 45 minutes with 30 seconds overlap. Exact defaults need benchmark validation.
+Do not send a four-hour proxy as one request. Plan windows with a 300-second hard maximum and 30 seconds overlap. Shorter windows increase provider calls and cost, but provide tighter coverage and timestamp localization; they are not a claim that quality has passed validation.
 
 Each window includes:
 
@@ -210,7 +210,7 @@ ingest -> proxy -> local_signals -> window proxies -> window Scout
        -> reconcile -> derive clip bounds -> extract -> thumbnails
 ```
 
-Window planning uses `[start_ms, end_ms)` with a maximum of 900,000 ms and a
+Window planning uses `[start_ms, end_ms)` with a maximum of 300,000 ms and a
 30,000 ms overlap by default. The tail ends exactly at source duration and the
 planner rejects non-forward progress or excessive window counts. Each window
 directory commits `analysis_window.mp4`, `window.json`, bounded `signals.json`,
@@ -225,8 +225,11 @@ available exposure before an upload; cached windows are excluded. The M6 CLI
 defaults to Fake Scout; Gemini window execution requires explicit opt-in and
 uses the same per-window ledger/cache boundary validated by the bounded smoke.
 
-The window Scout prompt uses a detection-first pass: it captures concrete gameplay
-anchors before optional social or reaction moments. Its `score` is editorial
+The window Scout prompt uses a detection-first coverage sweep, including the beginning,
+middle, and end before a rescan: it captures concrete gameplay anchors before optional
+social or reaction moments. Reveal/fight/engagement candidates begin at the first useful
+setup and extend through the immediate shooting or outcome instead of collapsing to a
+later banner-only result. Its `score` is editorial
 short-form potential and its `confidence` is detection/timestamp/evidence certainty.
 The local v2 ranking preserves every canonical candidate and records these separately
 as `short_form_score` and `detection_confidence`; the current short-form score is not

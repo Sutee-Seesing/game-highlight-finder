@@ -375,7 +375,7 @@ def build_window_prompt(
     source_duration_ms: int,
     window: ScoutWindow,
     local_signal_summary: Mapping[str, Any],
-    prompt_version: str = "gemini-scout-window-v14",
+    prompt_version: str = "gemini-scout-window-v15",
 ) -> str:
     summary = json.dumps(
         dict(local_signal_summary), ensure_ascii=False, sort_keys=True, separators=(",", ":")
@@ -392,6 +392,11 @@ def build_window_prompt(
             (
                 "First perform a detection-first pass across the whole window for concrete "
                 "gameplay anchors before making editorial selections."
+            ),
+            (
+                "Perform a chronological coverage sweep through the beginning, middle, and end "
+                "of the window, then rescan before returning. One strong moment must not end "
+                "discovery of other distinct moments."
             ),
             (
                 "Concrete gameplay anchors include clear eliminations, multi-step fights, "
@@ -455,6 +460,16 @@ def build_window_prompt(
                 "the exact impact or kill marker. When uncertain, use a modestly wider interval "
                 "inside the window and put extra context in setup_start_ms/payoff_end_ms."
             ),
+            (
+                "For a reveal, fight, or engagement chain, event start_ms must begin at the "
+                "first clearly useful reveal, engagement, or setup, rather than the final impact "
+                "or banner. event_end_ms must extend through the immediate shooting, payoff, or "
+                "outcome needed to understand the moment."
+            ),
+            (
+                "When a concrete engagement is visible, do not replace it with a later "
+                "round-win or banner-only candidate."
+            ),
             "Candidate categories must use only values allowed by the supplied schema.",
             (
                 "For this window Scout, put every Candidate Moment only in the top-level "
@@ -477,9 +492,8 @@ def build_window_prompt(
             ),
             (
                 "The local timestamp scale is the supplied window duration, not the full source "
-                "duration and not a default 900-second scale. Before emitting each item, verify "
-                "that every timestamp is inside this exact local range; omit any item you cannot "
-                "place inside the supplied window."
+                "duration. Before emitting each item, verify that every timestamp is inside this "
+                "exact local range; omit any item you cannot place inside the supplied window."
             ),
             (
                 f"Set window_start_ms={window.source_start_ms} and "

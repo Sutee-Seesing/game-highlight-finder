@@ -131,6 +131,10 @@ When projected cost is too high, offer choices without silently reducing quality
 
 Never silently omit windows to fit the budget and then label the session fully analyzed.
 
+The default Scout window is 300 seconds with 30 seconds overlap. This shorter-window
+strategy trades additional provider calls and cost for better coverage and timestamp
+localization; it does not establish a validated quality result.
+
 ## 7. Provider file and privacy cost lifecycle
 
 Gemini's Files API currently documents automatic deletion after 48 hours and no File API storage fee, but both facts are external and subject to change: [Gemini Files API](https://ai.google.dev/gemini-api/docs/files). Record remote expiry and explicitly delete when practical. Upload reuse may save time but not justify keeping personal footage remotely longer than necessary.

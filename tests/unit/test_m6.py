@@ -54,18 +54,20 @@ def _window_response(
     }
 
 
-def test_window_prompt_v14_is_detection_first_and_keeps_safe_compact_output() -> None:
+def test_window_prompt_v15_is_detection_first_and_keeps_safe_compact_output() -> None:
     source_id = "src_" + "a" * 16
     window = plan_scout_windows(20_000, session_id="session", source_id=source_id).windows[0]
     prompt = build_window_prompt(
         source_duration_ms=20_000,
         window=window,
         local_signal_summary={"loudness_peak_db": -4.0},
-        prompt_version="gemini-scout-window-v14",
+        prompt_version="gemini-scout-window-v15",
     )
     assert "entire supplied video AND audio window" in prompt
     assert "STILL return worthwhile top-level candidates" in prompt
     assert "detection-first pass" in prompt
+    assert "chronological coverage sweep through the beginning, middle, and end" in prompt
+    assert "then rescan before returning" in prompt
     assert "Concrete gameplay anchors include" in prompt
     assert "Do not use score as an inclusion gate for concrete anchors" in prompt
     assert (
@@ -79,7 +81,10 @@ def test_window_prompt_v14_is_detection_first_and_keeps_safe_compact_output() ->
     assert "audio-heavy and is only a seek hint" in prompt
     assert "Generic laughter, menu interaction, banter, hiding, or searching alone" in prompt
     assert "meaningful visual sequence" in prompt
-    assert "not the full source duration and not a default 900-second scale" in prompt
+    assert "first clearly useful reveal, engagement, or setup" in prompt
+    assert "immediate shooting, payoff, or outcome" in prompt
+    assert "do not replace it with a later round-win or banner-only candidate" in prompt
+    assert "not the full source duration" in prompt
     assert "schema_version to exactly 1" in prompt
     assert "top-level candidates array" in prompt
     assert "matches[].candidates array empty" in prompt
@@ -90,21 +95,30 @@ def test_window_prompt_v14_is_detection_first_and_keeps_safe_compact_output() ->
     assert "m8-real" not in prompt
     assert "MUST_CATCH" not in prompt
     assert "WORTH_REVIEW" not in prompt
+    assert "cal-02" not in prompt
+    assert "574000" not in prompt
+    assert "590000" not in prompt
 
 
 def test_window_planner_is_bounded_contiguous_and_deterministic() -> None:
-    first = plan_scout_windows(1_800_001, session_id="session", source_id="src_" + "a" * 16)
-    second = plan_scout_windows(1_800_001, session_id="session", source_id="src_" + "a" * 16)
+    first = plan_scout_windows(900_001, session_id="session", source_id="src_" + "a" * 16)
+    second = plan_scout_windows(900_001, session_id="session", source_id="src_" + "a" * 16)
     assert first.plan_hash == second.plan_hash
-    assert len(first.windows) == 3
+    assert len(first.windows) == 4
     assert first.windows[0].source_start_ms == 0
-    assert first.windows[-1].source_end_ms == 1_800_001
+    assert first.windows[-1].source_end_ms == 900_001
+    assert [(item.source_start_ms, item.source_end_ms) for item in first.windows] == [
+        (0, 300_000),
+        (270_000, 570_000),
+        (540_000, 840_000),
+        (810_000, 900_001),
+    ]
     for left, right in zip(first.windows, first.windows[1:], strict=False):
         assert right.source_start_ms == left.source_end_ms - 30_000
-        assert left.duration_ms <= 900_000
+        assert left.duration_ms <= 300_000
 
 
-@pytest.mark.parametrize("overlap", [-1, 900_000])
+@pytest.mark.parametrize("overlap", [-1, 300_000])
 def test_window_planner_rejects_invalid_overlap(overlap: int) -> None:
     with pytest.raises(ValidationError):
         plan_scout_windows(100_000, overlap_ms=overlap)

@@ -76,10 +76,10 @@ scout:
   readiness_poll_initial_seconds: 1
   readiness_poll_max_seconds: 8
   cleanup_retry_limit: 3
-  window_duration_seconds: 900
+  window_duration_seconds: 300
   window_overlap_seconds: 30
   max_windows: 1024
-  window_prompt_version: gemini-scout-window-v14
+  window_prompt_version: gemini-scout-window-v15
 
 report:
   # Local deterministic shortlist; all candidates remain in the report.

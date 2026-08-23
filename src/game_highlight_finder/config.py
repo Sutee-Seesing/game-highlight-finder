@@ -186,11 +186,11 @@ class ScoutConfig(StrictModel):
     cleanup_retry_limit: int = Field(default=3, ge=0, le=10)
     # M6 bounded overlapping-window policy.  These are intentionally separate
     # from the M5 one-request duration ceiling so old configs remain valid.
-    window_duration_seconds: int = Field(default=900, ge=1, le=3_600)
+    window_duration_seconds: int = Field(default=300, ge=1, le=3_600)
     window_overlap_seconds: int = Field(default=30, ge=0, le=3_599)
     max_windows: int = Field(default=1_024, ge=1, le=10_000)
     window_prompt_version: str = Field(
-        default="gemini-scout-window-v14", min_length=1, max_length=64
+        default="gemini-scout-window-v15", min_length=1, max_length=64
     )
 
     @field_validator("api_key_env")

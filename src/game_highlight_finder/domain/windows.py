@@ -119,7 +119,7 @@ def _window_digest(
 def plan_scout_windows(
     source_duration_ms: int,
     *,
-    max_duration_ms: int = 900_000,
+    max_duration_ms: int = 300_000,
     overlap_ms: int = 30_000,
     session_id: str = "session",
     source_id: str = "src_0000000000000000",
