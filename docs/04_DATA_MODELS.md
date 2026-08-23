@@ -297,7 +297,15 @@ V1 should favor under-merging over creating long, incoherent clips. Manual futur
 
 ## 7. Ranking
 
-Ranking is deterministic and explainable. Initial ranking can combine normalized Scout score, confidence, Reviewer score when present, standalone clarity, and penalties for duplication or excessive duration. Missing Reviewer results must not become zero; use a Scout-only formula and label the ranking basis.
+Ranking is deterministic and explainable. The current v2 ranking keeps every
+canonical candidate and orders by Scout `short_form_score` descending, then Scout
+`detection_confidence` descending, event start, and stable candidate ID. For now,
+`short_form_score` is exactly the Scout editorial score, not a virality prediction;
+`detection_confidence` is exactly Scout confidence that the event and its timestamps
+and evidence are correct. Legacy `score` and `confidence` remain in each ranking
+entry for compatibility. The recorded ranking basis makes this temporary Scout-only
+layer explicit; future Reviewer results and publish-performance metrics may improve
+short-form scoring without changing detection capture.
 
 Store ranking configuration/version and component scores. `best_of_candidate_ids`
 is reserved for later presentation ranking; M3 leaves it empty while the library

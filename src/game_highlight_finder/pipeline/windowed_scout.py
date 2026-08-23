@@ -375,7 +375,7 @@ def build_window_prompt(
     source_duration_ms: int,
     window: ScoutWindow,
     local_signal_summary: Mapping[str, Any],
-    prompt_version: str = "gemini-scout-window-v6",
+    prompt_version: str = "gemini-scout-window-v14",
 ) -> str:
     summary = json.dumps(
         dict(local_signal_summary), ensure_ascii=False, sort_keys=True, separators=(",", ":")
@@ -390,23 +390,23 @@ def build_window_prompt(
                 "there are no highlights."
             ),
             (
-                "Primary objective: find moments a human short-form editor would plausibly "
-                "want to review or share, while avoiding routine gameplay."
+                "First perform a detection-first pass across the whole window for concrete "
+                "gameplay anchors before making editorial selections."
             ),
             (
-                "Strong candidates include clutch/skill/smart play, funny or failed moments, "
-                "visible or audible reactions, friend interactions, surprising/WTF events, "
-                "and tension with a payoff."
+                "Concrete gameplay anchors include clear eliminations, multi-step fights, "
+                "target reveals or finds followed by engagement, sustained shooting encounters, "
+                "objective or state changes, close escapes, failures, and round or outcome changes."
             ),
             (
-                "Treat voice chat, laughter, shouting, surprise, and other audible reactions "
-                "as real evidence when audio is present; do not judge only from local signal "
-                "hints."
+                "Emit every clear concrete gameplay anchor even when its editorial short-form "
+                "potential is only moderate. Do not use score as an inclusion gate for concrete "
+                "anchors."
             ),
             (
-                "Give equal attention to visual gameplay payoff: visible fights, precise plays, "
-                "surprising outcomes, failures, and reactions can be worthwhile even when they "
-                "are quiet or the audio is ambiguous."
+                "Only after concrete gameplay anchors are covered, add social, funny, or reaction "
+                "candidates. Social or audio moments must never replace or crowd out visible "
+                "gameplay anchors; there is no quota."
             ),
             (
                 "The local signal summary may be audio-heavy and is only a seek hint, never a "
@@ -415,20 +415,19 @@ def build_window_prompt(
                 "inspection."
             ),
             (
-                "Rank clear visual gameplay outcomes ahead of generic voice-chat banter or "
-                "routine menu, lobby, hiding, or searching activity. Audio-only candidates need "
-                "an unusually distinctive event; ordinary laughter or talking is not enough."
+                "Generic laughter, menu interaction, banter, hiding, or searching alone is not a "
+                "highlight; it needs a distinct self-contained payoff."
             ),
             (
-                "Actively look for visible objective progress, player finds or eliminations, "
-                "close escapes, sudden failures, round outcomes, and other state changes even "
-                "when nobody reacts aloud."
+                "Treat voice chat, laughter, shouting, surprise, and other audible reactions as "
+                "evidence when audio is present, but do not let them substitute for visual "
+                "inspection."
             ),
             (
-                "For a gameplay candidate, require a visible anchor whenever gameplay is on "
-                "screen. Do not emit routine chat, laughter, banter, menu interaction, hiding, "
-                "or searching as a highlight by itself; audio-only material must be an unusual "
-                "self-contained payoff, not a quota filler."
+                "score is editorial or short-form potential from 0 to 10; confidence is certainty "
+                "from 0 to 1 that the event happened and its timestamps and evidence are correct. "
+                "Prefer lower score or confidence over omitting a real concrete anchor; never "
+                "invent events."
             ),
             (
                 "If match or round boundaries are uncertain, return zero matches if needed "

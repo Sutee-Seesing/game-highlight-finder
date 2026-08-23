@@ -54,26 +54,30 @@ def _window_response(
     }
 
 
-def test_window_prompt_v6_prioritizes_recall_and_compact_nonduplicated_output() -> None:
+def test_window_prompt_v14_is_detection_first_and_keeps_safe_compact_output() -> None:
     source_id = "src_" + "a" * 16
     window = plan_scout_windows(20_000, session_id="session", source_id=source_id).windows[0]
     prompt = build_window_prompt(
         source_duration_ms=20_000,
         window=window,
         local_signal_summary={"loudness_peak_db": -4.0},
-        prompt_version="gemini-scout-window-v6",
+        prompt_version="gemini-scout-window-v14",
     )
     assert "entire supplied video AND audio window" in prompt
     assert "STILL return worthwhile top-level candidates" in prompt
-    assert "Prefer recall for clearly salient moments" in prompt
+    assert "detection-first pass" in prompt
+    assert "Concrete gameplay anchors include" in prompt
+    assert "Do not use score as an inclusion gate for concrete anchors" in prompt
+    assert (
+        "Social or audio moments must never replace or crowd out visible gameplay anchors" in prompt
+    )
+    assert "score is editorial or short-form potential from 0 to 10" in prompt
+    assert "confidence is certainty from 0 to 1" in prompt
+    assert "Prefer lower score or confidence over omitting a real concrete anchor" in prompt
     assert "setup <= start < end <= payoff" in prompt
     assert "hints only, not ground truth" in prompt
-    assert "clutch/skill/smart play" in prompt
-    assert "friend interactions" in prompt
-    assert "equal attention to visual gameplay payoff" in prompt
     assert "audio-heavy and is only a seek hint" in prompt
-    assert "Rank clear visual gameplay outcomes ahead" in prompt
-    assert "require a visible anchor" in prompt
+    assert "Generic laughter, menu interaction, banter, hiding, or searching alone" in prompt
     assert "meaningful visual sequence" in prompt
     assert "not the full source duration and not a default 900-second scale" in prompt
     assert "schema_version to exactly 1" in prompt

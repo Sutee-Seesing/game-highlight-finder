@@ -225,6 +225,14 @@ available exposure before an upload; cached windows are excluded. The M6 CLI
 defaults to Fake Scout; Gemini window execution requires explicit opt-in and
 uses the same per-window ledger/cache boundary validated by the bounded smoke.
 
+The window Scout prompt uses a detection-first pass: it captures concrete gameplay
+anchors before optional social or reaction moments. Its `score` is editorial
+short-form potential and its `confidence` is detection/timestamp/evidence certainty.
+The local v2 ranking preserves every canonical candidate and records these separately
+as `short_form_score` and `detection_confidence`; the current short-form score is not
+a virality prediction. Future Reviewer or publish-performance metrics may improve
+ranking without changing detection capture.
+
 Reconcile completes only when all expected windows have canonical results.
 Extraction records each candidate independently and atomically. On interruption,
 verified completed clip/thumbnail hashes are reused and only missing/incomplete

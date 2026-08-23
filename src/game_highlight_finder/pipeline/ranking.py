@@ -16,8 +16,9 @@ from game_highlight_finder.storage.atomic import atomic_write_json, read_json
 from game_highlight_finder.storage.hashing import hash_file
 from game_highlight_finder.storage.sessions import SessionPaths
 
-RANKING_VERSION = "m7-ranking-v1"
-RANKING_SCHEMA_VERSION = 1
+RANKING_VERSION = "m8-ranking-v2"
+RANKING_SCHEMA_VERSION = 2
+RANKING_BASIS = "scout_short_form_score_then_detection_confidence"
 
 
 class RankingEntry(BaseModel):
@@ -27,15 +28,18 @@ class RankingEntry(BaseModel):
     rank: int = Field(gt=0)
     score: float = Field(ge=0, le=10)
     confidence: float = Field(ge=0, le=1)
+    short_form_score: float = Field(ge=0, le=10)
+    detection_confidence: float = Field(ge=0, le=1)
     ranking_key: str = Field(min_length=1, max_length=300)
 
 
 class RankingArtifact(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    schema_version: int = 1
+    schema_version: int = RANKING_SCHEMA_VERSION
     producer_version: str
     ranking_version: str
+    ranking_basis: str = Field(min_length=1, max_length=100)
     session_id: str
     source_id: str
     candidate_count: int = Field(ge=0)
@@ -47,8 +51,8 @@ class RankingArtifact(BaseModel):
 
 def _candidate_key(candidate: Candidate) -> tuple[float, float, int, str]:
     return (
-        -candidate.score,
-        -candidate.confidence,
+        -candidate.score,  # current Scout short-form editorial score
+        -candidate.confidence,  # current Scout detection confidence
         candidate.event_start_ms,
         candidate.candidate_id,
     )
@@ -60,6 +64,7 @@ def ranking_cache_payload(session_map: SessionMap, *, best_of_limit: int) -> dic
     )
     return {
         "ranking_version": RANKING_VERSION,
+        "ranking_basis": RANKING_BASIS,
         "session_map_sha256": hashlib.sha256(canonical.encode("utf-8")).hexdigest(),
         "best_of_limit": best_of_limit,
     }
@@ -84,8 +89,11 @@ def rank_session_map(session_map: SessionMap, *, best_of_limit: int = 3) -> Rank
             rank=index,
             score=candidate.score,
             confidence=candidate.confidence,
+            short_form_score=candidate.score,
+            detection_confidence=candidate.confidence,
             ranking_key=(
-                f"score={candidate.score:.6f};confidence={candidate.confidence:.6f};"
+                f"short_form_score={candidate.score:.6f};"
+                f"detection_confidence={candidate.confidence:.6f};"
                 f"event_start_ms={candidate.event_start_ms};candidate_id={candidate.candidate_id}"
             ),
         )
@@ -94,6 +102,7 @@ def rank_session_map(session_map: SessionMap, *, best_of_limit: int = 3) -> Rank
     return RankingArtifact(
         producer_version=__version__,
         ranking_version=RANKING_VERSION,
+        ranking_basis=RANKING_BASIS,
         session_id=session_map.session_id,
         source_id=session_map.source_id,
         candidate_count=len(ordered),
@@ -130,6 +139,7 @@ def ranking_hash(path: Path) -> str:
 
 
 __all__ = [
+    "RANKING_BASIS",
     "RANKING_VERSION",
     "RankingArtifact",
     "RankingEntry",
