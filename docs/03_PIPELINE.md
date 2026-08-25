@@ -280,4 +280,7 @@ the production pipeline yet. It exists to test whether higher effective temporal
 refine fast-action event boundaries without changing Scout detection semantics. Refiner output
 uses slowed-clip-relative timestamps, a strict bounded JSON schema, and deterministic mapping
 back to source time. A refinement must overlap the original Scout event or it is rejected as
-event drift.
+event drift. The refiner proxy selects an H.264 encoder only after a bounded local one-frame
+encode succeeds: NVENC is preferred, Intel QSV is the hardware fallback, and libx264 is the final
+CPU fallback. This avoids trusting FFmpeg's encoder registry when a listed hardware runtime is
+not actually present on the current machine.

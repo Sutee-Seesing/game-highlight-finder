@@ -7,7 +7,10 @@ import pytest
 
 from game_highlight_finder.config import (
     AppConfig,
+    ExtractionConfig,
     LoggingConfig,
+    MediaConfig,
+    ProxyConfig,
     ScoutConfig,
     StorageConfig,
     ToolsConfig,
@@ -29,6 +32,10 @@ def _config(data_dir: Path, ffmpeg: Path, ffprobe: Path) -> AppConfig:
     return AppConfig(
         storage=StorageConfig(data_dir=data_dir),
         tools=ToolsConfig(ffmpeg_path=ffmpeg, ffprobe_path=ffprobe),
+        media=MediaConfig(
+            proxy=ProxyConfig(video_codec="libx264", preset="veryfast"),
+            extraction=ExtractionConfig(video_codec="libx264", preset="veryfast"),
+        ),
     )
 
 

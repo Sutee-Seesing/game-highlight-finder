@@ -13,7 +13,14 @@ from game_highlight_finder.benchmark.models import (
     Modality,
 )
 from game_highlight_finder.cli import app
-from game_highlight_finder.config import AppConfig, StorageConfig, ToolsConfig
+from game_highlight_finder.config import (
+    AppConfig,
+    ExtractionConfig,
+    MediaConfig,
+    ProxyConfig,
+    StorageConfig,
+    ToolsConfig,
+)
 from game_highlight_finder.pipeline.runner import analyze_v1_source
 from game_highlight_finder.storage.atomic import atomic_write_json
 from game_highlight_finder.storage.hashing import hash_file
@@ -31,6 +38,10 @@ def test_full_benchmark_evaluate_cli_is_offline_and_persists_metrics(
     config = AppConfig(
         storage=StorageConfig(data_dir=tmp_path / "library"),
         tools=ToolsConfig(ffmpeg_path=ffmpeg_path, ffprobe_path=ffprobe_path),
+        media=MediaConfig(
+            proxy=ProxyConfig(video_codec="libx264", preset="veryfast"),
+            extraction=ExtractionConfig(video_codec="libx264", preset="veryfast"),
+        ),
     )
     source_before = hash_file(tiny_video, source=True)
     analysis = analyze_v1_source(tiny_video, config)

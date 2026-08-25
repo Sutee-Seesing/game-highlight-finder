@@ -11,6 +11,9 @@ from pydantic import ValidationError as PydanticValidationError
 from game_highlight_finder.config import (
     AppConfig,
     CostConfig,
+    ExtractionConfig,
+    MediaConfig,
+    ProxyConfig,
     ScoutConfig,
     StorageConfig,
     ToolsConfig,
@@ -76,6 +79,10 @@ def _config(tmp_path: Path, ffmpeg_path: Path, ffprobe_path: Path) -> AppConfig:
     return AppConfig(
         storage=StorageConfig(data_dir=tmp_path / "library"),
         tools=ToolsConfig(ffmpeg_path=ffmpeg_path, ffprobe_path=ffprobe_path),
+        media=MediaConfig(
+            proxy=ProxyConfig(video_codec="libx264", preset="veryfast"),
+            extraction=ExtractionConfig(video_codec="libx264", preset="veryfast"),
+        ),
         scout=ScoutConfig(
             backend="gemini",
             allow_remote_upload=True,

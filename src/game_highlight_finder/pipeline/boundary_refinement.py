@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Literal, cast
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from game_highlight_finder.domain.models import Candidate
+from game_highlight_finder.media.ffmpeg import build_slow_motion_proxy_command
+from game_highlight_finder.media.tools import H264EncoderChoice, select_usable_h264_encoder
 
 BOUNDARY_REFINEMENT_VERSION = "boundary-refiner-v1"
 DEFAULT_PRE_CONTEXT_MS = 20_000
@@ -92,6 +95,29 @@ def plan_boundary_refinement(
         anchor_start_ms=candidate.event_start_ms,
         anchor_end_ms=candidate.event_end_ms,
         slowdown_factor=validated_slowdown,
+    )
+
+
+def build_boundary_refinement_proxy_command(
+    ffmpeg_path: Path,
+    input_path: Path,
+    output_path: Path,
+    plan: BoundaryRefinementPlan,
+    *,
+    has_audio: bool,
+    encoder: H264EncoderChoice | None = None,
+) -> list[str]:
+    """Build the slowed refiner proxy with a codec usable on this machine."""
+
+    selected = encoder or select_usable_h264_encoder(ffmpeg_path)
+    return build_slow_motion_proxy_command(
+        ffmpeg_path,
+        input_path,
+        output_path,
+        slowdown_factor=plan.slowdown_factor,
+        has_audio=has_audio,
+        video_codec=selected.encoder,
+        preset=selected.preset,
     )
 
 

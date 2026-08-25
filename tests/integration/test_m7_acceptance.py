@@ -8,7 +8,14 @@ from typer.testing import CliRunner
 
 import game_highlight_finder.pipeline.runner as runner_module
 from game_highlight_finder.cli import app
-from game_highlight_finder.config import AppConfig, StorageConfig, ToolsConfig
+from game_highlight_finder.config import (
+    AppConfig,
+    ExtractionConfig,
+    MediaConfig,
+    ProxyConfig,
+    StorageConfig,
+    ToolsConfig,
+)
 from game_highlight_finder.cost.ledger import CostLedger
 from game_highlight_finder.pipeline.runner import analyze_v1_source
 from game_highlight_finder.pipeline.windowed_scout import FakeWindowScout, run_windowed_scout
@@ -26,6 +33,10 @@ def test_m7_cold_warm_full_v1_is_deterministic_and_offline(
     config = AppConfig(
         storage=StorageConfig(data_dir=tmp_path / "library"),
         tools=ToolsConfig(ffmpeg_path=ffmpeg_path, ffprobe_path=ffprobe_path),
+        media=MediaConfig(
+            proxy=ProxyConfig(video_codec="libx264", preset="veryfast"),
+            extraction=ExtractionConfig(video_codec="libx264", preset="veryfast"),
+        ),
     )
     original_source_hash = hash_file(tiny_video, source=True)
     providers: list[FakeWindowScout] = []
