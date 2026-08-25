@@ -274,13 +274,15 @@ provider responses remain local.
 
 ### Candidate-local boundary refinement (diagnostic scaffold)
 
-A provider-free v19 scaffold prepares a narrow context clip around an existing Scout candidate,
-then creates a 2x slow-motion proxy with audio preserved. This is intentionally not wired into
-the production pipeline yet. It exists to test whether higher effective temporal sampling can
-refine fast-action event boundaries without changing Scout detection semantics. Refiner output
-uses slowed-clip-relative timestamps, a strict bounded JSON schema, and deterministic mapping
-back to source time. A refinement must overlap the original Scout event or it is rejected as
-event drift. The refiner proxy selects an H.264 encoder only after a bounded local one-frame
-encode succeeds: NVENC is preferred, Intel QSV is the hardware fallback, and libx264 is the final
-CPU fallback. This avoids trusting FFmpeg's encoder registry when a listed hardware runtime is
-not actually present on the current machine.
+A provider-free v19 path prepares a narrow context clip around an existing Scout candidate,
+then creates a 2x slow-motion proxy with audio preserved. The local preparation step now cuts the
+context from the committed analysis proxy, validates both derivatives with ffprobe, persists parent
+and derivative hashes plus the refinement plan, and reuses only hash-valid cached artifacts. It is
+still intentionally not wired into the production pipeline or any paid provider call. The experiment
+exists to test whether higher effective temporal sampling can refine fast-action event boundaries
+without changing Scout detection semantics. Refiner output uses slowed-clip-relative timestamps, a
+strict bounded JSON schema, and deterministic mapping back to source time. A refinement must
+overlap the original Scout event or it is rejected as event drift. The refiner proxy selects an H.264
+encoder only after a bounded local one-frame encode succeeds: NVENC is preferred, Intel QSV is the
+hardware fallback, and libx264 is the final CPU fallback. This avoids trusting FFmpeg's encoder
+registry when a listed hardware runtime is not actually present on the current machine.

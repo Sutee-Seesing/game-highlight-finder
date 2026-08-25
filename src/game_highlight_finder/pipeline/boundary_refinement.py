@@ -1,13 +1,30 @@
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
-from typing import Literal, cast
+from typing import Any, Literal, cast
+from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from game_highlight_finder.domain.models import Candidate
-from game_highlight_finder.media.ffmpeg import build_slow_motion_proxy_command
-from game_highlight_finder.media.tools import H264EncoderChoice, select_usable_h264_encoder
+from game_highlight_finder.config import AppConfig
+from game_highlight_finder.domain.models import Candidate, Sha256, SourceAsset, model_json
+from game_highlight_finder.errors import ValidationError
+from game_highlight_finder.media.ffmpeg import (
+    build_slow_motion_proxy_command,
+    build_window_proxy_command,
+    run_ffmpeg,
+)
+from game_highlight_finder.media.ffprobe import run_ffprobe
+from game_highlight_finder.media.tools import (
+    H264EncoderChoice,
+    select_usable_h264_encoder,
+    tool_identity,
+)
+from game_highlight_finder.pipeline.proxy import ProxyResult
+from game_highlight_finder.storage.atomic import atomic_write_json, read_json
+from game_highlight_finder.storage.hashing import hash_file
+from game_highlight_finder.storage.sessions import make_session_id, session_paths
 
 BOUNDARY_REFINEMENT_VERSION = "boundary-refiner-v1"
 DEFAULT_PRE_CONTEXT_MS = 20_000
@@ -71,6 +88,36 @@ class BoundaryRefinementResponse(BaseModel):
         return self
 
 
+class BoundaryRefinementMediaArtifact(BaseModel):
+    """Committed local media/provenance prepared for one candidate refiner call."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    schema_version: Literal[1] = 1
+    version: str = BOUNDARY_REFINEMENT_VERSION
+    plan: BoundaryRefinementPlan
+    parent_proxy_sha256: Sha256
+    context_proxy_path: str = Field(min_length=1, max_length=1000)
+    context_proxy_sha256: Sha256
+    slowed_proxy_path: str = Field(min_length=1, max_length=1000)
+    slowed_proxy_sha256: Sha256
+    encoder: str = Field(min_length=1, max_length=100)
+    hardware_accelerated: bool
+    audio_present: bool
+    context_duration_ms: int = Field(gt=0)
+    slowed_proxy_duration_ms: int = Field(gt=0)
+
+
+class BoundaryRefinementMediaResult(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    cache_hit: bool
+    artifact_path: Path
+    context_path: Path
+    slowed_proxy_path: Path
+    artifact: BoundaryRefinementMediaArtifact
+
+
 def plan_boundary_refinement(
     candidate: Candidate,
     source_duration_ms: int,
@@ -119,6 +166,158 @@ def build_boundary_refinement_proxy_command(
         video_codec=selected.encoder,
         preset=selected.preset,
     )
+
+
+def prepare_boundary_refinement_media(
+    source: SourceAsset,
+    proxy: ProxyResult,
+    candidate: Candidate,
+    config: AppConfig,
+    *,
+    pre_context_ms: int = DEFAULT_PRE_CONTEXT_MS,
+    post_context_ms: int = DEFAULT_POST_CONTEXT_MS,
+    slowdown_factor: int = DEFAULT_SLOWDOWN_FACTOR,
+    force: bool = False,
+    encoder: H264EncoderChoice | None = None,
+) -> BoundaryRefinementMediaResult:
+    """Prepare, validate, and persist candidate-local media without any provider call."""
+
+    if proxy.session_id != make_session_id(source):
+        raise ValidationError("boundary refinement source and proxy belong to different sessions")
+    if not proxy.proxy_path.is_file():
+        raise ValidationError("boundary refinement requires a committed analysis proxy")
+
+    plan = plan_boundary_refinement(
+        candidate,
+        source.duration_ms,
+        pre_context_ms=pre_context_ms,
+        post_context_ms=post_context_ms,
+        slowdown_factor=slowdown_factor,
+    )
+    paths = session_paths(config.storage.data_dir, proxy.session_id)
+    item_dir = paths.scout_dir / "boundary_refinement" / candidate.candidate_id
+    context_path = item_dir / "context.mp4"
+    slowed_path = item_dir / "slowed.mp4"
+    artifact_path = item_dir / "artifact.json"
+    parent_sha = hash_file(proxy.proxy_path)
+
+    if not force:
+        cached = _load_cached_media_artifact(
+            artifact_path,
+            context_path,
+            slowed_path,
+            plan=plan,
+            parent_proxy_sha256=parent_sha,
+            session_root=paths.root,
+        )
+        if cached is not None:
+            return BoundaryRefinementMediaResult(
+                cache_hit=True,
+                artifact_path=artifact_path,
+                context_path=context_path,
+                slowed_proxy_path=slowed_path,
+                artifact=cached,
+            )
+
+    ffmpeg = tool_identity("ffmpeg", config.tools.ffmpeg_path)
+    ffprobe = tool_identity("ffprobe", config.tools.ffprobe_path, include_capabilities=False)
+    selected = encoder or select_usable_h264_encoder(ffmpeg.path)
+    source_clock_origin = (
+        source.timestamp_origin_ms
+        if source.timestamp_origin_ms is not None
+        else (source.video_stream.start_time_ms or 0)
+    )
+    proxy_start_ms = proxy.metadata.timestamp_mapping.source_to_proxy_ms(
+        plan.source_start_ms + source_clock_origin
+    )
+    if proxy_start_ms < 0:
+        raise ValidationError("boundary refinement mapped before the analysis proxy start")
+    if proxy_start_ms >= proxy.metadata.duration_ms:
+        raise ValidationError("boundary refinement mapped beyond the analysis proxy duration")
+
+    temp_dir = paths.tmp_dir / f"boundary-refinement-{candidate.candidate_id}-{uuid4().hex[:8]}"
+    temp_dir.mkdir(parents=True, exist_ok=False)
+    temp_context = temp_dir / "context.partial.mp4"
+    temp_slowed = temp_dir / "slowed.partial.mp4"
+    try:
+        run_ffmpeg(
+            build_window_proxy_command(
+                ffmpeg.path,
+                proxy.proxy_path,
+                temp_context,
+                proxy_start_ms=proxy_start_ms,
+                duration_ms=plan.source_duration_ms,
+                has_audio=proxy.metadata.audio_present,
+                video_codec=selected.encoder,
+                preset=selected.preset,
+            ),
+            duration_ms=plan.source_duration_ms,
+            timeout_seconds=config.tools.ffmpeg_timeout_seconds,
+            termination_grace_seconds=config.tools.termination_grace_seconds,
+        )
+        context_probe = run_ffprobe(
+            ffprobe.path,
+            temp_context,
+            timeout_seconds=config.tools.probe_timeout_seconds,
+        )
+        context_duration_ms = _validate_refinement_probe(
+            context_probe,
+            expected_duration_ms=plan.source_duration_ms,
+            expected_audio=proxy.metadata.audio_present,
+            label="boundary context",
+        )
+
+        run_ffmpeg(
+            build_boundary_refinement_proxy_command(
+                ffmpeg.path,
+                temp_context,
+                temp_slowed,
+                plan,
+                has_audio=proxy.metadata.audio_present,
+                encoder=selected,
+            ),
+            duration_ms=plan.proxy_duration_ms,
+            timeout_seconds=config.tools.ffmpeg_timeout_seconds,
+            termination_grace_seconds=config.tools.termination_grace_seconds,
+        )
+        slowed_probe = run_ffprobe(
+            ffprobe.path,
+            temp_slowed,
+            timeout_seconds=config.tools.probe_timeout_seconds,
+        )
+        slowed_duration_ms = _validate_refinement_probe(
+            slowed_probe,
+            expected_duration_ms=plan.proxy_duration_ms,
+            expected_audio=proxy.metadata.audio_present,
+            label="boundary slowed proxy",
+        )
+
+        item_dir.mkdir(parents=True, exist_ok=True)
+        temp_context.replace(context_path)
+        temp_slowed.replace(slowed_path)
+        artifact = BoundaryRefinementMediaArtifact(
+            plan=plan,
+            parent_proxy_sha256=parent_sha,
+            context_proxy_path=context_path.relative_to(paths.root).as_posix(),
+            context_proxy_sha256=hash_file(context_path),
+            slowed_proxy_path=slowed_path.relative_to(paths.root).as_posix(),
+            slowed_proxy_sha256=hash_file(slowed_path),
+            encoder=selected.encoder,
+            hardware_accelerated=selected.hardware_accelerated,
+            audio_present=proxy.metadata.audio_present,
+            context_duration_ms=context_duration_ms,
+            slowed_proxy_duration_ms=slowed_duration_ms,
+        )
+        atomic_write_json(artifact_path, model_json(artifact))
+        return BoundaryRefinementMediaResult(
+            cache_hit=False,
+            artifact_path=artifact_path,
+            context_path=context_path,
+            slowed_proxy_path=slowed_path,
+            artifact=artifact,
+        )
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)
 
 
 def boundary_refinement_schema(plan: BoundaryRefinementPlan) -> dict[str, object]:
@@ -207,3 +406,69 @@ def apply_boundary_refinement(
             "metadata": metadata,
         }
     )
+
+
+def _load_cached_media_artifact(
+    artifact_path: Path,
+    context_path: Path,
+    slowed_path: Path,
+    *,
+    plan: BoundaryRefinementPlan,
+    parent_proxy_sha256: str,
+    session_root: Path,
+) -> BoundaryRefinementMediaArtifact | None:
+    if not artifact_path.is_file() or not context_path.is_file() or not slowed_path.is_file():
+        return None
+    try:
+        artifact = BoundaryRefinementMediaArtifact.model_validate(read_json(artifact_path))
+    except Exception:
+        return None
+    if artifact.plan != plan or artifact.parent_proxy_sha256 != parent_proxy_sha256:
+        return None
+    if artifact.context_proxy_path != context_path.relative_to(session_root).as_posix():
+        return None
+    if artifact.slowed_proxy_path != slowed_path.relative_to(session_root).as_posix():
+        return None
+    if artifact.context_proxy_sha256 != hash_file(context_path):
+        return None
+    if artifact.slowed_proxy_sha256 != hash_file(slowed_path):
+        return None
+    return artifact
+
+
+def _validate_refinement_probe(
+    raw: dict[str, Any],
+    *,
+    expected_duration_ms: int,
+    expected_audio: bool,
+    label: str,
+) -> int:
+    streams = raw.get("streams")
+    format_data = raw.get("format")
+    if not isinstance(streams, list) or not isinstance(format_data, dict):
+        raise ValidationError(f"{label} ffprobe output is incomplete")
+    videos = [
+        item for item in streams if isinstance(item, dict) and item.get("codec_type") == "video"
+    ]
+    audios = [
+        item for item in streams if isinstance(item, dict) and item.get("codec_type") == "audio"
+    ]
+    if len(videos) != 1:
+        raise ValidationError(f"{label} must contain exactly one video stream")
+    if expected_audio and len(audios) != 1:
+        raise ValidationError(f"{label} is missing expected audio")
+    if not expected_audio and audios:
+        raise ValidationError(f"{label} unexpectedly contains audio")
+    try:
+        duration_ms = round(float(str(format_data.get("duration"))) * 1000)
+    except (TypeError, ValueError):
+        raise ValidationError(f"{label} duration is missing or invalid") from None
+    if duration_ms <= 0:
+        raise ValidationError(f"{label} duration must be positive")
+    tolerance_ms = max(750, int(expected_duration_ms * 0.03))
+    if abs(duration_ms - expected_duration_ms) > tolerance_ms:
+        raise ValidationError(
+            f"{label} duration differs from plan beyond tolerance "
+            f"({duration_ms} vs {expected_duration_ms} ms)"
+        )
+    return duration_ms
