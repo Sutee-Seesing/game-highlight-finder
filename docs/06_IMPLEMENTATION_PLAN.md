@@ -160,6 +160,15 @@ Ruff and mypy clean; real Gemini API calls during maintenance: zero.
   copies with H.264 NVENC/AAC by default. The helper validates audio, aspect/FPS/scale
   constraints, and a strict 250 ms duration tolerance; proxies are convenience files,
   not benchmark sources, and never alter production encoder defaults.
+- M8 v19 boundary-refinement remediation: **IMPLEMENTED OFFLINE / QUALITY NOT YET PROVEN**.
+  Candidate-local slowed media, strict fake/Gemini contracts, aggregate batch preflight,
+  injected/lazy transport execution, per-candidate cost/cache lifecycle, and the explicit
+  `highlight refine-boundaries` CLI gate are implemented. A new provider-free
+  `highlight benchmark boundary-feasibility` command is calibration-only and separates
+  strict matches from anchor-overlap boundary headroom, context reachability, detection
+  gaps, and MUST_CATCH detection gaps using the authoritative M8 evaluation policy. It
+  rejects validation/holdout cases and labels any ground-truth-derived candidate IDs as
+  diagnostic-only. No live Gemini call is made by this feasibility gate.
 - V1 defaults are **NOT LOCKED**. The provider-free 63.48-minute structural long-run
   is complete through report with Fake Scout and zero real Gemini calls: five windows,
   five candidates, best-of 3, resume/report exit 0 in 1329.587s, and a warm-cache
@@ -279,4 +288,4 @@ The 63.48-minute provider-free structural run has now exercised the long-source 
 
 ## 7. Current next action after M8 v13
 
-M7 implementation and acceptance hardening are complete. M8 v13 completed bounded validation but is **NOT ACCEPTED**. Remediation must use calibration or new calibration data only; before another unbiased validation decision, prepare and lock a fresh holdout before predictions. No additional provider generation is authorized under the exhausted 10/10 attempt cap without new explicit attempt/exposure authorization. M9 remains **NOT STARTED**.
+M7 implementation and acceptance hardening are complete. M8 v13 completed bounded validation but is **NOT ACCEPTED**. v19 boundary-refinement plumbing and its production CLI gate are implemented, but boundary-only work cannot recover events Scout never detected. The next action is to run the provider-free `benchmark boundary-feasibility` gate on legitimate calibration data and use its detection-gap versus boundary-headroom result to decide whether a live boundary-refinement calibration experiment is justified or Scout detection itself needs remediation first. The revealed validation holdout remains forbidden for tuning; before another unbiased validation decision, prepare and lock a fresh holdout before predictions. No additional provider generation is authorized under the exhausted 10/10 attempt cap without new explicit attempt/exposure authorization. M9 remains **NOT STARTED**.

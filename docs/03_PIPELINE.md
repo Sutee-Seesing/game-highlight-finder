@@ -272,22 +272,27 @@ and a result set that mixes semantic experiment configurations. Reports contain
 labels, hashes, and metrics only; private paths, media, credentials, and raw
 provider responses remain local.
 
-### Candidate-local boundary refinement (diagnostic scaffold)
+### Candidate-local boundary refinement (v19 remediation)
 
-A provider-free v19 path prepares a narrow context clip around an existing Scout candidate,
-then creates a 2x slow-motion proxy with audio preserved. The local preparation step now cuts the
-context from the committed analysis proxy, validates both derivatives with ffprobe, persists parent
-and derivative hashes plus the refinement plan, and reuses only hash-valid cached artifacts. A
-provider-free fake-refiner path also builds the exact prompt/schema/media request contract, binds it
-to candidate and media fingerprints, parses a strict bounded response, maps slowed timestamps back
-to source time, applies the refinement, and caches only fingerprint-matching fake results. Fake
-responses are explicitly persisted with `backend=fake` and are never evidence of a paid provider
-call. The experiment is still intentionally not wired into the production pipeline or any paid
-provider call. It exists to test whether higher effective temporal sampling can refine fast-action
-exists to test whether higher effective temporal sampling can refine fast-action event boundaries
-without changing Scout detection semantics. Refiner output uses slowed-clip-relative timestamps, a
-strict bounded JSON schema, and deterministic mapping back to source time. A refinement must
-overlap the original Scout event or it is rejected as event drift. The refiner proxy selects an H.264
-encoder only after a bounded local one-frame encode succeeds: NVENC is preferred, Intel QSV is the
-hardware fallback, and libx264 is the final CPU fallback. This avoids trusting FFmpeg's encoder
-registry when a listed hardware runtime is not actually present on the current machine.
+The v19 path prepares a narrow context clip around an existing Scout candidate, then creates a 2x
+slow-motion proxy with audio preserved. Local preparation cuts from the committed analysis proxy,
+validates both derivatives with ffprobe, persists parent/derivative hashes plus the refinement plan,
+and reuses only hash-valid cached artifacts. The refiner proxy runtime-probes H.264 encoders in
+NVENC -> Intel QSV -> libx264 order instead of trusting FFmpeg registry presence.
+
+The same strict prompt/schema/media contract is exercised by a provider-free fake refiner and by the
+Gemini provider boundary. Real execution remains explicit: candidate-local `slowed.mp4` is the only
+accepted upload, aggregate cost preflight runs before provider work, per-candidate ledger/cache
+lifecycle is authoritative, and ambiguous post-dispatch calls are never regenerated automatically.
+`highlight refine-boundaries SESSION_ID CANDIDATE_ID...` defaults to provider-free preflight; live
+execution requires both `--execute` and a fresh `--allow-remote-upload`. The original
+`session_map.json` is never overwritten.
+
+Because boundary refinement cannot invent a highlight that Scout never detected, calibration now has
+a provider-free feasibility gate: `highlight benchmark boundary-feasibility SESSION_ID --dataset ...
+--annotations ...`. It is calibration-only and rejects validation/holdout cases. It reuses the
+authoritative M8 temporal ruler, then reports strict matches, anchor-overlap coverage, refinement-
+context reachability, MUST_CATCH detection gaps, and boundary headroom. Candidate IDs emitted by this
+artifact are derived from calibration ground truth and are diagnostic only; they must never become a
+production selection policy. This gate makes zero provider/API calls and is the required decision
+point before spending on a boundary-refinement calibration experiment.

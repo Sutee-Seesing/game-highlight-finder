@@ -197,6 +197,13 @@ be used for tuning; a future unbiased decision needs a fresh locked holdout. M9:
 STARTED. Quality/fun is the primary product criterion, followed by MUST_CATCH
 recall, precision/review burden, cost per source hour, and runtime/storage.
 
+v19 boundary-refinement remediation is now implemented through the explicit production CLI gate,
+but it is not a quality pass. Before any new live boundary-refinement calls, use the provider-free
+`highlight benchmark boundary-feasibility` command on calibration data. It separates Scout detection
+gaps from boundary-only headroom and refuses validation/holdout cases, so the failed v13 validation
+set cannot leak back into tuning. Ground-truth-derived candidate IDs from this diagnostic are never
+production selection.
+
 Use `highlight benchmark annotate <annotation.json>` to open the small local-only
 human annotation helper. The source video is verified by SHA-256/duration, served
 read-only on loopback with byte-range support, and never re-encoded. The browser owns

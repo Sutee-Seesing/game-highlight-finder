@@ -84,6 +84,26 @@ The production command never replaces `session_map.json`; successful output rema
 This checkpoint adds the production wiring seam but does not execute the command with a real API
 key or make a live Gemini request. Automated acceptance continues to use fake/injected transports.
 
+## Calibration feasibility gate
+
+Before any live boundary-refinement calibration spend, the benchmark CLI exposes
+`highlight benchmark boundary-feasibility SESSION_ID --dataset <dataset.json> --annotations
+<annotations.json>`. The command is provider-free and accepts calibration cases only; a dataset case
+declared as validation/holdout fails closed before session/provider work. It uses the same versioned
+M8 temporal evaluation policy to measure strict matches, then separately reports:
+
+- annotations with direct Scout-anchor overlap,
+- annotations reachable only inside the candidate-local refinement context,
+- boundary headroom where an anchor overlaps ground truth but fails the strict ruler,
+- detection gaps where no Scout anchor overlaps the annotated event,
+- MUST_CATCH detection gaps and MUST_CATCH boundary headroom, and
+- strict boundary-error medians for already matched pairs.
+
+The persisted private feasibility artifact contains hashes/metrics/IDs only and records
+`provider_calls=0`. Any candidate IDs are explicitly ground-truth-derived calibration diagnostics;
+they must never be reused as an automatic production selection policy. This gate exists because v19
+can refine the timing of an existing event but cannot recover a highlight Scout did not detect.
+
 ## Deliberate limits
 
 - No live Gemini transport is wired into the production pipeline in this checkpoint.
@@ -95,7 +115,10 @@ key or make a live Gemini request. Automated acceptance continues to use fake/in
 
 ## Next safe step
 
-After offline regression remains green, the next provider-facing step is a separately authorized
-live-transport seam or a controlled calibration experiment. Any real generation must still pass the
-aggregate preflight and an explicitly authorized attempt/exposure budget. Model-quality evaluation
-must use calibration data or a fresh locked holdout; the revealed v13 holdout is not tuning data.
+After offline regression remains green, first run the provider-free boundary-feasibility gate on
+legitimate calibration data. If it shows meaningful anchor-overlap boundary headroom, a separately
+authorized live boundary-refinement calibration experiment can be considered; if detection gaps
+dominate, remediate Scout detection instead of spending on boundary timing. Any real generation must
+still pass aggregate preflight and a newly explicit attempt/exposure authorization. The revealed v13
+validation holdout is permanently excluded from tuning, and a future unbiased decision requires a
+fresh locked holdout prepared before predictions.

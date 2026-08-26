@@ -16,6 +16,9 @@ import typer
 
 from game_highlight_finder.benchmark.aggregate import aggregate_comparison, aggregate_manifest
 from game_highlight_finder.benchmark.annotation_server import AnnotationServer
+from game_highlight_finder.benchmark.boundary_feasibility import (
+    run_boundary_refinement_feasibility,
+)
 from game_highlight_finder.benchmark.calibration import (
     CALIBRATION_EXPERIMENT_REVISION,
     build_calibration_plan,
@@ -646,6 +649,65 @@ def _benchmark_validate(annotations_path: Path) -> None:
         f"total annotated highlight duration_ms: {summary.total_annotated_highlight_duration_ms}"
     )
     typer.echo("provider calls: ZERO")
+
+
+@benchmark_app.command("boundary-feasibility")
+def benchmark_boundary_feasibility(
+    ctx: typer.Context,
+    session_id: Annotated[str, typer.Argument(help="Completed calibration session identifier.")],
+    dataset: Annotated[Path, typer.Option("--dataset", help="Private benchmark dataset manifest.")],
+    annotations: Annotated[
+        Path, typer.Option("--annotations", help="Declared calibration annotation JSON.")
+    ],
+    output: Annotated[
+        Path | None, typer.Option("--output", help="Private feasibility JSON output path.")
+    ] = None,
+) -> None:
+    """Measure boundary-refinement headroom on calibration data without provider calls."""
+    _execute(
+        ctx,
+        lambda options: _benchmark_boundary_feasibility(
+            options, session_id, dataset, annotations, output
+        ),
+    )
+
+
+def _benchmark_boundary_feasibility(
+    options: RuntimeOptions,
+    session_id: str,
+    dataset: Path,
+    annotations: Path,
+    output: Path | None,
+) -> None:
+    config = _load_persisted_session_config(options, session_id)
+    result, target = run_boundary_refinement_feasibility(
+        session_id,
+        dataset,
+        annotations,
+        config,
+        output_path=output,
+    )
+    typer.echo("[PASS] boundary-refinement calibration feasibility (provider/API calls: ZERO)")
+    typer.echo(f"Case: {result.case_id} | session: {result.session_id}")
+    typer.echo(
+        f"Strict: {result.strict_match_count}/{result.ground_truth_count} truth matched; "
+        f"precision={result.strict_precision} recall={result.strict_recall}"
+    )
+    typer.echo(
+        f"Anchor overlap: {result.anchor_overlap_annotation_count}/{result.ground_truth_count}; "
+        f"boundary headroom: {result.boundary_headroom_count}; "
+        f"detection gaps: {result.detection_gap_count}"
+    )
+    typer.echo(
+        f"MUST_CATCH detection gaps: {result.must_catch_detection_gap_count}; "
+        f"MUST_CATCH boundary headroom: {result.must_catch_boundary_headroom_count}"
+    )
+    typer.echo(f"Diagnostic verdict: {result.diagnostic_verdict}")
+    typer.echo(
+        "Ground-truth-derived candidate IDs are calibration diagnostics only; "
+        "never production selection."
+    )
+    typer.echo(f"Feasibility artifact: {target}")
 
 
 @benchmark_app.command("evaluate")
