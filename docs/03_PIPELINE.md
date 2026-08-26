@@ -277,8 +277,13 @@ provider responses remain local.
 A provider-free v19 path prepares a narrow context clip around an existing Scout candidate,
 then creates a 2x slow-motion proxy with audio preserved. The local preparation step now cuts the
 context from the committed analysis proxy, validates both derivatives with ffprobe, persists parent
-and derivative hashes plus the refinement plan, and reuses only hash-valid cached artifacts. It is
-still intentionally not wired into the production pipeline or any paid provider call. The experiment
+and derivative hashes plus the refinement plan, and reuses only hash-valid cached artifacts. A
+provider-free fake-refiner path also builds the exact prompt/schema/media request contract, binds it
+to candidate and media fingerprints, parses a strict bounded response, maps slowed timestamps back
+to source time, applies the refinement, and caches only fingerprint-matching fake results. Fake
+responses are explicitly persisted with `backend=fake` and are never evidence of a paid provider
+call. The experiment is still intentionally not wired into the production pipeline or any paid
+provider call. It exists to test whether higher effective temporal sampling can refine fast-action
 exists to test whether higher effective temporal sampling can refine fast-action event boundaries
 without changing Scout detection semantics. Refiner output uses slowed-clip-relative timestamps, a
 strict bounded JSON schema, and deterministic mapping back to source time. A refinement must
