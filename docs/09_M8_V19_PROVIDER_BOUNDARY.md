@@ -5,11 +5,11 @@
 This checkpoint extends the provider-free candidate boundary-refinement work to the Gemini
 provider boundary without authorizing or performing a live Gemini request.
 
-The execution entrypoint accepts an explicitly injected `GeminiTransport`; it does not construct
-`GenAITransport` on its own. Automated acceptance uses `FakeGeminiTransport`, so this checkpoint
-has zero provider/network generations and zero real API cost.
+The execution entrypoints accept explicitly injected `GeminiTransport` objects; they do not
+construct `GenAITransport` on their own. Automated acceptance uses `FakeGeminiTransport`, so this
+checkpoint has zero live provider/network generations and zero real API cost.
 
-## Implemented contract
+## Implemented candidate contract
 
 For one explicitly selected Scout candidate:
 
@@ -44,6 +44,29 @@ no upload, and no provider generation. Tests also enforce non-empty input, uniqu
 per-item session/media provenance, deterministic ordering, and zero cost-call persistence during
 preflight.
 
+## Injected-transport batch execution
+
+The explicit batch orchestrator now carries the same contract end to end without wiring a live
+provider into production:
+
+1. Validate source/proxy/session-map identity, duration, explicit candidate IDs, and confidence.
+2. Prepare or reuse each candidate-local refinement media artifact.
+3. Run aggregate preflight for the whole selected batch before the first provider execution.
+4. Execute candidates in caller-supplied order through the injected transport only.
+5. Reuse each candidate independently when its ledger state is `SETTLED` and its persisted request
+   and response fingerprints are still valid.
+6. Preserve completed per-candidate ledger/artifacts if a later candidate fails, but do not persist
+   a final batch artifact or refined SessionMap until the entire batch completes.
+7. Replace only selected candidates, recompute clip bounds deterministically, and persist separate
+   `session_map.refined.gemini.json` and `batch.gemini.json` outputs; the input SessionMap is not
+   overwritten.
+8. Persist batch provenance including request fingerprints, call IDs, response status/confidence,
+   cache state, semantic candidate hashes, and boundary-change flags.
+
+The integration acceptance path uses real local ingest/proxy/boundary-media FFmpeg work plus two
+`FakeGeminiTransport` candidate calls. The first pass must settle both calls; a second pass must
+reuse both media/provider caches without increasing generation count.
+
 ## Deliberate limits
 
 - No live Gemini transport is wired into the production pipeline in this checkpoint.
@@ -55,7 +78,7 @@ preflight.
 
 ## Next safe step
 
-After offline regression remains green, wire this provider boundary into the explicit batch
-orchestrator behind a separate live-provider opt-in. Before any real generation, run the aggregate
-preflight and enforce an explicitly authorized attempt/exposure budget. A real quality experiment
+After offline regression remains green, the next provider-facing step is a separately authorized
+live-transport seam or a controlled calibration experiment. Any real generation must still pass the
+aggregate preflight and an explicitly authorized attempt/exposure budget. Model-quality evaluation
 must use calibration data or a fresh locked holdout; the revealed v13 holdout is not tuning data.
