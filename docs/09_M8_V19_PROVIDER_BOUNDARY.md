@@ -31,6 +31,19 @@ For one explicitly selected Scout candidate:
 10. Map accepted slowed-clip timestamps back to source time through the existing v19 mapping and
     overlap guard.
 
+## Aggregate batch preflight
+
+The provider boundary also has a provider-free aggregate preflight for an explicit candidate/media
+batch. It keeps the same maximum of 32 candidates and preserves caller order. Each item is quoted
+with the exact candidate-level request identity used by execution, then the batch sums base and
+reserved micro-THB exposure before any reservation or transport work.
+
+The aggregate gate fails closed when the total reserved exposure exceeds the currently available
+budget even when every candidate-level quote would fit by itself. It performs no ledger writes,
+no upload, and no provider generation. Tests also enforce non-empty input, unique candidate IDs,
+per-item session/media provenance, deterministic ordering, and zero cost-call persistence during
+preflight.
+
 ## Deliberate limits
 
 - No live Gemini transport is wired into the production pipeline in this checkpoint.
@@ -43,6 +56,6 @@ For one explicitly selected Scout candidate:
 ## Next safe step
 
 After offline regression remains green, wire this provider boundary into the explicit batch
-orchestrator behind a separate live-provider opt-in. Before any real generation, run candidate-level
-preflight and enforce the newly approved attempt/exposure budget. A real quality experiment must use
-calibration data or a fresh locked holdout; the revealed v13 holdout is not tuning data.
+orchestrator behind a separate live-provider opt-in. Before any real generation, run the aggregate
+preflight and enforce an explicitly authorized attempt/exposure budget. A real quality experiment
+must use calibration data or a fresh locked holdout; the revealed v13 holdout is not tuning data.
