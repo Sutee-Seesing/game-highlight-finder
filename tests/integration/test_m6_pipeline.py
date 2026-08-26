@@ -32,6 +32,7 @@ from game_highlight_finder.pipeline.windowed_scout import (
 )
 from game_highlight_finder.providers.gemini import FakeGeminiTransport, GeminiProviderError
 from game_highlight_finder.storage.atomic import read_json
+from game_highlight_finder.storage.sessions import scout_config_fingerprint
 
 
 def _config(data_dir: Path, ffmpeg: Path, ffprobe: Path) -> AppConfig:
@@ -148,6 +149,18 @@ def test_m6_offline_window_reconcile_extract_resume(
     assert first.scout.aggregate_preflight.estimated_micro_thb == 0
     assert first.extraction.incomplete == 0
     assert first.extraction.completed == len(first.session_map.candidates)
+    assert first.session_map.scout_backend == "fake"
+    assert (
+        first.session_map.scout_metadata["window_prompt_version"]
+        == config.scout.window_prompt_version
+    )
+    assert first.session_map.scout_metadata["scout_config_fingerprint"] == scout_config_fingerprint(
+        config
+    )
+    assert first.session_map.scout_metadata["window_plan_hash"] == first.windows.plan.plan_hash
+    assert (
+        first.session_map.scout_metadata["scout_provenance_source"] == "reconciled_current_config"
+    )
     assert tiny_video.read_bytes() == original
 
     second = analyze_m6_source(tiny_video, config)

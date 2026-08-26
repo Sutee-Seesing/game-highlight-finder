@@ -112,6 +112,14 @@ provider artifact, credential, persisted machine config, or validation/holdout c
 remain intact. `boundary-feasibility` now uses the caller-selected `data_dir` rather than requiring the
 source machine's `config.resolved.json`, so the same evidence can be revalidated on another PC.
 
+The bundle also preserves Scout provenance. New reconciled sessions carry the current backend/model,
+`window_prompt_version`, Scout config fingerprint, and window-plan hash directly in `session_map.json`.
+For older sessions whose reconcile step lost that metadata, packing recovers model/prompt identity
+provider-free from per-window `request_meta.json`, validates that all windows agree on source/model/
+prompt, hashes the recovered request set, and writes only the recovered identity into the bundle.
+`request_meta.json`, cost ledgers, and provider artifacts are not copied. Historical v11/v12 evidence
+must therefore remain labelled historical and must not be presented as current v18 Scout quality.
+
 ## Deliberate limits
 
 - No live Gemini transport is wired into the production pipeline in this checkpoint.

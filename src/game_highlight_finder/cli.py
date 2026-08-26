@@ -759,6 +759,12 @@ def _benchmark_pack_boundary_feasibility(
     )
     typer.echo(f"Case: {result.manifest.case_id} | session: {result.manifest.session_id}")
     typer.echo(f"Diagnostic verdict: {result.manifest.diagnostic_verdict}")
+    typer.echo(
+        "Scout provenance: "
+        f"{result.manifest.scout_provenance_source} | "
+        f"model={result.manifest.scout_model or '-'} | "
+        f"prompt={result.manifest.scout_prompt_version or '-'}"
+    )
     typer.echo("Validation/holdout included: NO")
     typer.echo("Source path sanitized: YES")
     typer.echo(f"Bundle: {result.root}")

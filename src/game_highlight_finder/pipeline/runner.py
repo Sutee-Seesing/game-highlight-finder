@@ -43,6 +43,7 @@ from game_highlight_finder.storage.sessions import (
     artifact_identity,
     completed_stage_cache_is_valid,
     load_manifest,
+    scout_config_fingerprint,
     session_paths,
     write_manifest,
 )
@@ -235,6 +236,7 @@ def analyze_m6_source(
         [(result.window, result.session_map) for result in scout.results],
         created_at=local.ingest.source.created_at,
     )
+    session_map = _attach_window_scout_provenance(session_map, scout, windows, config)
     session_map = derive_clip_boundaries(
         session_map, local.ingest.source.duration_ms, config.media.extraction
     )
@@ -440,6 +442,35 @@ def _file_hash(path: Path) -> str:
     from game_highlight_finder.storage.hashing import hash_file
 
     return hash_file(path)
+
+
+def _attach_window_scout_provenance(
+    session_map: SessionMap,
+    scout: WindowedScoutRun,
+    windows: WindowPreparationResult,
+    config: AppConfig,
+) -> SessionMap:
+    backend = scout.activity.scout_backend
+    if backend != config.scout.backend:
+        raise ConfigError(
+            "Window Scout execution backend differs from the resolved session config."
+        )
+    metadata = {
+        **session_map.scout_metadata,
+        "backend": backend,
+        "provider": backend,
+        "model": config.scout.model if backend == "gemini" else "fake",
+        "window_prompt_version": config.scout.window_prompt_version,
+        "scout_config_fingerprint": scout_config_fingerprint(config),
+        "window_plan_hash": windows.plan.plan_hash,
+        "scout_provenance_source": "reconciled_current_config",
+    }
+    return session_map.model_copy(
+        update={
+            "scout_backend": backend,
+            "scout_metadata": metadata,
+        }
+    )
 
 
 def _record_completed_stage(

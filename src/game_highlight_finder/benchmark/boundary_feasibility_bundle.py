@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import shutil
+import time
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -47,6 +50,11 @@ class BoundaryFeasibilityBundleManifest(BaseModel):
     calibration_only: Literal[True] = True
     validation_data_included: Literal[False] = False
     source_path_sanitized: Literal[True] = True
+    scout_backend: str = Field(min_length=1, max_length=64)
+    scout_model: str | None = Field(default=None, min_length=1, max_length=128)
+    scout_prompt_version: str | None = Field(default=None, min_length=1, max_length=64)
+    scout_provenance_source: str = Field(min_length=1, max_length=64)
+    scout_identity_fingerprint: Sha256 | None = None
 
     @model_validator(mode="after")
     def exact_portable_file_set(self) -> BoundaryFeasibilityBundleManifest:
@@ -143,6 +151,88 @@ def _load_case_inputs(
     return dataset, annotations, case, session_map, source
 
 
+def _sha256_json(value: object) -> str:
+    encoded = json.dumps(value, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _recover_window_scout_provenance(
+    config: AppConfig,
+    session_id: str,
+    session_map: SessionMap,
+    source: SourceAsset,
+) -> SessionMap:
+    metadata = dict(session_map.scout_metadata)
+    if metadata.get("window_prompt_version"):
+        metadata.setdefault("scout_provenance_source", "session_map")
+        return session_map.model_copy(update={"scout_metadata": metadata})
+
+    paths = session_paths(config.storage.data_dir, session_id)
+    request_entries: list[dict[str, Any]] = []
+    gemini_artifact_present = False
+    if paths.scout_windows_dir.is_dir():
+        for request_path in sorted(paths.scout_windows_dir.glob("*/request_meta.json")):
+            raw = read_json(request_path)
+            if not isinstance(raw, dict):
+                raise ValidationError("Window Scout request metadata is not a JSON object")
+            request = raw.get("request")
+            cache_key = raw.get("cache_key")
+            if not isinstance(request, dict) or not isinstance(cache_key, str) or not cache_key:
+                raise ValidationError("Window Scout request metadata is incomplete")
+            if request.get("source_sha256") != source.sha256:
+                raise ValidationError("Window Scout request metadata source identity mismatch")
+            for key in ("model", "prompt_version"):
+                if not isinstance(request.get(key), str) or not request.get(key):
+                    raise ValidationError(f"Window Scout request metadata lacks {key}")
+            request_entries.append({"cache_key": cache_key, "request": request})
+            item_dir = request_path.parent
+            gemini_artifact_present = gemini_artifact_present or (
+                (item_dir / "cost.json").is_file()
+                or (item_dir / "gemini_remote_file.json").is_file()
+            )
+
+    if not request_entries:
+        metadata.setdefault("scout_provenance_source", "unknown")
+        return session_map.model_copy(update={"scout_metadata": metadata})
+
+    prompts = {str(item["request"]["prompt_version"]) for item in request_entries}
+    models = {str(item["request"]["model"]) for item in request_entries}
+    if len(prompts) != 1 or len(models) != 1:
+        raise ValidationError(
+            "Window Scout request metadata mixes prompt/model identities within one session"
+        )
+    backend = "gemini" if gemini_artifact_present else session_map.scout_backend
+    if backend not in {"fake", "gemini"}:
+        raise ValidationError("Window Scout request metadata backend cannot be recovered safely")
+    metadata.update(
+        {
+            "backend": backend,
+            "provider": backend,
+            "model": next(iter(models)),
+            "window_prompt_version": next(iter(prompts)),
+            "window_request_set_fingerprint": _sha256_json(request_entries),
+            "scout_provenance_source": "window_request_meta",
+        }
+    )
+    return session_map.model_copy(
+        update={
+            "scout_backend": backend,
+            "scout_metadata": metadata,
+        }
+    )
+
+
+def _finalize_bundle_directory(temp_root: Path, target_root: Path) -> None:
+    for attempt in range(5):
+        try:
+            _finalize_bundle_directory(temp_root, target_root)
+            return
+        except PermissionError:
+            if target_root.exists() or attempt == 4:
+                raise
+            time.sleep(0.05 * (attempt + 1))
+
+
 def pack_boundary_refinement_feasibility_bundle(
     session_id: str,
     dataset_path: Path,
@@ -159,6 +249,7 @@ def pack_boundary_refinement_feasibility_bundle(
         annotations_path,
         config,
     )
+    session_map = _recover_window_scout_provenance(config, session_id, session_map, source)
     target_root = output_dir.expanduser().resolve()
     if target_root.exists():
         raise ValidationError("Boundary-feasibility bundle output directory must not already exist")
@@ -222,6 +313,9 @@ def pack_boundary_refinement_feasibility_bundle(
             session_map_rel.as_posix(): hash_file(session_map_out),
             "feasibility.json": hash_file(feasibility_out),
         }
+        identity_fingerprint = session_map.scout_metadata.get(
+            "scout_config_fingerprint"
+        ) or session_map.scout_metadata.get("window_request_set_fingerprint")
         manifest = BoundaryFeasibilityBundleManifest(
             case_id=annotations.case_id,
             session_id=session_id,
@@ -229,6 +323,13 @@ def pack_boundary_refinement_feasibility_bundle(
             evaluation_policy_fingerprint=feasibility.evaluation_policy_fingerprint,
             diagnostic_verdict=feasibility.diagnostic_verdict,
             files=files,
+            scout_backend=session_map.scout_backend,
+            scout_model=session_map.scout_metadata.get("model"),
+            scout_prompt_version=session_map.scout_metadata.get("window_prompt_version"),
+            scout_provenance_source=session_map.scout_metadata.get(
+                "scout_provenance_source", "unknown"
+            ),
+            scout_identity_fingerprint=identity_fingerprint,
         )
         atomic_write_json(temp_root / "bundle.json", manifest.model_dump(mode="json"))
         temp_root.rename(target_root)

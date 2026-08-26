@@ -240,6 +240,11 @@ as `short_form_score` and `detection_confidence`; the current short-form score i
 a virality prediction. Future Reviewer or publish-performance metrics may improve
 ranking without changing detection capture.
 
+After window reconciliation, the final `session_map.json` now preserves Scout provenance instead of
+falling back to generic fake metadata: backend/provider, model, exact window prompt version, current
+Scout config fingerprint, and window-plan hash are persisted. This identity is diagnostic evidence;
+quality comparisons must not treat an older prompt revision as current v18 behavior.
+
 Reconcile completes only when all expected windows have canonical results.
 Extraction records each candidate independently and atomically. On interruption,
 verified completed clip/thumbnail hashes are reused and only missing/incomplete

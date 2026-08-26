@@ -173,6 +173,10 @@ Ruff and mypy clean; real Gemini API calls during maintenance: zero.
   pack-boundary-feasibility`, which emits a JSON-only single-calibration-case bundle with
   sanitized source path and no media, credentials, provider artifacts, machine config, or
   validation data; the bundle can be revalidated under a different local `data_dir`.
+  Final reconciled SessionMaps now retain backend/model/window-prompt/config/plan provenance.
+  Historical sessions that predate this fix recover prompt/model identity from local per-window
+  request metadata during bundle packing; mixed identities fail closed and request/provider artifacts
+  themselves are never copied. This prevents v11/v12 outputs from being mistaken for current v18.
 - V1 defaults are **NOT LOCKED**. The provider-free 63.48-minute structural long-run
   is complete through report with Fake Scout and zero real Gemini calls: five windows,
   five candidates, best-of 3, resume/report exit 0 in 1329.587s, and a warm-cache

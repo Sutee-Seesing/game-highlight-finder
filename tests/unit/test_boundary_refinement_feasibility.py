@@ -298,6 +298,25 @@ def test_feasibility_bundle_is_media_free_portable_and_rerunnable(tmp_path: Path
         split=BenchmarkSplit.CALIBRATION,
     )
     bundle_root = tmp_path / "transfer" / "cal-01"
+    source_sha = read_json(annotation_path)["source_sha256"]
+    paths = session_paths(config.storage.data_dir, SESSION_ID)
+    for ordinal, cache_key in enumerate(("1" * 64, "2" * 64)):
+        item_dir = paths.scout_windows_dir / f"historical-window-{ordinal}"
+        item_dir.mkdir(parents=True, exist_ok=True)
+        atomic_write_json(
+            item_dir / "request_meta.json",
+            {
+                "cache_key": cache_key,
+                "request": {
+                    "source_sha256": source_sha,
+                    "window_id": f"historical-window-{ordinal}",
+                    "model": "gemini-3.5-flash-lite",
+                    "prompt_version": "gemini-scout-window-v6",
+                    "media_resolution": "high",
+                },
+            },
+        )
+        atomic_write_json(item_dir / "cost.json", {"historical_test": True})
 
     packed = pack_boundary_refinement_feasibility_bundle(
         SESSION_ID,
@@ -315,6 +334,12 @@ def test_feasibility_bundle_is_media_free_portable_and_rerunnable(tmp_path: Path
     assert manifest.validation_data_included is False
     assert manifest.source_path_sanitized is True
     assert manifest.diagnostic_verdict == "MUST_CATCH_DETECTION_GAP"
+    assert manifest.scout_backend == "gemini"
+    assert manifest.scout_model == "gemini-3.5-flash-lite"
+    assert manifest.scout_prompt_version == "gemini-scout-window-v6"
+    assert manifest.scout_provenance_source == "window_request_meta"
+    assert manifest.scout_identity_fingerprint is not None
+    assert len(manifest.scout_identity_fingerprint) == 64
     assert not any(
         path.suffix.lower() in {".mp4", ".mkv", ".mov", ".avi", ".webm"}
         for path in bundle_root.rglob("*")
@@ -335,6 +360,14 @@ def test_feasibility_bundle_is_media_free_portable_and_rerunnable(tmp_path: Path
     assert len(bundled_dataset.cases) == 1
     assert bundled_dataset.cases[0].split is BenchmarkSplit.CALIBRATION
     assert bundled_dataset.cases[0].result_path is None
+    bundled_session_map = SessionMap.model_validate(
+        read_json(bundle_root / "data" / "sessions" / SESSION_ID / "session_map.json")
+    )
+    assert bundled_session_map.scout_backend == "gemini"
+    assert bundled_session_map.scout_metadata["window_prompt_version"] == "gemini-scout-window-v6"
+    assert bundled_session_map.scout_metadata["scout_provenance_source"] == "window_request_meta"
+    assert not list(bundle_root.rglob("request_meta.json"))
+    assert not list(bundle_root.rglob("cost.json"))
 
     replay_config = AppConfig(storage=StorageConfig(data_dir=bundle_root / "data"))
     replay, replay_path = run_boundary_refinement_feasibility(
