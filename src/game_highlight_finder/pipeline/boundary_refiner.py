@@ -151,7 +151,7 @@ def parse_boundary_refinement_response(
 def run_fake_boundary_refinement(
     media: BoundaryRefinementMediaResult,
     candidate: Candidate,
-    fake: FakeBoundaryRefiner,
+    fake: FakeBoundaryRefiner | None = None,
     *,
     minimum_confidence: float = 0.5,
     force: bool = False,
@@ -181,6 +181,10 @@ def run_fake_boundary_refinement(
                 candidate=refined,
             )
 
+    if fake is None:
+        raise ValidationError(
+            "boundary refiner fake response is required when no valid cache exists"
+        )
     atomic_write_json(request_path, model_json(request))
     response = parse_boundary_refinement_response(fake.generate(request), request.plan)
     refined = apply_boundary_refinement(
@@ -230,6 +234,12 @@ def _load_cached_fake_response(
     except ValidationError:
         return None
     return stored_response
+
+
+def canonical_payload_sha256(payload: object) -> str:
+    """Return the deterministic JSON hash used by boundary-refinement artifacts."""
+
+    return _canonical_sha256(payload)
 
 
 def _canonical_sha256(payload: object) -> str:
