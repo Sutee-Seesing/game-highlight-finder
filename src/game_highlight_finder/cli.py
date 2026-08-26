@@ -19,6 +19,9 @@ from game_highlight_finder.benchmark.annotation_server import AnnotationServer
 from game_highlight_finder.benchmark.boundary_feasibility import (
     run_boundary_refinement_feasibility,
 )
+from game_highlight_finder.benchmark.boundary_feasibility_bundle import (
+    pack_boundary_refinement_feasibility_bundle,
+)
 from game_highlight_finder.benchmark.calibration import (
     CALIBRATION_EXPERIMENT_REVISION,
     build_calibration_plan,
@@ -679,7 +682,7 @@ def _benchmark_boundary_feasibility(
     annotations: Path,
     output: Path | None,
 ) -> None:
-    config = _load_persisted_session_config(options, session_id)
+    config = _load(options).config
     result, target = run_boundary_refinement_feasibility(
         session_id,
         dataset,
@@ -708,6 +711,63 @@ def _benchmark_boundary_feasibility(
         "never production selection."
     )
     typer.echo(f"Feasibility artifact: {target}")
+
+
+@benchmark_app.command("pack-boundary-feasibility")
+def benchmark_pack_boundary_feasibility(
+    ctx: typer.Context,
+    session_id: Annotated[str, typer.Argument(help="Completed calibration session identifier.")],
+    dataset: Annotated[Path, typer.Option("--dataset", help="Private benchmark dataset manifest.")],
+    annotations: Annotated[
+        Path, typer.Option("--annotations", help="Declared calibration annotation JSON.")
+    ],
+    output_dir: Annotated[
+        Path,
+        typer.Option(
+            "--output-dir",
+            help="New directory for the portable JSON-only feasibility bundle.",
+        ),
+    ],
+) -> None:
+    """Pack calibration feasibility evidence for safe cross-machine transfer."""
+    _execute(
+        ctx,
+        lambda options: _benchmark_pack_boundary_feasibility(
+            options, session_id, dataset, annotations, output_dir
+        ),
+    )
+
+
+def _benchmark_pack_boundary_feasibility(
+    options: RuntimeOptions,
+    session_id: str,
+    dataset: Path,
+    annotations: Path,
+    output_dir: Path,
+) -> None:
+    config = _load(options).config
+    result = pack_boundary_refinement_feasibility_bundle(
+        session_id,
+        dataset,
+        annotations,
+        config,
+        output_dir=output_dir,
+    )
+    annotation_path = result.root / "annotations" / f"{result.manifest.case_id}.json"
+    typer.echo(
+        "[PASS] portable boundary-feasibility bundle (provider/API calls: ZERO; media files: ZERO)"
+    )
+    typer.echo(f"Case: {result.manifest.case_id} | session: {result.manifest.session_id}")
+    typer.echo(f"Diagnostic verdict: {result.manifest.diagnostic_verdict}")
+    typer.echo("Validation/holdout included: NO")
+    typer.echo("Source path sanitized: YES")
+    typer.echo(f"Bundle: {result.root}")
+    typer.echo(
+        "Portable rerun: highlight --data-dir "
+        f'"{result.root / "data"}" benchmark boundary-feasibility '
+        f'"{result.manifest.session_id}" --dataset "{result.root / "dataset.json"}" '
+        f'--annotations "{annotation_path}"'
+    )
 
 
 @benchmark_app.command("evaluate")

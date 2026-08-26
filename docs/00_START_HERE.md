@@ -204,6 +204,11 @@ gaps from boundary-only headroom and refuses validation/holdout cases, so the fa
 set cannot leak back into tuning. Ground-truth-derived candidate IDs from this diagnostic are never
 production selection.
 
+If the private calibration corpus is on another machine, run `highlight benchmark
+pack-boundary-feasibility` there. The output is a portable JSON-only calibration bundle: no gameplay
+media, validation/holdout data, provider artifacts, credentials, or machine-specific persisted config.
+Run `boundary-feasibility` against the bundle with its bundled `data` directory on the review machine.
+
 Use `highlight benchmark annotate <annotation.json>` to open the small local-only
 human annotation helper. The source video is verified by SHA-256/duration, served
 read-only on loopback with byte-range support, and never re-encoded. The browser owns

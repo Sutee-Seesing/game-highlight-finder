@@ -169,6 +169,10 @@ Ruff and mypy clean; real Gemini API calls during maintenance: zero.
   gaps, and MUST_CATCH detection gaps using the authoritative M8 evaluation policy. It
   rejects validation/holdout cases and labels any ground-truth-derived candidate IDs as
   diagnostic-only. No live Gemini call is made by this feasibility gate.
+  Cross-machine calibration evidence can be moved with `highlight benchmark
+  pack-boundary-feasibility`, which emits a JSON-only single-calibration-case bundle with
+  sanitized source path and no media, credentials, provider artifacts, machine config, or
+  validation data; the bundle can be revalidated under a different local `data_dir`.
 - V1 defaults are **NOT LOCKED**. The provider-free 63.48-minute structural long-run
   is complete through report with Fake Scout and zero real Gemini calls: five windows,
   five candidates, best-of 3, resume/report exit 0 in 1329.587s, and a warm-cache

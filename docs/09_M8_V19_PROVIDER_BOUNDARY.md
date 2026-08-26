@@ -104,6 +104,14 @@ The persisted private feasibility artifact contains hashes/metrics/IDs only and 
 they must never be reused as an automatic production selection policy. This gate exists because v19
 can refine the timing of an existing event but cannot recover a highlight Scout did not detect.
 
+For cross-machine work, `highlight benchmark pack-boundary-feasibility` creates a portable
+calibration-only JSON bundle containing the single-case dataset view, annotation document, sanitized
+`source.json`, `session_map.json`, and feasibility result. It includes no source video, proxy, clip,
+provider artifact, credential, persisted machine config, or validation/holdout case. The bundled
+`source.path` is replaced by a non-existent absolute sentinel while SHA-256/duration/source identity
+remain intact. `boundary-feasibility` now uses the caller-selected `data_dir` rather than requiring the
+source machine's `config.resolved.json`, so the same evidence can be revalidated on another PC.
+
 ## Deliberate limits
 
 - No live Gemini transport is wired into the production pipeline in this checkpoint.

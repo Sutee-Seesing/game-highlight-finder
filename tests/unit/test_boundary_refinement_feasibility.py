@@ -11,6 +11,10 @@ from game_highlight_finder.benchmark.boundary_feasibility import (
     assess_boundary_refinement_feasibility,
     run_boundary_refinement_feasibility,
 )
+from game_highlight_finder.benchmark.boundary_feasibility_bundle import (
+    BoundaryFeasibilityBundleManifest,
+    pack_boundary_refinement_feasibility_bundle,
+)
 from game_highlight_finder.benchmark.models import (
     AnnotatedHighlight,
     BenchmarkAnnotations,
@@ -141,6 +145,7 @@ def _write_private_case(
     *,
     split: BenchmarkSplit,
 ) -> tuple[Path, Path, AppConfig]:
+    tmp_path.mkdir(parents=True, exist_ok=True)
     data_dir = tmp_path / "library"
     source_path = tmp_path / "calibration-source.mp4"
     source_path.write_bytes(b"private calibration source")
@@ -232,13 +237,15 @@ def test_feasibility_runner_persists_private_calibration_artifact(tmp_path: Path
     assert "production candidate-selection" in result.selection_warning
 
 
-def test_feasibility_cli_is_provider_free_and_uses_persisted_session_config(
+def test_feasibility_cli_is_provider_free_without_persisted_session_config(
     tmp_path: Path,
 ) -> None:
     dataset_path, annotation_path, config = _write_private_case(
         tmp_path,
         split=BenchmarkSplit.CALIBRATION,
     )
+    paths = session_paths(config.storage.data_dir, SESSION_ID)
+    paths.config.unlink()
     runner = CliRunner()
 
     result = runner.invoke(
@@ -283,3 +290,109 @@ def test_feasibility_runner_rejects_validation_before_session_access(tmp_path: P
             annotation_path,
             config,
         )
+
+
+def test_feasibility_bundle_is_media_free_portable_and_rerunnable(tmp_path: Path) -> None:
+    dataset_path, annotation_path, config = _write_private_case(
+        tmp_path / "source-machine",
+        split=BenchmarkSplit.CALIBRATION,
+    )
+    bundle_root = tmp_path / "transfer" / "cal-01"
+
+    packed = pack_boundary_refinement_feasibility_bundle(
+        SESSION_ID,
+        dataset_path,
+        annotation_path,
+        config,
+        output_dir=bundle_root,
+    )
+
+    assert packed.root == bundle_root.resolve()
+    manifest = BoundaryFeasibilityBundleManifest.model_validate(read_json(packed.manifest_path))
+    assert manifest.provider_calls == 0
+    assert manifest.media_files_included == 0
+    assert manifest.calibration_only is True
+    assert manifest.validation_data_included is False
+    assert manifest.source_path_sanitized is True
+    assert manifest.diagnostic_verdict == "MUST_CATCH_DETECTION_GAP"
+    assert not any(
+        path.suffix.lower() in {".mp4", ".mkv", ".mov", ".avi", ".webm"}
+        for path in bundle_root.rglob("*")
+        if path.is_file()
+    )
+
+    bundled_text = "\n".join(
+        path.read_text(encoding="utf-8") for path in bundle_root.rglob("*.json")
+    )
+    assert str(tmp_path.resolve()) not in bundled_text
+    bundled_annotation = read_json(bundle_root / "annotations" / "cal-01.json")
+    assert bundled_annotation["source_path"] is None
+    bundled_source = read_json(bundle_root / "data" / "sessions" / SESSION_ID / "source.json")
+    assert Path(bundled_source["path"]).is_absolute()
+    assert "__game_highlight_finder_private_source_not_bundled__" in bundled_source["path"]
+    assert "calibration-source.mp4" not in bundled_source["path"]
+    bundled_dataset = BenchmarkDataset.model_validate(read_json(bundle_root / "dataset.json"))
+    assert len(bundled_dataset.cases) == 1
+    assert bundled_dataset.cases[0].split is BenchmarkSplit.CALIBRATION
+    assert bundled_dataset.cases[0].result_path is None
+
+    replay_config = AppConfig(storage=StorageConfig(data_dir=bundle_root / "data"))
+    replay, replay_path = run_boundary_refinement_feasibility(
+        SESSION_ID,
+        bundle_root / "dataset.json",
+        bundle_root / "annotations" / "cal-01.json",
+        replay_config,
+        output_path=bundle_root / "replayed.feasibility.json",
+    )
+    assert replay == packed.feasibility
+    assert replay_path.is_file()
+
+
+def test_feasibility_bundle_rejects_validation_without_output(tmp_path: Path) -> None:
+    dataset_path, annotation_path, config = _write_private_case(
+        tmp_path / "source-machine",
+        split=BenchmarkSplit.VALIDATION,
+    )
+    output_dir = tmp_path / "transfer" / "blocked"
+
+    with pytest.raises(ValidationError, match="calibration-only"):
+        pack_boundary_refinement_feasibility_bundle(
+            SESSION_ID,
+            dataset_path,
+            annotation_path,
+            config,
+            output_dir=output_dir,
+        )
+    assert not output_dir.exists()
+
+
+def test_pack_feasibility_cli_creates_portable_json_only_bundle(tmp_path: Path) -> None:
+    dataset_path, annotation_path, config = _write_private_case(
+        tmp_path / "source-machine",
+        split=BenchmarkSplit.CALIBRATION,
+    )
+    bundle_root = tmp_path / "transfer" / "cli-bundle"
+    result = CliRunner().invoke(
+        app,
+        [
+            "--data-dir",
+            str(config.storage.data_dir),
+            "benchmark",
+            "pack-boundary-feasibility",
+            SESSION_ID,
+            "--dataset",
+            str(dataset_path),
+            "--annotations",
+            str(annotation_path),
+            "--output-dir",
+            str(bundle_root),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "provider/API calls: ZERO" in result.output
+    assert "media files: ZERO" in result.output
+    assert "Validation/holdout included: NO" in result.output
+    assert "Portable rerun:" in result.output
+    assert (bundle_root / "bundle.json").is_file()
+    assert not (bundle_root / "data" / "sessions" / SESSION_ID / "config.resolved.json").exists()
