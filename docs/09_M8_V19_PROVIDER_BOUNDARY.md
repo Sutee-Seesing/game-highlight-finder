@@ -67,6 +67,23 @@ The integration acceptance path uses real local ingest/proxy/boundary-media FFmp
 `FakeGeminiTransport` candidate calls. The first pass must settle both calls; a second pass must
 reuse both media/provider caches without increasing generation count.
 
+## Production CLI seam
+
+The local CLI now exposes `highlight refine-boundaries SESSION_ID CANDIDATE_ID...` as a
+separate explicit boundary-refinement workflow. Its default behavior is provider-free preflight:
+it loads only committed session/source/proxy artifacts, prepares candidate-local slowed media,
+quotes the whole selected batch, and prints aggregate maximum reserved THB exposure.
+
+Real execution requires both `--execute` and a fresh `--allow-remote-upload` on the same
+invocation. Persisted session configuration never carries that upload authorization forward. The
+real `GenAITransport` is supplied through a lazy factory only after aggregate preflight succeeds,
+and it is not constructed at all when every selected candidate is a validated settled cache hit.
+The production command never replaces `session_map.json`; successful output remains the separate
+`session_map.refined.gemini.json` plus `batch.gemini.json` provenance artifact.
+
+This checkpoint adds the production wiring seam but does not execute the command with a real API
+key or make a live Gemini request. Automated acceptance continues to use fake/injected transports.
+
 ## Deliberate limits
 
 - No live Gemini transport is wired into the production pipeline in this checkpoint.

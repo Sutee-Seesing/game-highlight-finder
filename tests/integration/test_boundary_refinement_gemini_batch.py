@@ -22,7 +22,9 @@ from game_highlight_finder.cost.fx import FxSnapshot
 from game_highlight_finder.cost.production import production_pricing_catalog
 from game_highlight_finder.cost.service import CostService
 from game_highlight_finder.domain.models import Candidate, SessionMap, model_json
+from game_highlight_finder.errors import BudgetExceededError
 from game_highlight_finder.pipeline.boundary_refiner_gemini_batch import (
+    run_gemini_boundary_refinement_batch_with_transport_factory,
     run_gemini_boundary_refinement_batch_with_transports,
 )
 from game_highlight_finder.pipeline.gemini_scout import build_gemini_registry
@@ -217,3 +219,60 @@ def test_gemini_boundary_refinement_batch_preflights_executes_persists_and_resum
     assert second_transport.generation_count == 1
     assert len(service.calls()) == 2
     assert hash_file(tiny_video, source=True) == source_before
+
+    cached_factory_calls = 0
+
+    def unexpected_cached_factory() -> FakeGeminiTransport:
+        nonlocal cached_factory_calls
+        cached_factory_calls += 1
+        raise AssertionError("settled cache hits must not construct a provider transport")
+
+    cached = run_gemini_boundary_refinement_batch_with_transport_factory(
+        ingest.source,
+        proxy,
+        session_map,
+        config,
+        candidate_ids=(first_candidate.candidate_id, second_candidate.candidate_id),
+        transport_factory=unexpected_cached_factory,
+        cost_service=service,
+    )
+
+    assert cached.generated_responses == 0
+    assert cached.response_cache_hits == 2
+    assert cached_factory_calls == 0
+
+    largest_reserved = max(
+        item.preflight.quote.reserved_cost_micro_thb for item in first.preflight.items
+    )
+    low_budget = Decimal(largest_reserved) / Decimal(1_000_000)
+    low_config = config.model_copy(
+        update={
+            "cost": config.cost.model_copy(
+                update={
+                    "monthly_budget_thb": low_budget,
+                    "ledger_path": tmp_path / "aggregate-low-ledger.sqlite3",
+                }
+            )
+        }
+    )
+    low_service = _service(low_config)
+    blocked_factory_calls = 0
+
+    def blocked_factory() -> FakeGeminiTransport:
+        nonlocal blocked_factory_calls
+        blocked_factory_calls += 1
+        raise AssertionError("aggregate budget rejection must happen before transport construction")
+
+    with pytest.raises(BudgetExceededError):
+        run_gemini_boundary_refinement_batch_with_transport_factory(
+            ingest.source,
+            proxy,
+            session_map,
+            low_config,
+            candidate_ids=(first_candidate.candidate_id, second_candidate.candidate_id),
+            transport_factory=blocked_factory,
+            cost_service=low_service,
+        )
+
+    assert blocked_factory_calls == 0
+    assert low_service.calls() == ()

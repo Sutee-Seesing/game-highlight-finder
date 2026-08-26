@@ -108,7 +108,7 @@ def preflight_gemini_boundary_refinement(
         config,
         session_id=session_id,
     )
-    service = cost_service or _build_cost_service(config)
+    service = cost_service or build_gemini_boundary_refinement_cost_service(config)
     quote = service.quote(cost_request)
     summary = service.summary()
     if summary.safety_hold_active:
@@ -163,7 +163,7 @@ def run_gemini_boundary_refinement_with_transport(
         config,
         session_id=session_id,
     )
-    service = cost_service or _build_cost_service(config)
+    service = cost_service or build_gemini_boundary_refinement_cost_service(config)
     call_id = cost_request.call_id
     item_dir = media.artifact_path.parent
     request_meta_path = item_dir / "request.gemini.json"
@@ -502,7 +502,7 @@ def _write_cost_artifact(service: CostService, call_id: str, path: Path) -> None
     )
 
 
-def _build_cost_service(config: AppConfig) -> CostService:
+def build_gemini_boundary_refinement_cost_service(config: AppConfig) -> CostService:
     if config.cost.pricing_catalog_path is not None:
         return CostService.from_config(config, registry=build_gemini_registry())
     fx = (

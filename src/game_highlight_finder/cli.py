@@ -44,13 +44,19 @@ from game_highlight_finder.config import (
 )
 from game_highlight_finder.cost import CostService, Money
 from game_highlight_finder.doctor import run_doctor
+from game_highlight_finder.domain.models import ProxyMetadata, SessionMap, SourceAsset
 from game_highlight_finder.domain.time import format_duration
 from game_highlight_finder.errors import AppError, ConfigError, ErrorCategory
 from game_highlight_finder.media.ffmpeg import ProgressUpdate
+from game_highlight_finder.pipeline.boundary_refiner_gemini_batch import (
+    preflight_gemini_boundary_refinement_session_batch,
+    run_gemini_boundary_refinement_batch_with_transport_factory,
+)
 from game_highlight_finder.pipeline.gemini_scout import (
     generate_gemini_scout,
     preflight_gemini_scout,
 )
+from game_highlight_finder.pipeline.proxy import ProxyResult
 from game_highlight_finder.pipeline.ranking import load_or_create_ranking
 from game_highlight_finder.pipeline.report import load_report_inputs, render_report
 from game_highlight_finder.pipeline.runner import (
@@ -62,6 +68,7 @@ from game_highlight_finder.pipeline.runner import (
 )
 from game_highlight_finder.pipeline.windowed_scout import ExecutionActivity
 from game_highlight_finder.providers import ProviderRegistry
+from game_highlight_finder.providers.gemini import GenAITransport
 from game_highlight_finder.status import get_session_status
 from game_highlight_finder.storage.atomic import read_json
 from game_highlight_finder.storage.sessions import session_paths, source_from_artifact
@@ -1080,6 +1087,170 @@ def _echo_execution_activity(activity: ExecutionActivity) -> None:
         typer.echo(f"Gemini generation calls this run: {activity.provider_generation_calls}")
     else:
         typer.echo("Provider generation activity: unknown")
+
+
+@app.command("refine-boundaries")
+def refine_boundaries(
+    ctx: typer.Context,
+    session_id: Annotated[str, typer.Argument(help="Completed session identifier.")],
+    candidate_ids: Annotated[
+        list[str],
+        typer.Argument(help="One or more explicit candidate IDs to refine in caller order."),
+    ],
+    execute: Annotated[
+        bool,
+        typer.Option(
+            "--execute",
+            help="Execute Gemini refinement after aggregate preflight; default is preflight only.",
+        ),
+    ] = False,
+    allow_remote_upload: Annotated[
+        bool,
+        typer.Option(
+            "--allow-remote-upload",
+            help="Freshly authorize candidate-local slowed.mp4 uploads for this invocation.",
+        ),
+    ] = False,
+    minimum_confidence: Annotated[
+        float,
+        typer.Option(
+            "--minimum-confidence",
+            min=0.0,
+            max=1.0,
+            help="Minimum provider confidence required to replace Scout event boundaries.",
+        ),
+    ] = 0.5,
+) -> None:
+    """Preflight or explicitly execute Gemini boundary refinement for selected candidates."""
+
+    _execute(
+        ctx,
+        lambda options: _refine_boundaries(
+            options,
+            session_id,
+            candidate_ids,
+            execute=execute,
+            allow_remote_upload=allow_remote_upload,
+            minimum_confidence=minimum_confidence,
+        ),
+    )
+
+
+def _refine_boundaries(
+    options: RuntimeOptions,
+    session_id: str,
+    candidate_ids: list[str],
+    *,
+    execute: bool,
+    allow_remote_upload: bool,
+    minimum_confidence: float,
+) -> None:
+    if execute and not allow_remote_upload:
+        raise ConfigError(
+            "Gemini boundary refinement execution requires --allow-remote-upload.",
+            hint="Preflight is the default and performs no provider call or upload.",
+        )
+
+    config, source, proxy, session_map = _load_boundary_refinement_inputs(options, session_id)
+    if allow_remote_upload:
+        config = config.model_copy(
+            update={"scout": config.scout.model_copy(update={"allow_remote_upload": True})}
+        )
+
+    if not execute:
+        preflight = preflight_gemini_boundary_refinement_session_batch(
+            source,
+            proxy,
+            session_map,
+            config,
+            candidate_ids=candidate_ids,
+        )
+        typer.echo("[PASS] Gemini boundary refinement preflight (provider/API calls: ZERO)")
+        typer.echo(f"Session: {session_id}")
+        typer.echo(f"Candidates: {len(preflight.selected_candidate_ids)}")
+        for item in preflight.items:
+            typer.echo(
+                f"  {item.candidate_id}: maximum reserved "
+                f"{_format_micro_thb(item.preflight.quote.reserved_cost_micro_thb)}"
+            )
+        typer.echo(
+            "Aggregate maximum reserved: "
+            f"{_format_micro_thb(preflight.total_reserved_cost_micro_thb)}"
+        )
+        typer.echo(f"Monthly available budget: {_format_micro_thb(preflight.available_micro_thb)}")
+        typer.echo("RAW source upload: NO")
+        typer.echo("Provider media if executed: candidate-local slowed.mp4 only")
+        return
+
+    result = run_gemini_boundary_refinement_batch_with_transport_factory(
+        source,
+        proxy,
+        session_map,
+        config,
+        candidate_ids=candidate_ids,
+        transport_factory=lambda: GenAITransport(api_key_env=config.scout.api_key_env),
+        minimum_confidence=minimum_confidence,
+    )
+    typer.echo("[PASS] Gemini boundary refinement batch completed")
+    typer.echo(f"Session: {session_id}")
+    typer.echo(f"Candidates: {len(result.artifact.selected_candidate_ids)}")
+    typer.echo(
+        "Aggregate preflight maximum reserved: "
+        f"{_format_micro_thb(result.preflight.total_reserved_cost_micro_thb)}"
+    )
+    typer.echo(f"Generated provider responses: {result.generated_responses}")
+    typer.echo(f"Provider response cache hits: {result.response_cache_hits}")
+    typer.echo(f"Local media cache hits: {result.media_cache_hits}")
+    typer.echo(f"Refined session map: {result.refined_session_map_path}")
+    typer.echo(f"Batch artifact: {result.artifact_path}")
+    typer.echo("Original session_map.json: unchanged")
+
+
+def _load_boundary_refinement_inputs(
+    options: RuntimeOptions,
+    session_id: str,
+) -> tuple[AppConfig, SourceAsset, ProxyResult, SessionMap]:
+    config = _load_persisted_session_config(options, session_id)
+    paths = session_paths(config.storage.data_dir, session_id)
+    if not paths.root.is_dir():
+        raise ConfigError(f"Session does not exist: {session_id}")
+    if not paths.source.is_file() or not paths.session_map.is_file():
+        raise ConfigError(
+            "Boundary refinement requires committed source and session_map artifacts."
+        )
+
+    source = source_from_artifact(paths.source)
+    if not source.path.is_file():
+        raise ConfigError("Original source is missing; boundary refinement cannot continue.")
+    try:
+        session_map = SessionMap.model_validate(read_json(paths.session_map))
+    except Exception as exc:
+        raise ConfigError(
+            "Stored session map is invalid; boundary refinement cannot continue.", hint=str(exc)
+        ) from exc
+
+    proxy_path = paths.proxy_dir / "analysis_proxy.mp4"
+    metadata_path = paths.proxy_dir / "metadata.json"
+    if not proxy_path.is_file() or not metadata_path.is_file():
+        raise ConfigError("Boundary refinement requires the committed analysis proxy and metadata.")
+    try:
+        metadata = ProxyMetadata.model_validate(read_json(metadata_path))
+    except Exception as exc:
+        raise ConfigError(
+            "Stored proxy metadata is invalid; boundary refinement cannot continue.", hint=str(exc)
+        ) from exc
+    analysis_audio = paths.audio_dir / "analysis_audio.m4a"
+    proxy = ProxyResult(
+        session_id=session_id,
+        cache_hit=True,
+        cache_reason="persisted-artifact",
+        proxy_path=proxy_path,
+        audio_path=analysis_audio if metadata.audio_present and analysis_audio.is_file() else None,
+        metadata_path=metadata_path,
+        metadata=metadata,
+        session_dir=paths.root,
+    )
+    return config, source, proxy, session_map
 
 
 @app.command()

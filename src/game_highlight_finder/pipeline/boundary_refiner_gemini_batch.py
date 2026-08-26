@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -30,16 +30,64 @@ from game_highlight_finder.pipeline.boundary_refiner import canonical_payload_sh
 from game_highlight_finder.pipeline.boundary_refiner_gemini import (
     GeminiBoundaryRefinementPreflight,
     GeminiBoundaryRefinementResult,
+    build_gemini_boundary_refinement_cost_service,
     preflight_gemini_boundary_refinement,
     run_gemini_boundary_refinement_with_transport,
 )
 from game_highlight_finder.pipeline.proxy import ProxyResult
-from game_highlight_finder.providers.gemini import GeminiTransport
+from game_highlight_finder.providers.gemini import GeminiRemoteFile, GeminiTransport
 from game_highlight_finder.storage.atomic import atomic_write_json
 from game_highlight_finder.storage.sessions import session_paths
 
 BOUNDARY_REFINER_GEMINI_BATCH_PREFLIGHT_VERSION = "boundary-refiner-gemini-batch-preflight-v1"
 BOUNDARY_REFINER_GEMINI_BATCH_VERSION = "boundary-refiner-gemini-batch-v1"
+
+GeminiBoundaryRefinementTransportFactory = Callable[[], GeminiTransport]
+
+
+class _LazyGeminiTransport:
+    """Create the real transport only when provider I/O is actually needed."""
+
+    def __init__(self, factory: GeminiBoundaryRefinementTransportFactory) -> None:
+        self._factory = factory
+        self._transport: GeminiTransport | None = None
+
+    def _get(self) -> GeminiTransport:
+        if self._transport is None:
+            self._transport = self._factory()
+        return self._transport
+
+    def upload(self, path: Path, *, mime_type: str) -> GeminiRemoteFile:
+        return self._get().upload(path, mime_type=mime_type)
+
+    def get_file(self, name: str) -> GeminiRemoteFile:
+        return self._get().get_file(name)
+
+    def create_interaction(
+        self,
+        *,
+        model: str,
+        remote_uri: str,
+        prompt: str,
+        response_schema: Mapping[str, Any],
+        media_resolution: str,
+        max_output_tokens: int,
+        thinking_level: str | None,
+        store: bool,
+    ) -> Any:
+        return self._get().create_interaction(
+            model=model,
+            remote_uri=remote_uri,
+            prompt=prompt,
+            response_schema=response_schema,
+            media_resolution=media_resolution,
+            max_output_tokens=max_output_tokens,
+            thinking_level=thinking_level,
+            store=store,
+        )
+
+    def delete_file(self, name: str) -> None:
+        self._get().delete_file(name)
 
 
 class GeminiBoundaryRefinementBatchPreflightItem(BaseModel):
@@ -188,6 +236,75 @@ def preflight_gemini_boundary_refinement_batch(
     )
 
 
+def preflight_gemini_boundary_refinement_session_batch(
+    source: SourceAsset,
+    proxy: ProxyResult,
+    session_map: SessionMap,
+    config: AppConfig,
+    *,
+    candidate_ids: Sequence[str],
+    cost_service: CostService | None = None,
+) -> GeminiBoundaryRefinementBatchPreflight:
+    """Prepare local media and quote a selected session batch without provider I/O."""
+
+    selected_ids = _validate_batch_context(source, proxy, session_map, candidate_ids)
+    prepared, _ = _prepare_batch(source, proxy, session_map, config, selected_ids)
+    service = cost_service or build_gemini_boundary_refinement_cost_service(config)
+    return preflight_gemini_boundary_refinement_batch(
+        prepared,
+        config,
+        session_id=session_map.session_id,
+        cost_service=service,
+    )
+
+
+def run_gemini_boundary_refinement_batch_with_transport_factory(
+    source: SourceAsset,
+    proxy: ProxyResult,
+    session_map: SessionMap,
+    config: AppConfig,
+    *,
+    candidate_ids: Sequence[str],
+    transport_factory: GeminiBoundaryRefinementTransportFactory,
+    cost_service: CostService | None = None,
+    minimum_confidence: float = 0.5,
+) -> GeminiBoundaryRefinementBatchResult:
+    """Run a selected batch after aggregate preflight with lazily-created provider transport."""
+
+    selected_ids = _validate_batch_context(source, proxy, session_map, candidate_ids)
+    if not config.scout.allow_remote_upload:
+        raise ValidationError(
+            "Gemini boundary-refiner batch requires explicit remote-upload opt-in"
+        )
+    if not 0 <= minimum_confidence <= 1:
+        raise ValidationError("boundary refinement minimum confidence must be between 0 and 1")
+
+    prepared, media_cache_hits = _prepare_batch(source, proxy, session_map, config, selected_ids)
+    service = cost_service or build_gemini_boundary_refinement_cost_service(config)
+    preflight = preflight_gemini_boundary_refinement_batch(
+        prepared,
+        config,
+        session_id=session_map.session_id,
+        cost_service=service,
+    )
+    lazy_transport = _LazyGeminiTransport(transport_factory)
+    transports: Mapping[str, GeminiTransport] = {
+        candidate_id: lazy_transport for candidate_id in selected_ids
+    }
+    return _execute_prepared_batch(
+        source,
+        session_map,
+        config,
+        selected_ids=selected_ids,
+        prepared=prepared,
+        transports=transports,
+        cost_service=service,
+        preflight=preflight,
+        media_cache_hits=media_cache_hits,
+        minimum_confidence=minimum_confidence,
+    )
+
+
 def run_gemini_boundary_refinement_batch_with_transports(
     source: SourceAsset,
     proxy: ProxyResult,
@@ -196,32 +313,18 @@ def run_gemini_boundary_refinement_batch_with_transports(
     *,
     candidate_ids: Sequence[str],
     transports: Mapping[str, GeminiTransport],
-    cost_service: CostService,
+    cost_service: CostService | None = None,
     minimum_confidence: float = 0.5,
 ) -> GeminiBoundaryRefinementBatchResult:
-    """Run an explicit bounded batch using caller-injected transports only.
+    """Run an explicit bounded batch using caller-injected transports only."""
 
-    All candidate media is prepared locally and the aggregate batch is preflighted before the
-    first provider execution. Per-candidate cost/cache lifecycle remains authoritative. Final batch
-    artifacts are written only after every selected candidate completes successfully.
-    """
-
-    selected_ids = _validate_candidate_selection(session_map, candidate_ids)
+    selected_ids = _validate_batch_context(source, proxy, session_map, candidate_ids)
     if not config.scout.allow_remote_upload:
         raise ValidationError(
             "Gemini boundary-refiner batch requires explicit remote-upload opt-in"
         )
-    if source.source_id != session_map.source_id:
-        raise ValidationError("Gemini boundary-refiner batch source does not match the session map")
-    if proxy.session_id != session_map.session_id:
-        raise ValidationError("Gemini boundary-refiner batch proxy does not match the session map")
-    if source.duration_ms != session_map.duration_ms:
-        raise ValidationError(
-            "Gemini boundary-refiner batch duration does not match the session map"
-        )
     if not 0 <= minimum_confidence <= 1:
         raise ValidationError("boundary refinement minimum confidence must be between 0 and 1")
-
     missing_transports = [
         candidate_id for candidate_id in selected_ids if candidate_id not in transports
     ]
@@ -231,8 +334,54 @@ def run_gemini_boundary_refinement_batch_with_transports(
             + ", ".join(missing_transports[:8])
         )
 
+    prepared, media_cache_hits = _prepare_batch(source, proxy, session_map, config, selected_ids)
+    service = cost_service or build_gemini_boundary_refinement_cost_service(config)
+    preflight = preflight_gemini_boundary_refinement_batch(
+        prepared,
+        config,
+        session_id=session_map.session_id,
+        cost_service=service,
+    )
+    return _execute_prepared_batch(
+        source,
+        session_map,
+        config,
+        selected_ids=selected_ids,
+        prepared=prepared,
+        transports=transports,
+        cost_service=service,
+        preflight=preflight,
+        media_cache_hits=media_cache_hits,
+        minimum_confidence=minimum_confidence,
+    )
+
+
+def _validate_batch_context(
+    source: SourceAsset,
+    proxy: ProxyResult,
+    session_map: SessionMap,
+    candidate_ids: Sequence[str],
+) -> tuple[str, ...]:
+    selected_ids = _validate_candidate_selection(session_map, candidate_ids)
+    if source.source_id != session_map.source_id:
+        raise ValidationError("Gemini boundary-refiner batch source does not match the session map")
+    if proxy.session_id != session_map.session_id:
+        raise ValidationError("Gemini boundary-refiner batch proxy does not match the session map")
+    if source.duration_ms != session_map.duration_ms:
+        raise ValidationError(
+            "Gemini boundary-refiner batch duration does not match the session map"
+        )
+    return selected_ids
+
+
+def _prepare_batch(
+    source: SourceAsset,
+    proxy: ProxyResult,
+    session_map: SessionMap,
+    config: AppConfig,
+    selected_ids: Sequence[str],
+) -> tuple[tuple[tuple[Candidate, BoundaryRefinementMediaResult], ...], int]:
     by_id = {candidate.candidate_id: candidate for candidate in session_map.candidates}
-    paths = session_paths(config.storage.data_dir, session_map.session_id)
     prepared: list[tuple[Candidate, BoundaryRefinementMediaResult]] = []
     media_cache_hits = 0
     for candidate_id in selected_ids:
@@ -240,14 +389,23 @@ def run_gemini_boundary_refinement_batch_with_transports(
         media = prepare_boundary_refinement_media(source, proxy, candidate, config)
         media_cache_hits += int(media.cache_hit)
         prepared.append((candidate, media))
+    return tuple(prepared), media_cache_hits
 
-    preflight = preflight_gemini_boundary_refinement_batch(
-        prepared,
-        config,
-        session_id=session_map.session_id,
-        cost_service=cost_service,
-    )
 
+def _execute_prepared_batch(
+    source: SourceAsset,
+    session_map: SessionMap,
+    config: AppConfig,
+    *,
+    selected_ids: Sequence[str],
+    prepared: Sequence[tuple[Candidate, BoundaryRefinementMediaResult]],
+    transports: Mapping[str, GeminiTransport],
+    cost_service: CostService,
+    preflight: GeminiBoundaryRefinementBatchPreflight,
+    media_cache_hits: int,
+    minimum_confidence: float,
+) -> GeminiBoundaryRefinementBatchResult:
+    paths = session_paths(config.storage.data_dir, session_map.session_id)
     refined_by_id: dict[str, Candidate] = {}
     executions: list[
         tuple[Candidate, BoundaryRefinementMediaResult, GeminiBoundaryRefinementResult]
@@ -327,7 +485,7 @@ def run_gemini_boundary_refinement_batch_with_transports(
         session_id=session_map.session_id,
         source_id=session_map.source_id,
         input_session_map_sha256=input_map_sha,
-        selected_candidate_ids=selected_ids,
+        selected_candidate_ids=tuple(selected_ids),
         minimum_confidence=minimum_confidence,
         preflight_total_reserved_cost_micro_thb=preflight.total_reserved_cost_micro_thb,
         items=tuple(item_artifacts),
@@ -378,6 +536,9 @@ __all__ = [
     "GeminiBoundaryRefinementBatchPreflight",
     "GeminiBoundaryRefinementBatchPreflightItem",
     "GeminiBoundaryRefinementBatchResult",
+    "GeminiBoundaryRefinementTransportFactory",
     "preflight_gemini_boundary_refinement_batch",
+    "preflight_gemini_boundary_refinement_session_batch",
+    "run_gemini_boundary_refinement_batch_with_transport_factory",
     "run_gemini_boundary_refinement_batch_with_transports",
 ]
