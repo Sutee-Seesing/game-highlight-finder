@@ -13,7 +13,7 @@ if (-not $InputPath) { $InputPath = Join-Path $RepoRoot 'secrets\env.enc.json' }
 if (-not $OutputPath) { $OutputPath = Join-Path $RepoRoot '.env' }
 if (-not $KeyPath) {
     if ($env:GHF_ENV_BACKUP_KEY_FILE) { $KeyPath = $env:GHF_ENV_BACKUP_KEY_FILE }
-    else { $KeyPath = Join-Path $env:USERPROFILE '.ghf\secrets\game-highlight-finder.env-backup.key' }
+    else { $KeyPath = Join-Path $RepoRoot 'secrets\env-backup.key' }
 }
 
 $InputPath = [IO.Path]::GetFullPath($InputPath)
@@ -41,7 +41,7 @@ function Read-MasterKey {
     }
 
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
-        throw "Backup key not found: $Path. Set GHF_ENV_BACKUP_KEY or GHF_ENV_BACKUP_KEY_FILE, or copy the key file from the source machine."
+        throw "Backup key not found: $Path. Pull the repository key file or set GHF_ENV_BACKUP_KEY / GHF_ENV_BACKUP_KEY_FILE."
     }
     try { $bytes = [Convert]::FromBase64String(([IO.File]::ReadAllText($Path)).Trim()) }
     catch { throw "Key file is not valid Base64: $Path" }

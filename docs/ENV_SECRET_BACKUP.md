@@ -1,15 +1,14 @@
-# Encrypted `.env` backup
+# Portable `.env` backup for this private repository
 
-This repository keeps the real `.env` file out of Git. A portable encrypted copy can be committed as `secrets/env.enc.json`.
+This personal repository keeps the real `.env` file out of Git, but intentionally commits both an encrypted copy (`secrets/env.enc.json`) and its decryption key (`secrets/env-backup.key`) so the environment can be restored after cloning on another machine.
 
 ## Security model
 
 - Plaintext `.env` stays ignored by Git.
 - The encrypted payload uses AES-256-CBC with HMAC-SHA256 (encrypt-then-MAC).
-- The 64-byte master key is stored outside the repository by default at:
-  `%USERPROFILE%\.ghf\secrets\game-highlight-finder.env-backup.key`
-- The repository also ignores `secrets/*.key` and `*.env-backup.key` to reduce accidental key commits.
-- Do not commit or paste the master key into the repository, issues, logs, or chat transcripts.
+- The 64-byte master key is intentionally tracked in this private repository at `secrets/env-backup.key`.
+- Because the repository contains both ciphertext and its key, anyone who can read the repository can recover the `.env`. Treat repository access as equivalent to access to these credentials.
+- Do not make the repository public or copy `secrets/env-backup.key` / the decrypted `.env` into issues, logs, or chat transcripts.
 
 ## Refresh the encrypted backup
 
@@ -19,31 +18,26 @@ From the repository root:
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\backup-env.ps1
 ```
 
-The command verifies that `.env` is ignored before reading it. It writes the encrypted payload to `secrets/env.enc.json` and reuses the existing master key unless `-ForceNewKey` is supplied.
+The command verifies that `.env` is ignored before reading it. By default it reuses `secrets/env-backup.key` and writes the encrypted payload to `secrets/env.enc.json`. Use `-ForceNewKey` only when intentionally rotating the repository backup key.
 
 ## Restore on another Windows machine
 
 1. Clone or pull the repository.
-2. Transfer the master key to the new machine using a secure channel and place it at:
-   `%USERPROFILE%\.ghf\secrets\game-highlight-finder.env-backup.key`
-3. Run:
+2. Run:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\restore-env.ps1
 ```
 
-If `.env` already exists, the restore script refuses to overwrite it unless `-Force` is explicitly supplied.
+The restore script uses `secrets/env-backup.key` automatically. If `.env` already exists, it refuses to overwrite it unless `-Force` is explicitly supplied.
 
 ## Alternate key sources
 
-Instead of the default key file, either of these may be used:
+The repository key is the default, but either of these may override it:
 
-- `GHF_ENV_BACKUP_KEY_FILE` — path to a Base64-encoded 64-byte master key file.
-- `GHF_ENV_BACKUP_KEY` — the Base64-encoded 64-byte master key directly in the process environment.
+- `GHF_ENV_BACKUP_KEY_FILE` — path to another Base64-encoded 64-byte master key file.
+- `GHF_ENV_BACKUP_KEY` — the Base64-encoded 64-byte master key directly in the current process environment.
 
-`GHF_ENV_BACKUP_KEY` should only be set for the current process/session when practical; avoid persisting it in shell history or repository files.
+## If repository access or credentials are exposed
 
-## If the master key is lost or exposed
-
-- Lost key: the encrypted payload cannot be recovered; create a new backup from a machine that still has the plaintext `.env`.
-- Exposed key: rotate affected provider/API credentials, generate a fresh master key with `backup-env.ps1 -ForceNewKey`, and commit the newly encrypted payload.
+Rotate the affected provider/API credentials. If only the backup key needs rotation, run `backup-env.ps1 -ForceNewKey` and commit both the new `secrets/env-backup.key` and `secrets/env.enc.json` together.

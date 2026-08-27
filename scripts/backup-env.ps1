@@ -13,7 +13,7 @@ if (-not $EnvPath) { $EnvPath = Join-Path $RepoRoot '.env' }
 if (-not $OutputPath) { $OutputPath = Join-Path $RepoRoot 'secrets\env.enc.json' }
 if (-not $KeyPath) {
     if ($env:GHF_ENV_BACKUP_KEY_FILE) { $KeyPath = $env:GHF_ENV_BACKUP_KEY_FILE }
-    else { $KeyPath = Join-Path $env:USERPROFILE '.ghf\secrets\game-highlight-finder.env-backup.key' }
+    else { $KeyPath = Join-Path $RepoRoot 'secrets\env-backup.key' }
 }
 
 $EnvPath = [IO.Path]::GetFullPath($EnvPath)
@@ -111,5 +111,5 @@ if ($outputParent) { [IO.Directory]::CreateDirectory($outputParent) | Out-Null }
 [Array]::Clear($macKey, 0, $macKey.Length)
 
 Write-Output "ENV_BACKUP_OK encrypted=$OutputPath"
-if (-not $env:GHF_ENV_BACKUP_KEY) { Write-Output "ENV_BACKUP_KEY_OUTSIDE_GIT path=$KeyPath" }
+if (-not $env:GHF_ENV_BACKUP_KEY) { Write-Output "ENV_BACKUP_KEY_FILE path=$KeyPath" }
 else { Write-Output 'ENV_BACKUP_KEY_SOURCE=GHF_ENV_BACKUP_KEY' }
