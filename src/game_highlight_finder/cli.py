@@ -693,6 +693,16 @@ def _benchmark_boundary_feasibility(
     typer.echo("[PASS] boundary-refinement calibration feasibility (provider/API calls: ZERO)")
     typer.echo(f"Case: {result.case_id} | session: {result.session_id}")
     typer.echo(
+        "Scout provenance: "
+        f"backend={result.scout_backend} | model={result.scout_model or 'unknown'} | "
+        f"prompt={result.scout_prompt_version or 'unknown'} | "
+        f"source={result.scout_provenance_source or 'unknown'}"
+    )
+    if not result.semantic_quality_applicable:
+        typer.echo("[WARN] Semantic Scout quality interpretation: NOT APPLICABLE")
+        if result.quality_interpretation_warning is not None:
+            typer.echo(f"[WARN] {result.quality_interpretation_warning}")
+    typer.echo(
         f"Strict: {result.strict_match_count}/{result.ground_truth_count} truth matched; "
         f"precision={result.strict_precision} recall={result.strict_recall}"
     )

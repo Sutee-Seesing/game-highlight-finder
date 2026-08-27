@@ -28,7 +28,7 @@ from game_highlight_finder.storage.atomic import atomic_write_json, read_json
 from game_highlight_finder.storage.hashing import hash_file
 from game_highlight_finder.storage.sessions import session_paths, source_from_artifact
 
-BOUNDARY_REFINEMENT_FEASIBILITY_VERSION = "boundary-refinement-feasibility-v1"
+BOUNDARY_REFINEMENT_FEASIBILITY_VERSION = "boundary-refinement-feasibility-v2"
 DiagnosticVerdict = Literal[
     "MUST_CATCH_DETECTION_GAP",
     "DETECTION_GAPS_PRESENT",
@@ -77,6 +77,12 @@ class BoundaryRefinementFeasibility(BaseModel):
     annotation_sha256: Sha256
     dataset_sha256: Sha256
     evaluation_policy_fingerprint: Sha256
+    scout_backend: str = Field(min_length=1, max_length=64)
+    scout_model: str | None = Field(default=None, max_length=128)
+    scout_prompt_version: str | None = Field(default=None, max_length=64)
+    scout_provenance_source: str | None = Field(default=None, max_length=64)
+    semantic_quality_applicable: bool
+    quality_interpretation_warning: str | None = Field(default=None, max_length=500)
     candidate_count: int = Field(ge=0)
     ground_truth_count: int = Field(ge=0)
     strict_match_count: int = Field(ge=0)
@@ -222,6 +228,18 @@ def assess_boundary_refinement_feasibility(
     )
     start_errors = [pair.start_error_ms for pair in pair_by_annotation.values()]
     end_errors = [pair.end_error_ms for pair in pair_by_annotation.values()]
+    scout_backend = session_map.scout_backend.strip().lower()
+    scout_model = session_map.scout_metadata.get("model")
+    scout_prompt_version = session_map.scout_metadata.get("window_prompt_version")
+    scout_provenance_source = session_map.scout_metadata.get("scout_provenance_source")
+    semantic_quality_applicable = scout_backend == "gemini"
+    quality_warning = None
+    if not semantic_quality_applicable:
+        quality_warning = (
+            f"Scout backend {session_map.scout_backend!r} is not a semantic production Scout; "
+            "feasibility metrics verify temporal/plumbing behavior only and must not be "
+            "interpreted as semantic Scout detection quality."
+        )
     return BoundaryRefinementFeasibility(
         benchmark_id=annotations.benchmark_id,
         case_id=annotations.case_id,
@@ -230,6 +248,12 @@ def assess_boundary_refinement_feasibility(
         annotation_sha256=annotation_document_sha256,
         dataset_sha256=dataset_sha256,
         evaluation_policy_fingerprint=policy.fingerprint(),
+        scout_backend=session_map.scout_backend,
+        scout_model=scout_model,
+        scout_prompt_version=scout_prompt_version,
+        scout_provenance_source=scout_provenance_source,
+        semantic_quality_applicable=semantic_quality_applicable,
+        quality_interpretation_warning=quality_warning,
         candidate_count=candidate_count,
         ground_truth_count=truth_count,
         strict_match_count=strict_count,

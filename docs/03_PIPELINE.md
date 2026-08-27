@@ -299,5 +299,8 @@ a provider-free feasibility gate: `highlight benchmark boundary-feasibility SESS
 authoritative M8 temporal ruler, then reports strict matches, anchor-overlap coverage, refinement-
 context reachability, MUST_CATCH detection gaps, and boundary headroom. Candidate IDs emitted by this
 artifact are derived from calibration ground truth and are diagnostic only; they must never become a
-production selection policy. This gate makes zero provider/API calls and is the required decision
-point before spending on a boundary-refinement calibration experiment.
+production selection policy. The artifact also records Scout backend/model/prompt provenance and
+marks whether semantic quality interpretation is applicable. Deterministic `fake` Scout sessions are
+explicitly fixture-only and the CLI warns that their detection-gap verdict is not semantic Scout
+quality evidence. This gate makes zero provider/API calls and is the required decision point before
+spending on a boundary-refinement calibration experiment.

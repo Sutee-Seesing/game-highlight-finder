@@ -128,6 +128,9 @@ def test_feasibility_separates_boundary_headroom_from_detection_gaps() -> None:
     assert result.must_catch_boundary_headroom_count == 1
     assert result.must_catch_detection_gap_count == 1
     assert result.diagnostic_verdict == "MUST_CATCH_DETECTION_GAP"
+    assert result.scout_backend == "gemini"
+    assert result.semantic_quality_applicable is True
+    assert result.quality_interpretation_warning is None
     assert result.ground_truth_derived_candidate_ids == (
         "cand_1111111111111111",
         "cand_2222222222222222",
@@ -138,6 +141,37 @@ def test_feasibility_separates_boundary_headroom_from_detection_gaps() -> None:
     assert by_id["hl-3"].detection_gap is True
     assert by_id["hl-3"].context_unreachable is True
     assert result.provider_calls == 0
+
+
+def test_feasibility_marks_fake_scout_as_non_semantic_quality() -> None:
+    source_sha = "a" * 64
+    fake_map = _session_map(source_sha).model_copy(
+        update={
+            "scout_backend": "fake",
+            "scout_metadata": {
+                "model": "fake",
+                "window_prompt_version": "gemini-scout-window-v18",
+                "scout_provenance_source": "reconciled_current_config",
+            },
+        }
+    )
+    result = assess_boundary_refinement_feasibility(
+        fake_map,
+        _annotations(source_sha),
+        EvaluationPolicy(),
+        dataset_sha256="b" * 64,
+        annotation_document_sha256="c" * 64,
+    )
+
+    assert result.scout_backend == "fake"
+    assert result.scout_model == "fake"
+    assert result.scout_prompt_version == "gemini-scout-window-v18"
+    assert result.scout_provenance_source == "reconciled_current_config"
+    assert result.semantic_quality_applicable is False
+    assert result.quality_interpretation_warning is not None
+    assert "must not be interpreted as semantic Scout detection quality" in (
+        result.quality_interpretation_warning
+    )
 
 
 def _write_private_case(
@@ -266,6 +300,8 @@ def test_feasibility_cli_is_provider_free_without_persisted_session_config(
     assert result.exit_code == 0, result.output
     assert "provider/API calls: ZERO" in result.output
     assert "MUST_CATCH_DETECTION_GAP" in result.output
+    assert "Scout provenance: backend=gemini" in result.output
+    assert "NOT APPLICABLE" not in result.output
     assert "never production selection" in result.output
     output = (
         config.storage.data_dir

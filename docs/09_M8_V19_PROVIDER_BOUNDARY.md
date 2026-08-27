@@ -101,8 +101,11 @@ M8 temporal evaluation policy to measure strict matches, then separately reports
 
 The persisted private feasibility artifact contains hashes/metrics/IDs only and records
 `provider_calls=0`. Any candidate IDs are explicitly ground-truth-derived calibration diagnostics;
-they must never be reused as an automatic production selection policy. This gate exists because v19
-can refine the timing of an existing event but cannot recover a highlight Scout did not detect.
+they must never be reused as an automatic production selection policy. The feasibility artifact now
+records Scout backend/model/prompt/provenance and a semantic-quality-applicability flag. A deterministic
+`fake` Scout run is fixture-only: its temporal metrics can test plumbing, but its detection-gap verdict
+must not be interpreted as semantic Scout quality. This gate exists because v19 can refine the timing
+of an existing event but cannot recover a highlight Scout did not detect.
 
 For cross-machine work, `highlight benchmark pack-boundary-feasibility` creates a portable
 calibration-only JSON bundle containing the single-case dataset view, annotation document, sanitized

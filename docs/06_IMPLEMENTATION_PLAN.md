@@ -168,7 +168,9 @@ Ruff and mypy clean; real Gemini API calls during maintenance: zero.
   strict matches from anchor-overlap boundary headroom, context reachability, detection
   gaps, and MUST_CATCH detection gaps using the authoritative M8 evaluation policy. It
   rejects validation/holdout cases and labels any ground-truth-derived candidate IDs as
-  diagnostic-only. No live Gemini call is made by this feasibility gate.
+  diagnostic-only. Feasibility output carries Scout backend/model/prompt provenance plus a
+  semantic-quality-applicability guard, so deterministic fake-Scout verdicts cannot be mistaken for
+  semantic detection evidence. No live Gemini call is made by this feasibility gate.
   Cross-machine calibration evidence can be moved with `highlight benchmark
   pack-boundary-feasibility`, which emits a JSON-only single-calibration-case bundle with
   sanitized source path and no media, credentials, provider artifacts, machine config, or
