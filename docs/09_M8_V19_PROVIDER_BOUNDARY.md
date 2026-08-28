@@ -34,15 +34,20 @@ For one explicitly selected Scout candidate:
 ## Aggregate batch preflight
 
 The provider boundary also has a provider-free aggregate preflight for an explicit candidate/media
-batch. It keeps the same maximum of 32 candidates and preserves caller order. Each item is quoted
-with the exact candidate-level request identity used by execution, then the batch sums base and
-reserved micro-THB exposure before any reservation or transport work.
+batch. It keeps the same maximum of 32 candidates and preserves caller order. Each item binds the
+exact candidate-level request identity used by execution. A candidate whose ledger state is
+`SETTLED` and whose persisted request/response fingerprints still validate is marked as a cache hit:
+it contributes **zero new reservation exposure** and needs no new price/FX quote. The batch creates
+fresh quotes and sums base/reserved micro-THB only for cache misses before any reservation or
+transport work.
 
-The aggregate gate fails closed when the total reserved exposure exceeds the currently available
-budget even when every candidate-level quote would fit by itself. It performs no ledger writes,
-no upload, and no provider generation. Tests also enforce non-empty input, unique candidate IDs,
-per-item session/media provenance, deterministic ordering, and zero cost-call persistence during
-preflight.
+The aggregate gate fails closed when the total new reserved exposure exceeds the currently available
+budget even when every cache-miss candidate-level quote would fit by itself. Fully cached batches
+therefore remain reusable when no new monthly headroom remains, while `RESERVED`, `IN_FLIGHT`,
+`AMBIGUOUS`, missing, or corrupt cache evidence is never treated as free. Preflight performs no
+ledger writes, no upload, and no provider generation. Tests also enforce non-empty input, unique
+candidate IDs, per-item session/media provenance, deterministic ordering, cache-aware incremental
+exposure, and zero cost-call persistence during preflight.
 
 ## Injected-transport batch execution
 
@@ -65,14 +70,18 @@ provider into production:
 
 The integration acceptance path uses real local ingest/proxy/boundary-media FFmpeg work plus two
 `FakeGeminiTransport` candidate calls. The first pass must settle both calls; a second pass must
-reuse both media/provider caches without increasing generation count.
+reuse both media/provider caches without increasing generation count. A partial-batch failure must
+preserve already settled candidate artifacts, persist an ambiguous post-dispatch tail as
+`AMBIGUOUS`, avoid final batch/refined-SessionMap publication, and never retry that unresolved call
+automatically.
 
 ## Production CLI seam
 
 The local CLI now exposes `highlight refine-boundaries SESSION_ID CANDIDATE_ID...` as a
 separate explicit boundary-refinement workflow. Its default behavior is provider-free preflight:
 it loads only committed session/source/proxy artifacts, prepares candidate-local slowed media,
-quotes the whole selected batch, and prints aggregate maximum reserved THB exposure.
+quotes the whole selected batch, and prints aggregate maximum reserved THB exposure. Validated
+`SETTLED` cache hits are labelled explicitly and contribute zero new reservation exposure.
 
 Real execution requires both `--execute` and a fresh `--allow-remote-upload` on the same
 invocation. Persisted session configuration never carries that upload authorization forward. The

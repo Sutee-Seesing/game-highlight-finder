@@ -139,6 +139,39 @@ def preflight_gemini_boundary_refinement(
     )
 
 
+def inspect_gemini_boundary_refinement_cache(
+    media: BoundaryRefinementMediaResult,
+    candidate: Candidate,
+    config: AppConfig,
+    *,
+    session_id: str,
+    cost_service: CostService | None = None,
+) -> tuple[bool, str]:
+    """Validate cache reuse and return the exact provider-request fingerprint without quoting."""
+
+    boundary_request, cost_request = _request_parts(
+        media,
+        candidate,
+        config,
+        session_id=session_id,
+    )
+    service = cost_service or build_gemini_boundary_refinement_cost_service(config)
+    item_dir = media.artifact_path.parent
+    cache_hit = (
+        _load_cached_response(
+            item_dir / "request.gemini.json",
+            item_dir / "response.gemini.json",
+            service,
+            call_id=cost_request.call_id,
+            session_id=session_id,
+            provider_request_fingerprint=cost_request.request_fingerprint,
+            boundary_request=boundary_request,
+        )
+        is not None
+    )
+    return cache_hit, cost_request.request_fingerprint
+
+
 def run_gemini_boundary_refinement_with_transport(
     media: BoundaryRefinementMediaResult,
     candidate: Candidate,

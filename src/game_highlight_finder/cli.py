@@ -1307,10 +1307,14 @@ def _refine_boundaries(
         typer.echo(f"Session: {session_id}")
         typer.echo(f"Candidates: {len(preflight.selected_candidate_ids)}")
         for item in preflight.items:
-            typer.echo(
-                f"  {item.candidate_id}: maximum reserved "
-                f"{_format_micro_thb(item.preflight.quote.reserved_cost_micro_thb)}"
-            )
+            if getattr(item, "cache_hit", False):
+                typer.echo(f"  {item.candidate_id}: SETTLED cache hit; new reservation ZERO")
+            else:
+                assert item.preflight is not None
+                typer.echo(
+                    f"  {item.candidate_id}: maximum reserved "
+                    f"{_format_micro_thb(item.preflight.quote.reserved_cost_micro_thb)}"
+                )
         typer.echo(
             "Aggregate maximum reserved: "
             f"{_format_micro_thb(preflight.total_reserved_cost_micro_thb)}"

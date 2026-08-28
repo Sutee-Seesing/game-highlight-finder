@@ -145,11 +145,13 @@ def test_batch_preflight_aggregates_exact_quotes_without_ledger_writes(tmp_path:
         "cand_2222222222222222",
     )
     assert tuple(item.candidate_id for item in result.items) == result.selected_candidate_ids
+    assert all(item.preflight is not None for item in result.items)
+    preflights = tuple(item.preflight for item in result.items if item.preflight is not None)
     assert result.total_base_cost_micro_thb == sum(
-        item.preflight.quote.base_cost_micro_thb for item in result.items
+        item.quote.base_cost_micro_thb for item in preflights
     )
     assert result.total_reserved_cost_micro_thb == sum(
-        item.preflight.quote.reserved_cost_micro_thb for item in result.items
+        item.quote.reserved_cost_micro_thb for item in preflights
     )
     assert result.total_reserved_cost_micro_thb > 0
     assert result.total_reserved_cost_micro_thb <= result.available_micro_thb
@@ -168,7 +170,9 @@ def test_batch_preflight_refuses_aggregate_exposure_even_when_each_item_fits(
         session_id=SESSION_ID,
         cost_service=high_service,
     )
-    largest_item = max(item.preflight.quote.reserved_cost_micro_thb for item in high.items)
+    assert all(item.preflight is not None for item in high.items)
+    high_preflights = tuple(item.preflight for item in high.items if item.preflight is not None)
+    largest_item = max(item.quote.reserved_cost_micro_thb for item in high_preflights)
     assert high.total_reserved_cost_micro_thb > largest_item
 
     low_budget = Decimal(largest_item) / Decimal(1_000_000)
