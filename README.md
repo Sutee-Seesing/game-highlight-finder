@@ -48,7 +48,9 @@ same hostile-output validator as the built-in fixture.
 For Gemini, set `scout.backend: gemini`, provide a user-supplied FX snapshot, and
 set `scout.allow_remote_upload: true` only after confirming the account/tier data
 use terms. The adapter reads the API key from the environment variable named by
-`scout.api_key_env` (default `GEMINI_API_KEY`); the key itself is never stored in
+`scout.api_key_env` (default `GEMINI_API_KEY`). When that default name is unset,
+it deterministically falls back to the lowest non-empty `GEMINI_API_KEY1..N`;
+custom `api_key_env` names do not cross-fallback. The key itself is never stored in
 configuration or session artifacts. Only the committed session
 `proxy/analysis_proxy.mp4` may cross the provider boundary. `--dry-run` performs
 local preflight and cost quoting without uploading anything.

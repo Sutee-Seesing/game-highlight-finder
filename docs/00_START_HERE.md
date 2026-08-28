@@ -137,7 +137,7 @@ default backend remains Fake Scout and remote upload remains opt-in. Before any
 future live run, confirm:
 
 - Whether cloud-uploaded proxy data is acceptable under the chosen Gemini account/tier and data-use terms.
-- A valid user-managed `GEMINI_API_KEY` and an explicit FX snapshot.
+- A valid user-managed `GEMINI_API_KEY` (or numbered `GEMINI_API_KEY1..N` fallback) and an explicit FX snapshot.
 - A short, synthetic/non-private proxy and the configured M5 duration/budget limits.
 
 ## M6 long-session reconciliation and extraction
