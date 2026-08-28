@@ -75,3 +75,32 @@ calibration annotations as full-source truth.
   full-source human ground truth is required first.
 - Preserve the completed resume, warm-cache, immutability, storage, and review-ratio
   evidence with the private session artifacts.
+
+## 2026-08-28 provider-free remediation readiness
+
+The current remediation branch now has a provider-free M6 dry-run and a separate
+`highlight benchmark scout-readiness` authorization checkpoint. The M6 dry-run checkpoint
+is commit `5d5afa1`; its full provider-free regression passed **308/308**, Ruff passed, and
+mypy reported **69 source files clean**. The readiness addition is verified by targeted
+tests plus Ruff and mypy with **70 source files clean**; it does not authorize a live call.
+
+On CPFLE, calibration case `external-fps-openarena-01` is provider-clean and locked to the
+human-reviewed external calibration source (not validation/holdout). The source SHA-256 is
+`b5365144c0a4a3270877b1796ee980ce2ccbbec215c9450b642181bc9778f77c`; the prepared current
+Scout identity is `gemini-3.5-flash-lite` with `gemini-scout-window-v18`, low media
+resolution, minimal thinking, one 99,008 ms window, and one planned provider request.
+
+The exact provider-free preflight is **649,624 micro-THB (THB 0.649624)** against
+**650,000 micro-THB (THB 0.650000)** available, leaving **376 micro-THB** headroom. The
+readiness artifact records zero provider calls, zero remote uploads, zero ledger
+reservations, `revealed_validation_used=false`, and `semantic_quality_available=false`.
+Independent ledger inspection after readiness also found zero rows in calls, events, and
+control. The private readiness JSON remains under ignored calibration data and is not
+committed.
+
+This does **not** change the M8 quality verdict. The old live attempt authorization remains
+exhausted at **10/10**. A fresh explicit attempt/exposure authorization is required before
+the one planned current-v18 Scout generation. Only after that calibration result exists may
+provider-free `boundary-feasibility` be used to distinguish current semantic detection gaps
+from boundary-only timing headroom. The revealed v13 validation cases remain forbidden for
+tuning.

@@ -40,6 +40,9 @@ from game_highlight_finder.benchmark.review_proxy import (
     make_review_profile,
     make_review_proxies,
 )
+from game_highlight_finder.benchmark.scout_readiness import (
+    run_scout_calibration_readiness,
+)
 from game_highlight_finder.benchmark.template import create_annotation_template
 from game_highlight_finder.config import (
     AppConfig,
@@ -655,6 +658,81 @@ def _benchmark_validate(annotations_path: Path) -> None:
         f"total annotated highlight duration_ms: {summary.total_annotated_highlight_duration_ms}"
     )
     typer.echo("provider calls: ZERO")
+
+
+@benchmark_app.command("scout-readiness")
+def benchmark_scout_readiness(
+    ctx: typer.Context,
+    session_id: Annotated[str, typer.Argument(help="Provider-clean calibration session identifier.")],
+    dataset: Annotated[Path, typer.Option("--dataset", help="Private benchmark dataset manifest.")],
+    annotations: Annotated[
+        Path, typer.Option("--annotations", help="Declared calibration annotation JSON.")
+    ],
+    case_id: Annotated[
+        str | None,
+        typer.Option("--case-id", help="Calibration case ID when the dataset has more than one."),
+    ] = None,
+    output: Annotated[
+        Path | None, typer.Option("--output", help="Private Scout readiness JSON output path.")
+    ] = None,
+) -> None:
+    """Freeze a provider-free authorization/readiness artifact for one calibration Scout run."""
+    _execute(
+        ctx,
+        lambda options: _benchmark_scout_readiness(
+            options, session_id, dataset, annotations, case_id, output
+        ),
+    )
+
+
+def _benchmark_scout_readiness(
+    options: RuntimeOptions,
+    session_id: str,
+    dataset: Path,
+    annotations: Path,
+    case_id: str | None,
+    output: Path | None,
+) -> None:
+    config = _load(options).config
+    config = config.model_copy(
+        update={"scout": config.scout.model_copy(update={"backend": "gemini"})}
+    )
+    artifact, target = run_scout_calibration_readiness(
+        session_id,
+        dataset,
+        annotations,
+        config,
+        case_id=case_id,
+        output_path=output,
+    )
+    typer.echo("[PASS] Scout calibration readiness frozen (provider/API calls: ZERO)")
+    typer.echo(f"Case: {artifact.case_id} | split: {artifact.split}")
+    typer.echo(f"Session: {artifact.session_id}")
+    typer.echo(
+        f"Scout: {artifact.provider}/{artifact.model} | prompt={artifact.window_prompt_version}"
+    )
+    typer.echo(
+        f"Windows/requests: {len(artifact.windows)}/{artifact.planned_provider_requests}"
+    )
+    typer.echo(
+        "Aggregate maximum reserved: "
+        f"{_format_micro_thb(artifact.aggregate_maximum_reserved_micro_thb)} "
+        f"({artifact.aggregate_maximum_reserved_micro_thb} micro-THB)"
+    )
+    typer.echo(
+        "Monthly available: "
+        f"{_format_micro_thb(artifact.monthly_available_micro_thb)} "
+        f"({artifact.monthly_available_micro_thb} micro-THB)"
+    )
+    typer.echo(f"Post-reservation headroom: {artifact.post_reservation_headroom_micro_thb} micro-THB")
+    typer.echo(f"Budget gate: {'BLOCKED' if artifact.budget_blocked else 'PASS'} ({artifact.budget_reason})")
+    typer.echo("Paid-response cache assumption: ZERO")
+    typer.echo("Provider calls: ZERO | remote uploads: ZERO | ledger reservations: ZERO")
+    typer.echo("Semantic quality available: NO")
+    typer.echo("Fresh attempt/exposure authorization required before execution: YES")
+    typer.echo(f"Readiness artifact: {target}")
+    if not artifact.ready_for_authorized_execution:
+        raise ConfigError("Scout calibration readiness is blocked.", hint=artifact.budget_reason)
 
 
 @benchmark_app.command("boundary-feasibility")

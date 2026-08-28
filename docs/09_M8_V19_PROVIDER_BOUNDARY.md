@@ -132,6 +132,28 @@ prompt, hashes the recovered request set, and writes only the recovered identity
 `request_meta.json`, cost ledgers, and provider artifacts are not copied. Historical v11/v12 evidence
 must therefore remain labelled historical and must not be presented as current v18 Scout quality.
 
+## Scout calibration readiness checkpoint
+
+`highlight benchmark scout-readiness SESSION_ID --dataset <dataset.json> --annotations
+<annotations.json>` freezes the exact provider-free authorization surface for a provider-clean
+calibration session. It rejects validation cases before preflight, requires the exact annotation file
+declared by the dataset, re-hashes the locked source, verifies session/source identity and current M6
+window planning, re-hashes every prepared window proxy, validates parent-proxy lineage, and refuses a
+session that already contains paid Scout request/response/cost artifacts.
+
+The private JSON artifact records dataset/annotation/source hashes, config hash, exact model/prompt/
+media/thinking settings, window IDs and hashes, exact per-window and aggregate micro-THB reservation,
+available budget and headroom, planned request count, and explicit zero-call/zero-upload/zero-
+reservation evidence. `paid_response_cache_assumption=ZERO` makes the quote conservative. The artifact
+also records that semantic quality is unavailable and that fresh attempt authorization remains
+required; readiness is not permission to execute.
+
+The 2026-08-28 CPFLE OpenArena calibration checkpoint passes readiness for one current-v18 window:
+`gemini-3.5-flash-lite`, `gemini-scout-window-v18`, **649,624 micro-THB** maximum reservation against
+**650,000 micro-THB** available, leaving **376 micro-THB** headroom. Provider calls, remote uploads,
+and ledger reservations remained zero, and the cost ledger contained zero call/event/control rows.
+This is readiness/cost evidence only, not semantic Scout quality evidence.
+
 ## Deliberate limits
 
 - No live Gemini transport is wired into the production pipeline in this checkpoint.
@@ -150,3 +172,5 @@ dominate, remediate Scout detection instead of spending on boundary timing. Any 
 still pass aggregate preflight and a newly explicit attempt/exposure authorization. The revealed v13
 validation holdout is permanently excluded from tuning, and a future unbiased decision requires a
 fresh locked holdout prepared before predictions.
+
+For the current OpenArena calibration, that next step is blocked only on a new explicit authorization for the single planned Scout generation; no live call is authorized by this document.
