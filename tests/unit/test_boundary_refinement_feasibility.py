@@ -130,10 +130,16 @@ def test_feasibility_separates_boundary_headroom_from_detection_gaps() -> None:
     assert result.diagnostic_verdict == "MUST_CATCH_DETECTION_GAP"
     assert result.scout_backend == "gemini"
     assert result.semantic_quality_applicable is True
+    assert result.annotation_coverage == "exhaustive"
+    assert result.precision_tuning_safe is True
     assert result.quality_interpretation_warning is None
     assert result.ground_truth_derived_candidate_ids == (
         "cand_1111111111111111",
         "cand_2222222222222222",
+    )
+    assert result.unmatched_candidate_ids == (
+        "cand_2222222222222222",
+        "cand_3333333333333333",
     )
     by_id = {item.annotation_id: item for item in result.annotations}
     assert by_id["hl-1"].strict_matched_candidate_id == "cand_1111111111111111"
@@ -178,6 +184,7 @@ def _write_private_case(
     tmp_path: Path,
     *,
     split: BenchmarkSplit,
+    sparse_annotations: bool = False,
 ) -> tuple[Path, Path, AppConfig]:
     tmp_path.mkdir(parents=True, exist_ok=True)
     data_dir = tmp_path / "library"
@@ -198,6 +205,7 @@ def _write_private_case(
                 annotation_path=annotation_path,
                 game_profile="valorant",
                 split=split,
+                tags=(("sparse-annotations",) if sparse_annotations else ()),
             ),
         ),
     )
@@ -269,6 +277,34 @@ def test_feasibility_runner_persists_private_calibration_artifact(tmp_path: Path
     assert result.split == "calibration"
     assert result.provider_calls == 0
     assert "production candidate-selection" in result.selection_warning
+
+
+def test_feasibility_marks_sparse_calibration_precision_as_not_tuning_safe(
+    tmp_path: Path,
+) -> None:
+    dataset_path, annotation_path, config = _write_private_case(
+        tmp_path,
+        split=BenchmarkSplit.CALIBRATION,
+        sparse_annotations=True,
+    )
+
+    result, _ = run_boundary_refinement_feasibility(
+        SESSION_ID,
+        dataset_path,
+        annotation_path,
+        config,
+    )
+
+    assert result.annotation_coverage == "sparse"
+    assert result.precision_tuning_safe is False
+    assert result.strict_precision == pytest.approx(1 / 3)
+    assert result.unmatched_candidate_ids == (
+        "cand_2222222222222222",
+        "cand_3333333333333333",
+    )
+    assert result.quality_interpretation_warning is not None
+    assert "not confirmed false positives" in result.quality_interpretation_warning
+    assert "must not drive Scout suppression" in result.quality_interpretation_warning
 
 
 def test_feasibility_cli_is_provider_free_without_persisted_session_config(

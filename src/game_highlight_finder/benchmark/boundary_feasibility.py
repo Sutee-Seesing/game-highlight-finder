@@ -35,6 +35,7 @@ DiagnosticVerdict = Literal[
     "BOUNDARY_HEADROOM_PRESENT",
     "NO_OBVIOUS_BOUNDARY_HEADROOM",
 ]
+AnnotationCoverage = Literal["exhaustive", "sparse"]
 
 
 class BoundaryRefinementAnnotationFeasibility(BaseModel):
@@ -82,6 +83,8 @@ class BoundaryRefinementFeasibility(BaseModel):
     scout_prompt_version: str | None = Field(default=None, max_length=64)
     scout_provenance_source: str | None = Field(default=None, max_length=64)
     semantic_quality_applicable: bool
+    annotation_coverage: AnnotationCoverage = "exhaustive"
+    precision_tuning_safe: bool = True
     quality_interpretation_warning: str | None = Field(default=None, max_length=500)
     candidate_count: int = Field(ge=0)
     ground_truth_count: int = Field(ge=0)
@@ -104,6 +107,7 @@ class BoundaryRefinementFeasibility(BaseModel):
     median_strict_end_error_ms: float | None = Field(default=None, ge=0)
     diagnostic_verdict: DiagnosticVerdict
     ground_truth_derived_candidate_ids: tuple[str, ...] = ()
+    unmatched_candidate_ids: tuple[str, ...] = ()
     annotations: tuple[BoundaryRefinementAnnotationFeasibility, ...] = ()
     selection_warning: str = (
         "Candidate IDs in this artifact are derived from calibration ground truth and must never "
@@ -127,6 +131,7 @@ def assess_boundary_refinement_feasibility(
     *,
     dataset_sha256: str,
     annotation_document_sha256: str,
+    annotation_coverage: AnnotationCoverage = "exhaustive",
 ) -> BoundaryRefinementFeasibility:
     """Measure whether boundary-only refinement has calibration headroom without provider I/O."""
 
@@ -226,6 +231,11 @@ def assess_boundary_refinement_feasibility(
         for candidate in candidates
         if candidate.candidate_id in ground_truth_derived
     )
+    unmatched_candidate_ids = tuple(
+        candidate.candidate_id
+        for candidate in candidates
+        if candidate.candidate_id not in {pair.prediction.candidate.candidate_id for pair in pairs}
+    )
     start_errors = [pair.start_error_ms for pair in pair_by_annotation.values()]
     end_errors = [pair.end_error_ms for pair in pair_by_annotation.values()]
     scout_backend = session_map.scout_backend.strip().lower()
@@ -233,13 +243,21 @@ def assess_boundary_refinement_feasibility(
     scout_prompt_version = session_map.scout_metadata.get("window_prompt_version")
     scout_provenance_source = session_map.scout_metadata.get("scout_provenance_source")
     semantic_quality_applicable = scout_backend == "gemini"
-    quality_warning = None
+    precision_tuning_safe = semantic_quality_applicable and annotation_coverage == "exhaustive"
+    warnings: list[str] = []
     if not semantic_quality_applicable:
-        quality_warning = (
+        warnings.append(
             f"Scout backend {session_map.scout_backend!r} is not a semantic production Scout; "
             "feasibility metrics verify temporal/plumbing behavior only and must not be "
             "interpreted as semantic Scout detection quality."
         )
+    if annotation_coverage == "sparse":
+        warnings.append(
+            "Calibration annotations are explicitly sparse; unmatched candidates require "
+            "human review and are not confirmed false positives. Raw strict precision is "
+            "diagnostic only and must not drive Scout suppression or threshold tuning."
+        )
+    quality_warning = " ".join(warnings) or None
     return BoundaryRefinementFeasibility(
         benchmark_id=annotations.benchmark_id,
         case_id=annotations.case_id,
@@ -253,6 +271,8 @@ def assess_boundary_refinement_feasibility(
         scout_prompt_version=scout_prompt_version,
         scout_provenance_source=scout_provenance_source,
         semantic_quality_applicable=semantic_quality_applicable,
+        annotation_coverage=annotation_coverage,
+        precision_tuning_safe=precision_tuning_safe,
         quality_interpretation_warning=quality_warning,
         candidate_count=candidate_count,
         ground_truth_count=truth_count,
@@ -275,6 +295,7 @@ def assess_boundary_refinement_feasibility(
         median_strict_end_error_ms=(float(median(end_errors)) if end_errors else None),
         diagnostic_verdict=verdict,
         ground_truth_derived_candidate_ids=ordered_ground_truth_candidates,
+        unmatched_candidate_ids=unmatched_candidate_ids,
         annotations=tuple(rows),
     )
 
@@ -348,6 +369,9 @@ def run_boundary_refinement_feasibility(
         dataset.evaluation_policy,
         dataset_sha256=hash_file(resolved_dataset),
         annotation_document_sha256=annotation_sha256(resolved_annotations),
+        annotation_coverage=(
+            "sparse" if "sparse-annotations" in case.tags else "exhaustive"
+        ),
     )
     target = (
         output_path.expanduser().resolve()

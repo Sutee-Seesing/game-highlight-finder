@@ -32,6 +32,44 @@ validation holdout must not be used for tuning. Any remediation must use calibra
 new calibration data; a future unbiased validation decision requires a fresh holdout
 prepared and locked before predictions.
 
+## Fresh OpenArena calibration checkpoint — 2026-08-29
+
+A newly authorized **calibration-only** OpenArena Scout call ran after the sealed v13
+validation. It used `gemini-3.5-flash-lite` with `gemini-scout-window-v18` on the single
+99,008 ms calibration window. The authorization allowed exactly **1 attempt** and
+**THB 0.65** exposure. Exactly **1 generation attempt** ran, with no automatic retry.
+The ledger settled the call at **THB 0.251294** after reserving **THB 0.649624**, and
+the Gemini remote file records `deletion_status=deleted`.
+
+The semantic Scout produced four candidates. The only currently human-confirmed positive
+(24,000–26,000 ms) was strictly matched by the 23,000–30,500 ms candidate. The provider-free
+boundary diagnostic therefore reports known-positive recall **1.0**, zero detection gaps,
+zero boundary-headroom cases, and `NO_OBVIOUS_BOUNDARY_HEADROOM`. The raw strict precision
+number is **0.25**, but it is **not safe to use for precision tuning**.
+
+The OpenArena annotation is explicitly a sparse visual review with one confirmed frag, not
+an exhaustive full-source annotation. The dataset now marks this case `sparse-annotations`,
+and the provider-free feasibility tool records `annotation_coverage=sparse`,
+`precision_tuning_safe=false`, plus the exact unmatched candidate IDs. Those three unmatched
+candidates are **human-review-required**, not confirmed false positives. Do not suppress
+Scout candidates, raise score/confidence thresholds, or change ranking defaults from this
+0.25 number. In particular, all four candidates have confidence 0.95 and the known-positive
+score (8.0) is shared by another unmatched candidate, so a simple score/confidence cutoff
+would not separate the current labels safely.
+
+The private review queue is persisted at
+`data/external_dev/fps-open-001/openarena-unmatched-candidate-review.json`. It identifies:
+
+- `cand_357fd964f750ee93` (0–5 s): human review required; overlaps one high-audio review interval.
+- `cand_00a30c7a3b46451f` (47–51 s): human review required; no high-audio review-queue overlap.
+- `cand_e7a545c860337a96` (57–62 s): human review required; overlaps two high-audio review intervals.
+
+No new provider call is needed for this review: the existing source, candidate clips/sheets,
+canonical response, and settled Scout output are sufficient. If review confirms additional
+highlights, expand **calibration** annotations and rerun provider-free evaluation. Only if
+review rejects candidates as genuine non-highlights should false-positive suppression or
+ranking changes be tuned against them.
+
 ## Offline verification
 
 After the v13 provider phase, the local maintenance verification passed:

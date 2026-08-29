@@ -700,12 +700,24 @@ def _benchmark_boundary_feasibility(
     )
     if not result.semantic_quality_applicable:
         typer.echo("[WARN] Semantic Scout quality interpretation: NOT APPLICABLE")
-        if result.quality_interpretation_warning is not None:
-            typer.echo(f"[WARN] {result.quality_interpretation_warning}")
+    if not result.precision_tuning_safe:
+        typer.echo(
+            "[WARN] Precision tuning: NOT APPLICABLE until annotations are exhaustive "
+            "and semantic Scout quality is applicable"
+        )
+    if result.quality_interpretation_warning is not None:
+        typer.echo(f"[WARN] {result.quality_interpretation_warning}")
     typer.echo(
         f"Strict: {result.strict_match_count}/{result.ground_truth_count} truth matched; "
-        f"precision={result.strict_precision} recall={result.strict_recall}"
+        f"precision={result.strict_precision} recall={result.strict_recall}; "
+        f"annotation_coverage={result.annotation_coverage}"
     )
+    if result.unmatched_candidate_ids:
+        qualifier = "review-required" if not result.precision_tuning_safe else "strict-unmatched"
+        typer.echo(
+            f"Unmatched candidates ({qualifier}): "
+            + ", ".join(result.unmatched_candidate_ids)
+        )
     typer.echo(
         f"Anchor overlap: {result.anchor_overlap_annotation_count}/{result.ground_truth_count}; "
         f"boundary headroom: {result.boundary_headroom_count}; "

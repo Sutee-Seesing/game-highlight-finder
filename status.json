@@ -1,7 +1,7 @@
 {
   "task_id": "m8-v13-live-validation-2026-08-21",
-  "current_phase": "sealed_validation_complete_quality_gate_failed",
-  "last_checkpoint": "v13 val-01 and val-02 each ran exactly once, both SETTLED, both remote media objects were deleted, and local sealed evaluation completed. Validation quality is insufficient: val-01 precision 0.2 recall 0.3333333333 MUST recall 0.0; val-02 precision 0.0 recall 0.0. No provider attempts remain under the authorized cap.",
+  "current_phase": "openarena_calibration_sparse_annotation_review_required",
+  "last_checkpoint": "Fresh OpenArena calibration ran exactly once with no retry: Gemini Scout SETTLED at THB 0.251294 after reserving THB 0.649624; remote file deleted. Known positive 24-26s matched by 23-30.5s candidate; recall 1.0, detection gaps 0, boundary headroom 0. Raw precision 0.25 is not tuning-safe because the calibration annotation is explicitly sparse; three unmatched candidates require human review before any suppression/ranking tuning.",
   "tests": {
     "full_pytest": "256 passed in 102.30s",
     "ruff": "passed",
@@ -63,5 +63,41 @@
     "default_branch_untouched": true,
     "pr_created": false
   },
-  "blocker": "M8 cannot be accepted because sealed validation quality is inadequate and the required complete human-reviewed 1-4 hour holdout evaluation is still open. The observed validation set must not be reused as an untouched holdout for future tuning."
+  "blocker": "M8 remains not accepted. The fresh OpenArena calibration shows the current Scout can recover the known positive without boundary headroom, but its sparse annotation cannot establish precision or confirm three unmatched candidates as false positives. Complete local human review of those candidates before tuning; future acceptance still requires an unbiased locked holdout.",
+  "post_v13_calibration": {
+    "case_id": "external-fps-openarena-01",
+    "split": "calibration",
+    "authorization": {
+      "attempt_cap": 1,
+      "attempts_used": 1,
+      "exposure_cap_thb": "0.650000",
+      "automatic_retries": 0
+    },
+    "provider": {
+      "model": "gemini-3.5-flash-lite",
+      "prompt_version": "gemini-scout-window-v18",
+      "ledger_status": "SETTLED",
+      "reserved_thb": "0.649624",
+      "settled_thb": "0.251294",
+      "remote_cleanup": "deleted"
+    },
+    "semantic": {
+      "ground_truth_known_positive_count": 1,
+      "candidate_count": 4,
+      "strict_match_count": 1,
+      "raw_strict_precision": 0.25,
+      "known_positive_recall": 1.0,
+      "detection_gap_count": 0,
+      "boundary_headroom_count": 0,
+      "diagnostic_verdict": "NO_OBVIOUS_BOUNDARY_HEADROOM",
+      "annotation_coverage": "sparse",
+      "precision_tuning_safe": false,
+      "review_required_candidate_ids": [
+        "cand_357fd964f750ee93",
+        "cand_00a30c7a3b46451f",
+        "cand_e7a545c860337a96"
+      ]
+    },
+    "next_gate": "Human-review the three unmatched Scout candidates using existing local media/review sheets. Expand calibration annotations for genuine highlights, or only then use rejected candidates for false-positive suppression/ranking calibration. No provider call is required for this gate."
+  }
 }
