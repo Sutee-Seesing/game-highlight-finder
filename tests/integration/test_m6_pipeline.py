@@ -124,7 +124,13 @@ def _settled_window_fixture(
         cost_service=service,
     )
     assert first.results[0].cache_hit is False
-    assert service.ledger.list_calls()[0].status.value == "SETTLED"
+    settled_call = service.ledger.list_calls()[0]
+    assert settled_call.status.value == "SETTLED"
+    assert first.aggregate_preflight.estimated_micro_thb == settled_call.reserved_cost_micro_thb
+    assert (
+        first.aggregate_preflight.window_estimates_micro_thb[window.window_id]
+        == settled_call.reserved_cost_micro_thb
+    )
     item_dir = local.windows.session_dir / "scout" / "windows" / window.window_id
     return config, local, window, transport, service, item_dir
 

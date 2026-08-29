@@ -221,9 +221,11 @@ billing/media/thinking settings, prompt/schema hashes, and output ceiling.
 An existing valid raw response can be canonicalized again without generation.
 A fully verified canonical response is a cache hit. Aggregate paid-window
 preflight quotes all missing windows together and compares the sum with current
-available exposure before an upload; cached windows are excluded. The M6 CLI
-defaults to Fake Scout; Gemini window execution requires explicit opt-in and
-uses the same per-window ledger/cache boundary validated by the bounded smoke.
+available exposure before an upload; cached windows are excluded. The aggregate quote
+must use the exact bounded signal summary and resulting prompt used by the paid request,
+so each per-window preflight estimate matches the amount subsequently reserved in the
+ledger. The M6 CLI defaults to Fake Scout; Gemini window execution requires explicit
+opt-in and uses the same per-window ledger/cache boundary validated by the bounded smoke.
 
 The v18 window Scout prompt uses a detection-first coverage sweep, including the beginning,
 middle, and end before a rescan: it captures concrete gameplay anchors before optional

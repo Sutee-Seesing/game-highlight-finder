@@ -812,6 +812,7 @@ def _run_gemini_windowed_scout(
     )
     cache_keys: dict[str, str] = {}
     payloads: dict[str, tuple[dict[str, Any], str, dict[str, Any], CostRequest]] = {}
+    signal_summaries: dict[str, dict[str, Any]] = {}
     recoveries: dict[str, _PaidWindowRecovery] = {}
     cached_ids: set[str] = set()
     generation_calls = 0
@@ -825,6 +826,7 @@ def _run_gemini_windowed_scout(
         item_dir = paths.scout_windows_dir / window.window_id
         summary_path = item_dir / "signals.json"
         summary = read_json(summary_path) if summary_path.is_file() else {}
+        signal_summaries[window.window_id] = summary
         prompt = build_window_prompt(
             source_duration_ms=source.duration_ms,
             window=window,
@@ -880,6 +882,7 @@ def _run_gemini_windowed_scout(
         config,
         cached_window_ids=cached_ids,
         cost_service=service,
+        local_signal_summaries=signal_summaries,
     )
     if preflight.blocked:
         raise ValidationError("M6 aggregate Gemini preflight is blocked.", hint=preflight.reason)
