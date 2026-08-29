@@ -1,12 +1,13 @@
 {
   "task_id": "m8-v13-live-validation-2026-08-21",
-  "current_phase": "openarena_calibration_sparse_annotation_review_required",
-  "last_checkpoint": "Fresh OpenArena calibration ran exactly once with no retry: Gemini Scout SETTLED at THB 0.251294 after reserving THB 0.649624; remote file deleted. Known positive 24-26s matched by 23-30.5s candidate; recall 1.0, detection gaps 0, boundary headroom 0. Raw precision 0.25 is not tuning-safe because the calibration annotation is explicitly sparse; three unmatched candidates require human review before any suppression/ranking tuning.",
+  "current_phase": "openarena_audio_peak_suppression_headroom_needs_cross_case_calibration",
+  "last_checkpoint": "OpenArena current-v18 candidate review is complete: 2 reviewed positives and 2 confirmed boring/traversal negatives. Boundary feasibility is 2/2 annotated positives matched with detection gaps 0 and boundary headroom 0. Existing Scout score/confidence thresholds have no safe suppression headroom, while provider-free local audio peak dB shows calibration headroom: positive floor -18.518034 dB rejects 2/2 confirmed negatives and preserves 2/2 positives. Weighted mean dB rejects 1/2. No provider call was made for these diagnostics.",
   "tests": {
-    "full_pytest": "256 passed in 102.30s",
+    "full_pytest": "308 passed in 304.58s",
     "ruff": "passed",
-    "mypy_source": "passed, 62 source files",
-    "git_diff_check": "passed"
+    "mypy_source": "passed, 70 source files",
+    "git_diff_check": "passed",
+    "targeted_suppression": "14 passed"
   },
   "provider_attempts": {
     "cumulative_used": 10,
@@ -63,7 +64,7 @@
     "default_branch_untouched": true,
     "pr_created": false
   },
-  "blocker": "M8 remains not accepted. The fresh OpenArena calibration shows the current Scout can recover the known positive without boundary headroom, but its sparse annotation cannot establish precision or confirm three unmatched candidates as false positives. Complete local human review of those candidates before tuning; future acceptance still requires an unbiased locked holdout.",
+  "blocker": "M8 remains not accepted. OpenArena suggests local audio-peak evidence can suppress the two reviewed false positives where Scout score/confidence cannot, but this is one sparse calibration case and cannot become a production threshold yet. Validate the feature on additional calibration cases first; any fresh Gemini generation requires new explicit attempt/exposure authorization, and future acceptance still requires a fresh locked holdout.",
   "post_v13_calibration": {
     "case_id": "external-fps-openarena-01",
     "split": "calibration",
@@ -82,22 +83,36 @@
       "remote_cleanup": "deleted"
     },
     "semantic": {
-      "ground_truth_known_positive_count": 1,
+      "ground_truth_known_positive_count": 2,
       "candidate_count": 4,
-      "strict_match_count": 1,
-      "raw_strict_precision": 0.25,
+      "strict_match_count": 2,
+      "raw_strict_precision": 0.5,
       "known_positive_recall": 1.0,
       "detection_gap_count": 0,
       "boundary_headroom_count": 0,
       "diagnostic_verdict": "NO_OBVIOUS_BOUNDARY_HEADROOM",
       "annotation_coverage": "sparse",
       "precision_tuning_safe": false,
-      "review_required_candidate_ids": [
-        "cand_357fd964f750ee93",
+      "review_required_candidate_ids": [],
+      "candidate_review_complete": true,
+      "false_positive_suppression_safe": true,
+      "score_confidence_threshold_suppression_headroom": false,
+      "confirmed_negative_candidate_ids": [
         "cand_00a30c7a3b46451f",
         "cand_e7a545c860337a96"
       ]
     },
-    "next_gate": "Human-review the three unmatched Scout candidates using existing local media/review sheets. Expand calibration annotations for genuine highlights, or only then use rejected candidates for false-positive suppression/ranking calibration. No provider call is required for this gate."
+    "next_gate": "Provider-free cross-case calibration: visually adjudicate existing FreeDoom/Xonotic external-dev review material and test whether local audio-peak evidence remains useful. Do not promote the OpenArena threshold to production. Any fresh Gemini Scout generation requires new explicit attempt/exposure authorization.",
+    "suppression_feasibility": {
+      "provider_calls": 0,
+      "score_confidence_threshold_headroom": false,
+      "audio_peak_db_positive_floor": -18.518034,
+      "audio_peak_db_rejected_confirmed_negatives": 2,
+      "audio_peak_db_confirmed_negative_count": 2,
+      "audio_mean_db_positive_floor": -26.658512,
+      "audio_mean_db_rejected_confirmed_negatives": 1,
+      "diagnostic_verdict": "AUDIO_PEAK_DB_HEADROOM",
+      "production_threshold_locked": false
+    }
   }
 }

@@ -113,3 +113,34 @@ calibration annotations as full-source truth.
   full-source human ground truth is required first.
 - Preserve the completed resume, warm-cache, immutability, storage, and review-ratio
   evidence with the private session artifacts.
+
+## 2026-08-29 OpenArena candidate adjudication and suppression diagnostic
+
+The sparse OpenArena calibration review is complete for every prediction from the fresh
+current-v18 Scout run, without any additional provider call. Local visual review promoted
+the 0-5s candidate to an additional `WORTH_REVIEW` combat sequence, retained the existing
+24-26s frag as positive, and marked the 47-51s plus 57-62s candidates as boring/traversal
+predictions. The private annotation therefore contains two highlights and two fully
+covering boring intervals while remaining explicitly **sparse** rather than pretending to
+be exhaustive source ground truth.
+
+Re-running provider-free boundary feasibility gives 2/2 currently reviewed highlights
+matched, strict precision 0.5, recall 1.0 over the annotated positives, detection gaps 0,
+and boundary headroom 0. The artifact now records `precision_tuning_safe=false`,
+`candidate_review_complete=true`, and `false_positive_suppression_safe=true`. Existing
+Scout `score`/`confidence` lower-bound thresholds have no headroom: neither confirmed
+negative can be removed without also dropping at least one reviewed positive.
+
+A new provider-free `benchmark suppression-feasibility` diagnostic then evaluated the
+already-computed local audio activity over those same four event intervals. The minimum
+positive event peak is **-18.518034 dB**; a calibration-only lower-bound at that value
+would retain 2/2 reviewed positives and reject 2/2 confirmed negatives. Weighted mean dB
+retains both positives but rejects only 1/2 negatives. The resulting diagnostic verdict is
+`AUDIO_PEAK_DB_HEADROOM`, with provider/API calls still **ZERO** for this remediation
+stage. This threshold is deliberately not wired into production ranking or Scout capture.
+
+The next gate is cross-case calibration: visually adjudicate additional external-dev
+FreeDoom/Xonotic calibration material, then test whether the same local feature remains
+useful. Any fresh Gemini Scout generation requires a new explicit attempt/exposure
+authorization. The revealed v13 validation set remains forbidden for tuning, and a future
+M8 acceptance claim still requires a fresh locked holdout.

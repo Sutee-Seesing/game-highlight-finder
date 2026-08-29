@@ -21,6 +21,7 @@ from game_highlight_finder.benchmark.models import (
     BenchmarkCase,
     BenchmarkDataset,
     BenchmarkSplit,
+    BoringInterval,
     EvaluationPolicy,
     Importance,
     Modality,
@@ -141,6 +142,17 @@ def test_feasibility_separates_boundary_headroom_from_detection_gaps() -> None:
         "cand_2222222222222222",
         "cand_3333333333333333",
     )
+    assert result.strict_unmatched_candidate_ids == result.unmatched_candidate_ids
+    assert result.confirmed_negative_candidate_ids == (
+        "cand_3333333333333333",
+    )
+    assert result.human_review_required_candidate_ids == ()
+    assert result.candidate_review_complete is True
+    assert result.false_positive_suppression_safe is True
+    assert result.protected_positive_min_score == 8.0
+    assert result.protected_positive_min_confidence == 0.9
+    assert result.threshold_rejectable_confirmed_negative_candidate_ids == ()
+    assert result.score_confidence_threshold_suppression_headroom is False
     by_id = {item.annotation_id: item for item in result.annotations}
     assert by_id["hl-1"].strict_matched_candidate_id == "cand_1111111111111111"
     assert by_id["hl-2"].boundary_headroom is True
@@ -297,6 +309,8 @@ def test_feasibility_marks_sparse_calibration_precision_as_not_tuning_safe(
 
     assert result.annotation_coverage == "sparse"
     assert result.precision_tuning_safe is False
+    assert result.false_positive_suppression_safe is False
+    assert result.candidate_review_complete is False
     assert result.strict_precision == pytest.approx(1 / 3)
     assert result.unmatched_candidate_ids == (
         "cand_2222222222222222",
@@ -304,7 +318,125 @@ def test_feasibility_marks_sparse_calibration_precision_as_not_tuning_safe(
     )
     assert result.quality_interpretation_warning is not None
     assert "not confirmed false positives" in result.quality_interpretation_warning
-    assert "must not drive Scout suppression" in result.quality_interpretation_warning
+    assert "must not drive global Scout threshold tuning" in result.quality_interpretation_warning
+
+
+def test_sparse_candidate_adjudication_allows_only_candidate_level_suppression() -> None:
+    source_sha = "a" * 64
+    annotations = _annotations(source_sha).model_copy(
+        update={
+            "boring_intervals": (
+                BoringInterval(
+                    annotation_id="boring-candidate-3",
+                    start_ms=75_000,
+                    end_ms=76_000,
+                    notes="Human-reviewed current prediction is traversal only.",
+                ),
+            )
+        }
+    )
+    result = assess_boundary_refinement_feasibility(
+        _session_map(source_sha),
+        annotations,
+        EvaluationPolicy(),
+        dataset_sha256="b" * 64,
+        annotation_document_sha256="c" * 64,
+        annotation_coverage="sparse",
+    )
+
+    assert result.precision_tuning_safe is False
+    assert result.strict_precision == pytest.approx(1 / 3)
+    assert result.strict_unmatched_candidate_ids == (
+        "cand_2222222222222222",
+        "cand_3333333333333333",
+    )
+    assert result.ground_truth_derived_candidate_ids == (
+        "cand_1111111111111111",
+        "cand_2222222222222222",
+    )
+    assert result.confirmed_negative_candidate_ids == (
+        "cand_3333333333333333",
+    )
+    assert result.human_review_required_candidate_ids == ()
+    assert result.candidate_review_complete is True
+    assert result.false_positive_suppression_safe is True
+    assert result.protected_positive_min_score == 8.0
+    assert result.protected_positive_min_confidence == 0.9
+    assert result.threshold_rejectable_confirmed_negative_candidate_ids == ()
+    assert result.score_confidence_threshold_suppression_headroom is False
+    assert result.quality_interpretation_warning is not None
+    assert "source recall is not exhaustive" in result.quality_interpretation_warning
+    assert "candidate-level false-positive suppression" in result.quality_interpretation_warning
+
+
+def test_sparse_cli_distinguishes_global_precision_from_reviewed_suppression(
+    tmp_path: Path,
+) -> None:
+    dataset_path, annotation_path, config = _write_private_case(
+        tmp_path,
+        split=BenchmarkSplit.CALIBRATION,
+        sparse_annotations=True,
+    )
+    payload = read_json(annotation_path)
+    payload["boring_intervals"] = [
+        {
+            "annotation_id": "boring-candidate-3",
+            "start_ms": 75_000,
+            "end_ms": 76_000,
+            "notes": "Human-reviewed current prediction is traversal only.",
+        }
+    ]
+    atomic_write_json(annotation_path, payload)
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        [
+            "--data-dir",
+            str(config.storage.data_dir),
+            "benchmark",
+            "boundary-feasibility",
+            SESSION_ID,
+            "--dataset",
+            str(dataset_path),
+            "--annotations",
+            str(annotation_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Global strict precision tuning: NOT APPLICABLE" in result.output
+    assert "Candidate-level false-positive suppression: SAFE" in result.output
+    assert "Existing score/confidence threshold headroom: NONE" in result.output
+    assert "Confirmed negative candidates: cand_3333333333333333" in result.output
+    assert "Human-review-required candidates" not in result.output
+
+
+def test_reviewed_suppression_detects_existing_threshold_headroom() -> None:
+    source_sha = "a" * 64
+    session_map = _session_map(source_sha)
+    lowered_negative = session_map.candidates[2].model_copy(
+        update={"score": 6.0, "confidence": 0.7}
+    )
+    session_map = session_map.model_copy(
+        update={"candidates": [*session_map.candidates[:2], lowered_negative]}
+    )
+    result = assess_boundary_refinement_feasibility(
+        session_map,
+        _annotations(source_sha),
+        EvaluationPolicy(),
+        dataset_sha256="b" * 64,
+        annotation_document_sha256="c" * 64,
+    )
+
+    assert result.false_positive_suppression_safe is True
+    assert result.protected_positive_min_score == 8.0
+    assert result.protected_positive_min_confidence == 0.9
+    assert result.threshold_rejectable_confirmed_negative_candidate_ids == (
+        "cand_3333333333333333",
+    )
+    assert result.score_confidence_threshold_suppression_headroom is True
+
 
 
 def test_feasibility_cli_is_provider_free_without_persisted_session_config(

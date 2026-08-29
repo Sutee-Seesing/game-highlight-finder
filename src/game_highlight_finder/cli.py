@@ -40,6 +40,9 @@ from game_highlight_finder.benchmark.review_proxy import (
     make_review_profile,
     make_review_proxies,
 )
+from game_highlight_finder.benchmark.suppression_feasibility import (
+    run_candidate_suppression_feasibility,
+)
 from game_highlight_finder.benchmark.template import create_annotation_template
 from game_highlight_finder.config import (
     AppConfig,
@@ -702,8 +705,27 @@ def _benchmark_boundary_feasibility(
         typer.echo("[WARN] Semantic Scout quality interpretation: NOT APPLICABLE")
     if not result.precision_tuning_safe:
         typer.echo(
-            "[WARN] Precision tuning: NOT APPLICABLE until annotations are exhaustive "
+            "[WARN] Global strict precision tuning: NOT APPLICABLE until annotations are exhaustive "
             "and semantic Scout quality is applicable"
+        )
+    if result.false_positive_suppression_safe:
+        typer.echo(
+            "[PASS] Candidate-level false-positive suppression: SAFE for adjudicated current "
+            "predictions"
+        )
+        if result.score_confidence_threshold_suppression_headroom:
+            typer.echo(
+                "[PASS] Existing score/confidence threshold headroom: YES; rejectable negatives: "
+                + ", ".join(result.threshold_rejectable_confirmed_negative_candidate_ids)
+            )
+        else:
+            typer.echo(
+                "[INFO] Existing score/confidence threshold headroom: NONE without dropping a "
+                "reviewed positive"
+            )
+    elif result.human_review_required_candidate_ids:
+        typer.echo(
+            "[WARN] Candidate-level false-positive suppression: BLOCKED pending human review"
         )
     if result.quality_interpretation_warning is not None:
         typer.echo(f"[WARN] {result.quality_interpretation_warning}")
@@ -712,11 +734,19 @@ def _benchmark_boundary_feasibility(
         f"precision={result.strict_precision} recall={result.strict_recall}; "
         f"annotation_coverage={result.annotation_coverage}"
     )
-    if result.unmatched_candidate_ids:
-        qualifier = "review-required" if not result.precision_tuning_safe else "strict-unmatched"
+    if result.strict_unmatched_candidate_ids:
         typer.echo(
-            f"Unmatched candidates ({qualifier}): "
-            + ", ".join(result.unmatched_candidate_ids)
+            "Strict-unmatched candidates: " + ", ".join(result.strict_unmatched_candidate_ids)
+        )
+    if result.confirmed_negative_candidate_ids:
+        typer.echo(
+            "Confirmed negative candidates: "
+            + ", ".join(result.confirmed_negative_candidate_ids)
+        )
+    if result.human_review_required_candidate_ids:
+        typer.echo(
+            "Human-review-required candidates: "
+            + ", ".join(result.human_review_required_candidate_ids)
         )
     typer.echo(
         f"Anchor overlap: {result.anchor_overlap_annotation_count}/{result.ground_truth_count}; "
@@ -733,6 +763,83 @@ def _benchmark_boundary_feasibility(
         "never production selection."
     )
     typer.echo(f"Feasibility artifact: {target}")
+
+
+@benchmark_app.command("suppression-feasibility")
+def benchmark_suppression_feasibility(
+    ctx: typer.Context,
+    session_id: Annotated[str, typer.Argument(help="Reviewed calibration session identifier.")],
+    feasibility: Annotated[
+        Path,
+        typer.Option(
+            "--feasibility",
+            help="Reviewed boundary-feasibility JSON with completed candidate adjudication.",
+        ),
+    ],
+    output: Annotated[
+        Path | None,
+        typer.Option("--output", help="Private candidate-suppression feasibility JSON output path."),
+    ] = None,
+) -> None:
+    """Measure provider-free local-signal headroom for reviewed false positives."""
+    _execute(
+        ctx,
+        lambda options: _benchmark_suppression_feasibility(
+            options, session_id, feasibility, output
+        ),
+    )
+
+
+def _benchmark_suppression_feasibility(
+    options: RuntimeOptions,
+    session_id: str,
+    feasibility: Path,
+    output: Path | None,
+) -> None:
+    config = _load(options).config
+    result, target = run_candidate_suppression_feasibility(
+        session_id,
+        feasibility,
+        config,
+        output_path=output,
+    )
+    typer.echo("[PASS] candidate-suppression calibration feasibility (provider/API calls: ZERO)")
+    typer.echo(f"Case: {result.case_id} | session: {result.session_id}")
+    typer.echo(
+        "Scout provenance: "
+        f"backend={result.scout_backend} | model={result.scout_model or 'unknown'} | "
+        f"prompt={result.scout_prompt_version or 'unknown'}"
+    )
+    typer.echo(
+        "Reviewed candidates: "
+        f"positives={result.protected_positive_count} "
+        f"confirmed_negatives={result.confirmed_negative_count}"
+    )
+    typer.echo(
+        "Existing score/confidence threshold headroom: "
+        + ("YES" if result.score_confidence_threshold_suppression_headroom else "NONE")
+    )
+    if result.protected_positive_min_audio_peak_db is not None:
+        typer.echo(
+            "Audio peak dB lower-bound diagnostic: "
+            f"keep >= {result.protected_positive_min_audio_peak_db:.6f} dB; "
+            f"rejects {len(result.audio_peak_db_threshold_rejectable_negative_candidate_ids)}/"
+            f"{result.confirmed_negative_count} confirmed negatives"
+        )
+    else:
+        typer.echo("Audio peak dB lower-bound diagnostic: NOT APPLICABLE")
+    if result.protected_positive_min_audio_mean_db is not None:
+        typer.echo(
+            "Audio mean dB lower-bound diagnostic: "
+            f"keep >= {result.protected_positive_min_audio_mean_db:.6f} dB; "
+            f"rejects {len(result.audio_mean_db_threshold_rejectable_negative_candidate_ids)}/"
+            f"{result.confirmed_negative_count} confirmed negatives"
+        )
+    else:
+        typer.echo("Audio mean dB lower-bound diagnostic: NOT APPLICABLE")
+    typer.echo(f"Diagnostic verdict: {result.diagnostic_verdict}")
+    typer.echo(f"[WARN] {result.warning}")
+    typer.echo(f"Suppression feasibility artifact: {target}")
 
 
 @benchmark_app.command("pack-boundary-feasibility")

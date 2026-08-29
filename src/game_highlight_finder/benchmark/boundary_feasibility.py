@@ -28,7 +28,7 @@ from game_highlight_finder.storage.atomic import atomic_write_json, read_json
 from game_highlight_finder.storage.hashing import hash_file
 from game_highlight_finder.storage.sessions import session_paths, source_from_artifact
 
-BOUNDARY_REFINEMENT_FEASIBILITY_VERSION = "boundary-refinement-feasibility-v2"
+BOUNDARY_REFINEMENT_FEASIBILITY_VERSION = "boundary-refinement-feasibility-v3"
 DiagnosticVerdict = Literal[
     "MUST_CATCH_DETECTION_GAP",
     "DETECTION_GAPS_PRESENT",
@@ -107,6 +107,15 @@ class BoundaryRefinementFeasibility(BaseModel):
     median_strict_end_error_ms: float | None = Field(default=None, ge=0)
     diagnostic_verdict: DiagnosticVerdict
     ground_truth_derived_candidate_ids: tuple[str, ...] = ()
+    strict_unmatched_candidate_ids: tuple[str, ...] = ()
+    confirmed_negative_candidate_ids: tuple[str, ...] = ()
+    human_review_required_candidate_ids: tuple[str, ...] = ()
+    candidate_review_complete: bool = False
+    false_positive_suppression_safe: bool = False
+    protected_positive_min_score: float | None = Field(default=None, ge=0, le=10)
+    protected_positive_min_confidence: float | None = Field(default=None, ge=0, le=1)
+    threshold_rejectable_confirmed_negative_candidate_ids: tuple[str, ...] = ()
+    score_confidence_threshold_suppression_headroom: bool = False
     unmatched_candidate_ids: tuple[str, ...] = ()
     annotations: tuple[BoundaryRefinementAnnotationFeasibility, ...] = ()
     selection_warning: str = (
@@ -122,6 +131,17 @@ def _ratio(numerator: int, denominator: int) -> float | None:
 
 def _overlaps(left_start: int, left_end: int, right_start: int, right_end: int) -> bool:
     return min(left_end, right_end) > max(left_start, right_start)
+
+
+def _contains_interval(
+    container_start: int,
+    container_end: int,
+    item_start: int,
+    item_end: int,
+) -> bool:
+    """Return whether one half-open interval fully adjudicates another."""
+
+    return container_start <= item_start and item_end <= container_end
 
 
 def assess_boundary_refinement_feasibility(
@@ -231,11 +251,44 @@ def assess_boundary_refinement_feasibility(
         for candidate in candidates
         if candidate.candidate_id in ground_truth_derived
     )
-    unmatched_candidate_ids = tuple(
+    strict_matched_candidate_ids = {
+        pair.prediction.candidate.candidate_id for pair in pairs
+    }
+    strict_unmatched_candidate_ids = tuple(
         candidate.candidate_id
         for candidate in candidates
-        if candidate.candidate_id not in {pair.prediction.candidate.candidate_id for pair in pairs}
+        if candidate.candidate_id not in strict_matched_candidate_ids
     )
+    semantic_positive_candidate_ids = set(ordered_ground_truth_candidates)
+    if annotation_coverage == "exhaustive":
+        confirmed_negative_candidate_ids = tuple(
+            candidate.candidate_id
+            for candidate in candidates
+            if candidate.candidate_id not in semantic_positive_candidate_ids
+        )
+    else:
+        confirmed_negative_candidate_ids = tuple(
+            candidate.candidate_id
+            for candidate in candidates
+            if candidate.candidate_id not in semantic_positive_candidate_ids
+            and any(
+                _contains_interval(
+                    boring.start_ms,
+                    boring.end_ms,
+                    candidate.event_start_ms,
+                    candidate.event_end_ms,
+                )
+                for boring in annotations.boring_intervals
+            )
+        )
+    confirmed_negative_ids = set(confirmed_negative_candidate_ids)
+    human_review_required_candidate_ids = tuple(
+        candidate.candidate_id
+        for candidate in candidates
+        if candidate.candidate_id not in semantic_positive_candidate_ids
+        and candidate.candidate_id not in confirmed_negative_ids
+    )
+    candidate_review_complete = not human_review_required_candidate_ids
     start_errors = [pair.start_error_ms for pair in pair_by_annotation.values()]
     end_errors = [pair.end_error_ms for pair in pair_by_annotation.values()]
     scout_backend = session_map.scout_backend.strip().lower()
@@ -244,6 +297,44 @@ def assess_boundary_refinement_feasibility(
     scout_provenance_source = session_map.scout_metadata.get("scout_provenance_source")
     semantic_quality_applicable = scout_backend == "gemini"
     precision_tuning_safe = semantic_quality_applicable and annotation_coverage == "exhaustive"
+    false_positive_suppression_safe = (
+        semantic_quality_applicable
+        and candidate_review_complete
+        and bool(confirmed_negative_candidate_ids)
+    )
+    protected_positive_candidates = tuple(
+        candidate
+        for candidate in candidates
+        if candidate.candidate_id in semantic_positive_candidate_ids
+    )
+    protected_positive_min_score = (
+        min(candidate.score for candidate in protected_positive_candidates)
+        if protected_positive_candidates
+        else None
+    )
+    protected_positive_min_confidence = (
+        min(candidate.confidence for candidate in protected_positive_candidates)
+        if protected_positive_candidates
+        else None
+    )
+    threshold_rejectable_confirmed_negative_candidate_ids = (
+        tuple(
+            candidate.candidate_id
+            for candidate in candidates
+            if candidate.candidate_id in confirmed_negative_ids
+            and (
+                candidate.score < protected_positive_min_score
+                or candidate.confidence < protected_positive_min_confidence
+            )
+        )
+        if false_positive_suppression_safe
+        and protected_positive_min_score is not None
+        and protected_positive_min_confidence is not None
+        else ()
+    )
+    score_confidence_threshold_suppression_headroom = bool(
+        threshold_rejectable_confirmed_negative_candidate_ids
+    )
     warnings: list[str] = []
     if not semantic_quality_applicable:
         warnings.append(
@@ -252,11 +343,20 @@ def assess_boundary_refinement_feasibility(
             "interpreted as semantic Scout detection quality."
         )
     if annotation_coverage == "sparse":
-        warnings.append(
-            "Calibration annotations are explicitly sparse; unmatched candidates require "
-            "human review and are not confirmed false positives. Raw strict precision is "
-            "diagnostic only and must not drive Scout suppression or threshold tuning."
-        )
+        if human_review_required_candidate_ids:
+            warnings.append(
+                "Calibration annotations are explicitly sparse; some semantic-unmatched "
+                "candidates still require human review and are not confirmed false positives. "
+                "Raw strict precision is diagnostic only and must not drive global Scout "
+                "threshold tuning."
+            )
+        else:
+            warnings.append(
+                "Calibration annotations remain sparse, so source recall is not exhaustive and "
+                "raw strict precision remains diagnostic. All current Scout candidates are "
+                "adjudicated by highlight overlap or fully covering boring intervals; confirmed "
+                "negatives may drive candidate-level false-positive suppression diagnostics only."
+            )
     quality_warning = " ".join(warnings) or None
     return BoundaryRefinementFeasibility(
         benchmark_id=annotations.benchmark_id,
@@ -295,7 +395,20 @@ def assess_boundary_refinement_feasibility(
         median_strict_end_error_ms=(float(median(end_errors)) if end_errors else None),
         diagnostic_verdict=verdict,
         ground_truth_derived_candidate_ids=ordered_ground_truth_candidates,
-        unmatched_candidate_ids=unmatched_candidate_ids,
+        strict_unmatched_candidate_ids=strict_unmatched_candidate_ids,
+        confirmed_negative_candidate_ids=confirmed_negative_candidate_ids,
+        human_review_required_candidate_ids=human_review_required_candidate_ids,
+        candidate_review_complete=candidate_review_complete,
+        false_positive_suppression_safe=false_positive_suppression_safe,
+        protected_positive_min_score=protected_positive_min_score,
+        protected_positive_min_confidence=protected_positive_min_confidence,
+        threshold_rejectable_confirmed_negative_candidate_ids=(
+            threshold_rejectable_confirmed_negative_candidate_ids
+        ),
+        score_confidence_threshold_suppression_headroom=(
+            score_confidence_threshold_suppression_headroom
+        ),
+        unmatched_candidate_ids=strict_unmatched_candidate_ids,
         annotations=tuple(rows),
     )
 

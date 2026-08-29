@@ -77,3 +77,25 @@ scientifically valid acceptance claim.
 The production revision-planner change remains on feature branch
 `m8-v12-revision-planner` at `bbb696b273f6a1d3522f9d1939ec9efaa925d5b3` before
 this checkpoint update. No PR is created by this checkpoint.
+
+## Post-v13 calibration checkpoint — 2026-08-29
+
+A separately authorized one-attempt OpenArena calibration used the current v18 Scout and
+settled once with no retry. Candidate adjudication is now complete provider-free: two of
+four predictions are reviewed positives and two are confirmed boring/traversal negatives.
+Boundary feasibility remains `NO_OBVIOUS_BOUNDARY_HEADROOM` with 2/2 annotated positives
+matched, zero detection gaps, and zero boundary-only headroom.
+
+The remediation gate now distinguishes sparse-source uncertainty from reviewed-candidate
+precision. Global strict precision tuning remains unsafe, but candidate-level false-positive
+suppression diagnostics are safe for this exact reviewed prediction set. Existing Scout
+score/confidence thresholds cannot separate the two negatives while preserving both
+positives. A new local-only audio diagnostic found `AUDIO_PEAK_DB_HEADROOM`: the protected
+positive peak floor is **-18.518034 dB**, which rejects 2/2 reviewed negatives while keeping
+2/2 positives on this calibration case; weighted mean dB rejects 1/2. No provider call was
+made for either diagnostic.
+
+This is not a production threshold and does not lock V1 defaults. The next evidence gate is
+additional calibration-case review/validation of the local feature; the revealed v13
+validation set remains forbidden for tuning and any new Gemini generation requires fresh
+explicit authorization.
