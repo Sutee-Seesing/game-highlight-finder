@@ -17,6 +17,7 @@ from game_highlight_finder.storage.sessions import session_paths, source_from_ar
 
 CANDIDATE_SUPPRESSION_FEASIBILITY_VERSION = "candidate-suppression-feasibility-v1"
 SuppressionVerdict = Literal[
+    "AUDIO_PEAK_OVER_LOUDNESS_HEADROOM",
     "AUDIO_PEAK_DB_HEADROOM",
     "AUDIO_MEAN_DB_HEADROOM",
     "NO_EXISTING_LOCAL_SIGNAL_HEADROOM",
@@ -37,6 +38,7 @@ class CandidateSuppressionFeature(BaseModel):
     audio_active_fraction: float | None = Field(default=None, ge=0, le=1)
     audio_mean_db: float | None = Field(default=None, ge=-200, le=20)
     audio_peak_db: float | None = Field(default=None, ge=-200, le=20)
+    audio_peak_over_loudness_db: float | None = Field(default=None, ge=-200, le=220)
 
 
 class CandidateSuppressionFeasibility(BaseModel):
@@ -59,6 +61,11 @@ class CandidateSuppressionFeasibility(BaseModel):
     protected_positive_min_audio_peak_db: float | None = Field(default=None, ge=-200, le=20)
     audio_peak_db_threshold_rejectable_negative_candidate_ids: tuple[str, ...] = ()
     audio_peak_db_threshold_suppression_headroom: bool = False
+    protected_positive_min_audio_peak_over_loudness_db: float | None = Field(
+        default=None, ge=-200, le=220
+    )
+    audio_peak_over_loudness_threshold_rejectable_negative_candidate_ids: tuple[str, ...] = ()
+    audio_peak_over_loudness_threshold_suppression_headroom: bool = False
     protected_positive_min_audio_mean_db: float | None = Field(default=None, ge=-200, le=20)
     audio_mean_db_threshold_rejectable_negative_candidate_ids: tuple[str, ...] = ()
     audio_mean_db_threshold_suppression_headroom: bool = False
@@ -107,7 +114,7 @@ def _audio_features(
 def _lower_bound_headroom(
     rows: tuple[CandidateSuppressionFeature, ...],
     *,
-    field: Literal["audio_peak_db", "audio_mean_db"],
+    field: Literal["audio_peak_db", "audio_mean_db", "audio_peak_over_loudness_db"],
 ) -> tuple[float | None, tuple[str, ...]]:
     positives = [getattr(row, field) for row in rows if row.adjudication == "POSITIVE"]
     if not positives or any(value is None for value in positives):
@@ -162,6 +169,11 @@ def assess_candidate_suppression_feasibility(
             candidate.event_end_ms,
             signals,
         )
+        peak_over_loudness = (
+            peak_db - signals.overall_loudness_lufs
+            if peak_db is not None and signals.overall_loudness_lufs is not None
+            else None
+        )
         rows.append(
             CandidateSuppressionFeature(
                 candidate_id=candidate.candidate_id,
@@ -176,6 +188,7 @@ def assess_candidate_suppression_feasibility(
                 audio_active_fraction=active_fraction,
                 audio_mean_db=mean_db,
                 audio_peak_db=peak_db,
+                audio_peak_over_loudness_db=peak_over_loudness,
             )
         )
     ordered_rows = tuple(rows)
@@ -183,12 +196,18 @@ def assess_candidate_suppression_feasibility(
         ordered_rows,
         field="audio_peak_db",
     )
+    relative_peak_threshold, relative_peak_rejectable = _lower_bound_headroom(
+        ordered_rows,
+        field="audio_peak_over_loudness_db",
+    )
     mean_threshold, mean_rejectable = _lower_bound_headroom(
         ordered_rows,
         field="audio_mean_db",
     )
-    if peak_rejectable:
-        verdict: SuppressionVerdict = "AUDIO_PEAK_DB_HEADROOM"
+    if relative_peak_rejectable:
+        verdict: SuppressionVerdict = "AUDIO_PEAK_OVER_LOUDNESS_HEADROOM"
+    elif peak_rejectable:
+        verdict = "AUDIO_PEAK_DB_HEADROOM"
     elif mean_rejectable:
         verdict = "AUDIO_MEAN_DB_HEADROOM"
     else:
@@ -212,6 +231,11 @@ def assess_candidate_suppression_feasibility(
         protected_positive_min_audio_peak_db=peak_threshold,
         audio_peak_db_threshold_rejectable_negative_candidate_ids=peak_rejectable,
         audio_peak_db_threshold_suppression_headroom=bool(peak_rejectable),
+        protected_positive_min_audio_peak_over_loudness_db=relative_peak_threshold,
+        audio_peak_over_loudness_threshold_rejectable_negative_candidate_ids=(
+            relative_peak_rejectable
+        ),
+        audio_peak_over_loudness_threshold_suppression_headroom=bool(relative_peak_rejectable),
         protected_positive_min_audio_mean_db=mean_threshold,
         audio_mean_db_threshold_rejectable_negative_candidate_ids=mean_rejectable,
         audio_mean_db_threshold_suppression_headroom=bool(mean_rejectable),

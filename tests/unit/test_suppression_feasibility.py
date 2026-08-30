@@ -129,6 +129,7 @@ def _signals(*, equal_audio: bool = False) -> LocalSignalsArtifact:
         producer_version="test",
         source_duration_ms=99_008,
         audio_present=True,
+        overall_loudness_lufs=-29.2,
         audio_activity=[
             AudioActivityInterval(
                 start_ms=start,
@@ -164,13 +165,36 @@ def test_audio_peak_diagnostic_separates_reviewed_openarena_candidates() -> None
         "cand_e7a545c860337a96",
     )
     assert result.audio_peak_db_threshold_suppression_headroom is True
+    assert result.protected_positive_min_audio_peak_over_loudness_db == pytest.approx(10.681966)
+    assert result.audio_peak_over_loudness_threshold_rejectable_negative_candidate_ids == (
+        "cand_00a30c7a3b46451f",
+        "cand_e7a545c860337a96",
+    )
+    assert result.audio_peak_over_loudness_threshold_suppression_headroom is True
     assert result.protected_positive_min_audio_mean_db == pytest.approx(-26.659)
     assert result.audio_mean_db_threshold_rejectable_negative_candidate_ids == (
         "cand_00a30c7a3b46451f",
     )
     assert result.audio_mean_db_threshold_suppression_headroom is True
-    assert result.diagnostic_verdict == "AUDIO_PEAK_DB_HEADROOM"
+    assert result.diagnostic_verdict == "AUDIO_PEAK_OVER_LOUDNESS_HEADROOM"
     assert result.provider_calls == 0
+
+
+def test_relative_peak_diagnostic_is_not_applicable_without_overall_loudness() -> None:
+    session_map = _session_map()
+    signals = _signals().model_copy(update={"overall_loudness_lufs": None})
+    result = assess_candidate_suppression_feasibility(
+        session_map,
+        signals,
+        _boundary(session_map),
+        boundary_feasibility_sha256="d" * 64,
+    )
+
+    assert result.protected_positive_min_audio_peak_over_loudness_db is None
+    assert result.audio_peak_over_loudness_threshold_rejectable_negative_candidate_ids == ()
+    assert result.audio_peak_over_loudness_threshold_suppression_headroom is False
+    assert result.audio_peak_db_threshold_suppression_headroom is True
+    assert result.diagnostic_verdict == "AUDIO_PEAK_DB_HEADROOM"
 
 
 def test_audio_diagnostic_reports_no_headroom_when_negatives_match_positive_floor() -> None:
@@ -184,6 +208,8 @@ def test_audio_diagnostic_reports_no_headroom_when_negatives_match_positive_floo
 
     assert result.audio_peak_db_threshold_rejectable_negative_candidate_ids == ()
     assert result.audio_peak_db_threshold_suppression_headroom is False
+    assert result.audio_peak_over_loudness_threshold_rejectable_negative_candidate_ids == ()
+    assert result.audio_peak_over_loudness_threshold_suppression_headroom is False
     assert result.audio_mean_db_threshold_rejectable_negative_candidate_ids == ()
     assert result.audio_mean_db_threshold_suppression_headroom is False
     assert result.diagnostic_verdict == "NO_EXISTING_LOCAL_SIGNAL_HEADROOM"

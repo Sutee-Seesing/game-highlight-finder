@@ -828,6 +828,16 @@ def _benchmark_suppression_feasibility(
         )
     else:
         typer.echo("Audio peak dB lower-bound diagnostic: NOT APPLICABLE")
+    if result.protected_positive_min_audio_peak_over_loudness_db is not None:
+        typer.echo(
+            "Audio peak-over-loudness lower-bound diagnostic: "
+            f"keep >= {result.protected_positive_min_audio_peak_over_loudness_db:.6f} dB; "
+            f"rejects "
+            f"{len(result.audio_peak_over_loudness_threshold_rejectable_negative_candidate_ids)}/"
+            f"{result.confirmed_negative_count} confirmed negatives"
+        )
+    else:
+        typer.echo("Audio peak-over-loudness lower-bound diagnostic: NOT APPLICABLE")
     if result.protected_positive_min_audio_mean_db is not None:
         typer.echo(
             "Audio mean dB lower-bound diagnostic: "

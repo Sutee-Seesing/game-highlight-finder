@@ -144,3 +144,22 @@ FreeDoom/Xonotic calibration material, then test whether the same local feature 
 useful. Any fresh Gemini Scout generation requires a new explicit attempt/exposure
 authorization. The revealed v13 validation set remains forbidden for tuning, and a future
 M8 acceptance claim still requires a fresh locked holdout.
+
+## 2026-08-30 cross-source audio-scale sanity
+
+Before assigning any semantic labels to the existing FreeDoom/Xonotic review queues, a
+provider-free scale check invalidated the idea of promoting the OpenArena **absolute**
+`audio_peak_db` floor globally. FreeDoom has source overall loudness -21.0 LUFS and all
+7 queued review intervals exceed the OpenArena -18.518034 dB floor; Xonotic is -31.6
+LUFS and all 5 queued intervals fall below it. That all-or-nothing split is already
+present without semantic adjudication, so it is a source-mix/loudness confound rather
+than cross-game evidence of highlight quality.
+
+The suppression diagnostic therefore also records `audio_peak_over_loudness_db`
+(peak activity minus source integrated loudness) as an exploratory prominence feature.
+On the reviewed OpenArena candidates, the normalized lower-bound floor is **10.681966 dB**
+and still rejects **2/2** confirmed negatives while preserving **2/2** reviewed positives;
+the diagnostic verdict is `AUDIO_PEAK_OVER_LOUDNESS_HEADROOM`. This remains
+calibration-only and is **not** a production rule. FreeDoom/Xonotic still require visual
+semantic adjudication before the normalized feature can be accepted or rejected; no labels
+were fabricated and no provider call was made.
