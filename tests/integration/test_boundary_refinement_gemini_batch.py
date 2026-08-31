@@ -241,9 +241,11 @@ def test_gemini_boundary_refinement_batch_preflights_executes_persists_and_resum
     assert cached.response_cache_hits == 2
     assert cached_factory_calls == 0
 
-    largest_reserved = max(
-        item.preflight.quote.reserved_cost_micro_thb for item in first.preflight.items
+    assert all(item.preflight is not None for item in first.preflight.items)
+    first_preflights = tuple(
+        item.preflight for item in first.preflight.items if item.preflight is not None
     )
+    largest_reserved = max(item.quote.reserved_cost_micro_thb for item in first_preflights)
     low_budget = Decimal(largest_reserved) / Decimal(1_000_000)
     low_config = config.model_copy(
         update={

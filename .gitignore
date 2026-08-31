@@ -16,6 +16,11 @@ dist/
 .env.*
 !.env.example
 
+# Other local decryption material remains ignored.
+secrets/*.key
+*.env-backup.key
+!secrets/env-backup.key
+
 config.yaml
 data/
 benchmarks/private/

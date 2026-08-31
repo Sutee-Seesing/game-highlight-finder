@@ -40,6 +40,9 @@ from game_highlight_finder.benchmark.review_proxy import (
     make_review_profile,
     make_review_proxies,
 )
+from game_highlight_finder.benchmark.scout_readiness import (
+    run_scout_calibration_readiness,
+)
 from game_highlight_finder.benchmark.suppression_feasibility import (
     run_candidate_suppression_feasibility,
 )
@@ -75,7 +78,10 @@ from game_highlight_finder.pipeline.runner import (
     analyze_source,
     analyze_v1_source,
 )
-from game_highlight_finder.pipeline.windowed_scout import ExecutionActivity
+from game_highlight_finder.pipeline.windowed_scout import (
+    ExecutionActivity,
+    aggregate_window_preflight,
+)
 from game_highlight_finder.providers import ProviderRegistry
 from game_highlight_finder.providers.gemini import GenAITransport
 from game_highlight_finder.status import get_session_status
@@ -657,6 +663,81 @@ def _benchmark_validate(annotations_path: Path) -> None:
     typer.echo("provider calls: ZERO")
 
 
+@benchmark_app.command("scout-readiness")
+def benchmark_scout_readiness(
+    ctx: typer.Context,
+    session_id: Annotated[str, typer.Argument(help="Provider-clean calibration session identifier.")],
+    dataset: Annotated[Path, typer.Option("--dataset", help="Private benchmark dataset manifest.")],
+    annotations: Annotated[
+        Path, typer.Option("--annotations", help="Declared calibration annotation JSON.")
+    ],
+    case_id: Annotated[
+        str | None,
+        typer.Option("--case-id", help="Calibration case ID when the dataset has more than one."),
+    ] = None,
+    output: Annotated[
+        Path | None, typer.Option("--output", help="Private Scout readiness JSON output path.")
+    ] = None,
+) -> None:
+    """Freeze a provider-free authorization/readiness artifact for one calibration Scout run."""
+    _execute(
+        ctx,
+        lambda options: _benchmark_scout_readiness(
+            options, session_id, dataset, annotations, case_id, output
+        ),
+    )
+
+
+def _benchmark_scout_readiness(
+    options: RuntimeOptions,
+    session_id: str,
+    dataset: Path,
+    annotations: Path,
+    case_id: str | None,
+    output: Path | None,
+) -> None:
+    config = _load(options).config
+    config = config.model_copy(
+        update={"scout": config.scout.model_copy(update={"backend": "gemini"})}
+    )
+    artifact, target = run_scout_calibration_readiness(
+        session_id,
+        dataset,
+        annotations,
+        config,
+        case_id=case_id,
+        output_path=output,
+    )
+    typer.echo("[PASS] Scout calibration readiness frozen (provider/API calls: ZERO)")
+    typer.echo(f"Case: {artifact.case_id} | split: {artifact.split}")
+    typer.echo(f"Session: {artifact.session_id}")
+    typer.echo(
+        f"Scout: {artifact.provider}/{artifact.model} | prompt={artifact.window_prompt_version}"
+    )
+    typer.echo(
+        f"Windows/requests: {len(artifact.windows)}/{artifact.planned_provider_requests}"
+    )
+    typer.echo(
+        "Aggregate maximum reserved: "
+        f"{_format_micro_thb(artifact.aggregate_maximum_reserved_micro_thb)} "
+        f"({artifact.aggregate_maximum_reserved_micro_thb} micro-THB)"
+    )
+    typer.echo(
+        "Monthly available: "
+        f"{_format_micro_thb(artifact.monthly_available_micro_thb)} "
+        f"({artifact.monthly_available_micro_thb} micro-THB)"
+    )
+    typer.echo(f"Post-reservation headroom: {artifact.post_reservation_headroom_micro_thb} micro-THB")
+    typer.echo(f"Budget gate: {'BLOCKED' if artifact.budget_blocked else 'PASS'} ({artifact.budget_reason})")
+    typer.echo("Paid-response cache assumption: ZERO")
+    typer.echo("Provider calls: ZERO | remote uploads: ZERO | ledger reservations: ZERO")
+    typer.echo("Semantic quality available: NO")
+    typer.echo("Fresh attempt/exposure authorization required before execution: YES")
+    typer.echo(f"Readiness artifact: {target}")
+    if not artifact.ready_for_authorized_execution:
+        raise ConfigError("Scout calibration readiness is blocked.", hint=artifact.budget_reason)
+
+
 @benchmark_app.command("boundary-feasibility")
 def benchmark_boundary_feasibility(
     ctx: typer.Context,
@@ -1194,10 +1275,59 @@ def _analyze(
             update={"scout": config.scout.model_copy(update={"allow_remote_upload": True})}
         )
     if dry_run and m6:
-        raise ConfigError(
-            "--dry-run with --m6 is not yet supported; refusing provider execution. "
-            "No provider call or upload was made."
+        if config.scout.backend != "gemini":
+            raise ConfigError("--dry-run --m6 is only available with the Gemini Scout backend.")
+        m6_local = analyze_m6_source(video, config, stop_after="windows")
+        if m6_local.windows is None:
+            raise ConfigError("M6 dry-run did not produce the expected local Scout windows.")
+        paths = session_paths(config.storage.data_dir, m6_local.ingest.session_id)
+        signal_summaries: dict[str, dict[str, Any]] = {}
+        for window in m6_local.windows.windows:
+            summary_path = paths.scout_windows_dir / window.window_id / "signals.json"
+            if not summary_path.is_file():
+                raise ConfigError(
+                    "M6 dry-run is missing a local window signal summary.",
+                    hint=str(summary_path),
+                )
+            summary = read_json(summary_path)
+            if not isinstance(summary, dict):
+                raise ConfigError(
+                    "M6 dry-run window signal summary is not a JSON object.",
+                    hint=str(summary_path),
+                )
+            signal_summaries[window.window_id] = summary
+        m6_preflight = aggregate_window_preflight(
+            m6_local.ingest.source,
+            m6_local.windows.windows,
+            config,
+            cached_window_ids=set(),
+            local_signal_summaries=signal_summaries,
         )
+        typer.echo("[PASS] M6 Gemini window preflight: provider/API calls ZERO")
+        typer.echo(f"Session: {m6_local.ingest.session_id}")
+        typer.echo(f"Model: {config.scout.model}")
+        typer.echo(f"Prompt version: {config.scout.window_prompt_version}")
+        typer.echo(f"Windows: {m6_preflight.total_windows}")
+        typer.echo("Paid-response cache assumption: ZERO (conservative dry-run)")
+        for window_id, estimate in m6_preflight.window_estimates_micro_thb.items():
+            typer.echo(f"  {window_id}: maximum reserved {_format_micro_thb(estimate)}")
+        typer.echo(f"Aggregate maximum reserved: {_format_micro_thb(m6_preflight.estimated_micro_thb)}")
+        available_micro_thb = m6_preflight.available_micro_thb or 0
+        headroom_micro_thb = available_micro_thb - m6_preflight.estimated_micro_thb
+        typer.echo(f"Aggregate maximum reserved micro-THB: {m6_preflight.estimated_micro_thb}")
+        typer.echo(f"Monthly available budget: {_format_micro_thb(available_micro_thb)}")
+        typer.echo(f"Monthly available budget micro-THB: {available_micro_thb}")
+        typer.echo(f"Post-reservation headroom micro-THB: {headroom_micro_thb}")
+        typer.echo(f"Budget gate: {'BLOCKED' if m6_preflight.blocked else 'PASS'} ({m6_preflight.reason})")
+        typer.echo("Provider transport constructed: NO")
+        typer.echo("Remote upload: NO")
+        typer.echo("Ledger reservation: NO")
+        if m6_preflight.blocked:
+            raise ConfigError(
+                "M6 Gemini window preflight is blocked.",
+                hint=m6_preflight.reason,
+            )
+        return
     if m6 and stop_after.strip().lower().replace("-", "_") not in {"report", "rank"}:
         if config.scout.backend == "gemini" and not config.scout.allow_remote_upload:
             raise ConfigError("M6 Gemini requires --allow-remote-upload.")
@@ -1436,10 +1566,14 @@ def _refine_boundaries(
         typer.echo(f"Session: {session_id}")
         typer.echo(f"Candidates: {len(preflight.selected_candidate_ids)}")
         for item in preflight.items:
-            typer.echo(
-                f"  {item.candidate_id}: maximum reserved "
-                f"{_format_micro_thb(item.preflight.quote.reserved_cost_micro_thb)}"
-            )
+            if getattr(item, "cache_hit", False):
+                typer.echo(f"  {item.candidate_id}: SETTLED cache hit; new reservation ZERO")
+            else:
+                assert item.preflight is not None
+                typer.echo(
+                    f"  {item.candidate_id}: maximum reserved "
+                    f"{_format_micro_thb(item.preflight.quote.reserved_cost_micro_thb)}"
+                )
         typer.echo(
             "Aggregate maximum reserved: "
             f"{_format_micro_thb(preflight.total_reserved_cost_micro_thb)}"

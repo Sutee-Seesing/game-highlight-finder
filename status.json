@@ -7,7 +7,8 @@
     "ruff": "passed",
     "mypy_source": "passed, 70 source files",
     "git_diff_check": "passed",
-    "targeted_suppression": "15 passed"
+    "targeted_suppression": "15 passed",
+    "readiness_targeted": "8 passed in 0.96s"
   },
   "provider_attempts": {
     "cumulative_used": 10,
@@ -18,7 +19,8 @@
     "v13_val01_settled": 1,
     "v13_val02_settled": 1,
     "v13_remote_cleanup_deleted": 2,
-    "automatic_retries": 0
+    "automatic_retries": 0,
+    "new_authorization_required": true
   },
   "exposure": {
     "known_settled_thb": "15.041438",
@@ -126,5 +128,28 @@
       "audio_peak_over_loudness_positive_floor": 10.681966,
       "audio_peak_over_loudness_rejected_confirmed_negatives": 2
     }
+  },
+  "offline_readiness": {
+    "case_id": "external-fps-openarena-01",
+    "benchmark_id": "external-fps-dev-v1",
+    "split": "calibration",
+    "session_id": "2026-08-26_unknown_b5365144c0a4",
+    "source_sha256": "b5365144c0a4a3270877b1796ee980ce2ccbbec215c9450b642181bc9778f77c",
+    "model": "gemini-3.5-flash-lite",
+    "window_prompt_version": "gemini-scout-window-v18",
+    "window_count": 1,
+    "planned_provider_requests": 1,
+    "aggregate_maximum_reserved_micro_thb": 649624,
+    "monthly_available_micro_thb": 650000,
+    "post_reservation_headroom_micro_thb": 376,
+    "provider_calls": 0,
+    "remote_uploads": 0,
+    "ledger_reservations": 0,
+    "provider_clean_session": true,
+    "semantic_quality_available": false,
+    "fresh_attempt_authorization_required": true,
+    "revealed_validation_used": false,
+    "semantic_quality_available_after_authorized_run": true,
+    "historical_checkpoint": true
   }
 }

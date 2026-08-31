@@ -206,15 +206,50 @@ class _DispatchSignal:
     dispatched: bool
 
 
+_DEFAULT_GEMINI_API_KEY_ENV = "GEMINI_API_KEY"
+_NUMBERED_GEMINI_API_KEY_RE = re.compile(r"^GEMINI_API_KEY([1-9][0-9]*)$")
+
+
+def _resolve_gemini_api_key(api_key_env: str, environ: Mapping[str, str]) -> str:
+    """Resolve one credential without persisting or exposing its value.
+
+    The configured variable remains authoritative.  Only the default
+    ``GEMINI_API_KEY`` name may fall back to a numbered local key pool, which
+    keeps persisted config/request fingerprints stable across machines that
+    store credentials as ``GEMINI_API_KEY1``, ``GEMINI_API_KEY2``, and so on.
+    Selection is deterministic and never retries a provider call.
+    """
+
+    key = environ.get(api_key_env)
+    if key:
+        return key
+    if api_key_env != _DEFAULT_GEMINI_API_KEY_ENV:
+        raise GeminiConfigurationError(
+            f"Gemini API key environment variable {api_key_env} is not set."
+        )
+
+    numbered: list[tuple[int, str]] = []
+    for name, value in environ.items():
+        if not value:
+            continue
+        match = _NUMBERED_GEMINI_API_KEY_RE.fullmatch(name)
+        if match is not None:
+            numbered.append((int(match.group(1)), value))
+    if numbered:
+        numbered.sort(key=lambda item: item[0])
+        return numbered[0][1]
+
+    raise GeminiConfigurationError(
+        "Gemini API key environment variable GEMINI_API_KEY is not set, and no "
+        "numbered fallback GEMINI_API_KEY1..N is available."
+    )
+
+
 class GenAITransport:
     """Lazy wrapper around the official ``google-genai`` Python SDK."""
 
     def __init__(self, *, api_key_env: str = "GEMINI_API_KEY") -> None:
-        key = os.environ.get(api_key_env)
-        if not key:
-            raise GeminiConfigurationError(
-                f"Gemini API key environment variable {api_key_env} is not set."
-            )
+        key = _resolve_gemini_api_key(api_key_env, os.environ)
         try:
             from google import genai  # type: ignore[import-not-found, unused-ignore]
         except ImportError as exc:  # pragma: no cover - exercised when optional extra is absent

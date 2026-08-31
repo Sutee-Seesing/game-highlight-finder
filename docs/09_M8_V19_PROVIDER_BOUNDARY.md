@@ -34,15 +34,20 @@ For one explicitly selected Scout candidate:
 ## Aggregate batch preflight
 
 The provider boundary also has a provider-free aggregate preflight for an explicit candidate/media
-batch. It keeps the same maximum of 32 candidates and preserves caller order. Each item is quoted
-with the exact candidate-level request identity used by execution, then the batch sums base and
-reserved micro-THB exposure before any reservation or transport work.
+batch. It keeps the same maximum of 32 candidates and preserves caller order. Each item binds the
+exact candidate-level request identity used by execution. A candidate whose ledger state is
+`SETTLED` and whose persisted request/response fingerprints still validate is marked as a cache hit:
+it contributes **zero new reservation exposure** and needs no new price/FX quote. The batch creates
+fresh quotes and sums base/reserved micro-THB only for cache misses before any reservation or
+transport work.
 
-The aggregate gate fails closed when the total reserved exposure exceeds the currently available
-budget even when every candidate-level quote would fit by itself. It performs no ledger writes,
-no upload, and no provider generation. Tests also enforce non-empty input, unique candidate IDs,
-per-item session/media provenance, deterministic ordering, and zero cost-call persistence during
-preflight.
+The aggregate gate fails closed when the total new reserved exposure exceeds the currently available
+budget even when every cache-miss candidate-level quote would fit by itself. Fully cached batches
+therefore remain reusable when no new monthly headroom remains, while `RESERVED`, `IN_FLIGHT`,
+`AMBIGUOUS`, missing, or corrupt cache evidence is never treated as free. Preflight performs no
+ledger writes, no upload, and no provider generation. Tests also enforce non-empty input, unique
+candidate IDs, per-item session/media provenance, deterministic ordering, cache-aware incremental
+exposure, and zero cost-call persistence during preflight.
 
 ## Injected-transport batch execution
 
@@ -65,14 +70,18 @@ provider into production:
 
 The integration acceptance path uses real local ingest/proxy/boundary-media FFmpeg work plus two
 `FakeGeminiTransport` candidate calls. The first pass must settle both calls; a second pass must
-reuse both media/provider caches without increasing generation count.
+reuse both media/provider caches without increasing generation count. A partial-batch failure must
+preserve already settled candidate artifacts, persist an ambiguous post-dispatch tail as
+`AMBIGUOUS`, avoid final batch/refined-SessionMap publication, and never retry that unresolved call
+automatically.
 
 ## Production CLI seam
 
 The local CLI now exposes `highlight refine-boundaries SESSION_ID CANDIDATE_ID...` as a
 separate explicit boundary-refinement workflow. Its default behavior is provider-free preflight:
 it loads only committed session/source/proxy artifacts, prepares candidate-local slowed media,
-quotes the whole selected batch, and prints aggregate maximum reserved THB exposure.
+quotes the whole selected batch, and prints aggregate maximum reserved THB exposure. Validated
+`SETTLED` cache hits are labelled explicitly and contribute zero new reservation exposure.
 
 Real execution requires both `--execute` and a fresh `--allow-remote-upload` on the same
 invocation. Persisted session configuration never carries that upload authorization forward. The
@@ -123,6 +132,28 @@ prompt, hashes the recovered request set, and writes only the recovered identity
 `request_meta.json`, cost ledgers, and provider artifacts are not copied. Historical v11/v12 evidence
 must therefore remain labelled historical and must not be presented as current v18 Scout quality.
 
+## Scout calibration readiness checkpoint
+
+`highlight benchmark scout-readiness SESSION_ID --dataset <dataset.json> --annotations
+<annotations.json>` freezes the exact provider-free authorization surface for a provider-clean
+calibration session. It rejects validation cases before preflight, requires the exact annotation file
+declared by the dataset, re-hashes the locked source, verifies session/source identity and current M6
+window planning, re-hashes every prepared window proxy, validates parent-proxy lineage, and refuses a
+session that already contains paid Scout request/response/cost artifacts.
+
+The private JSON artifact records dataset/annotation/source hashes, config hash, exact model/prompt/
+media/thinking settings, window IDs and hashes, exact per-window and aggregate micro-THB reservation,
+available budget and headroom, planned request count, and explicit zero-call/zero-upload/zero-
+reservation evidence. `paid_response_cache_assumption=ZERO` makes the quote conservative. The artifact
+also records that semantic quality is unavailable and that fresh attempt authorization remains
+required; readiness is not permission to execute.
+
+The 2026-08-28 CPFLE OpenArena calibration checkpoint passes readiness for one current-v18 window:
+`gemini-3.5-flash-lite`, `gemini-scout-window-v18`, **649,624 micro-THB** maximum reservation against
+**650,000 micro-THB** available, leaving **376 micro-THB** headroom. Provider calls, remote uploads,
+and ledger reservations remained zero, and the cost ledger contained zero call/event/control rows.
+This is readiness/cost evidence only, not semantic Scout quality evidence.
+
 ## Deliberate limits
 
 - No live Gemini transport is wired into the production pipeline in this checkpoint.
@@ -141,3 +172,5 @@ dominate, remediate Scout detection instead of spending on boundary timing. Any 
 still pass aggregate preflight and a newly explicit attempt/exposure authorization. The revealed v13
 validation holdout is permanently excluded from tuning, and a future unbiased decision requires a
 fresh locked holdout prepared before predictions.
+
+For the current OpenArena calibration, that next step is blocked only on a new explicit authorization for the single planned Scout generation; no live call is authorized by this document.

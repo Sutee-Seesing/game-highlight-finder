@@ -31,6 +31,7 @@ from game_highlight_finder.pipeline.boundary_refiner_gemini import (
     GeminiBoundaryRefinementPreflight,
     GeminiBoundaryRefinementResult,
     build_gemini_boundary_refinement_cost_service,
+    inspect_gemini_boundary_refinement_cache,
     preflight_gemini_boundary_refinement,
     run_gemini_boundary_refinement_with_transport,
 )
@@ -39,7 +40,7 @@ from game_highlight_finder.providers.gemini import GeminiRemoteFile, GeminiTrans
 from game_highlight_finder.storage.atomic import atomic_write_json
 from game_highlight_finder.storage.sessions import session_paths
 
-BOUNDARY_REFINER_GEMINI_BATCH_PREFLIGHT_VERSION = "boundary-refiner-gemini-batch-preflight-v1"
+BOUNDARY_REFINER_GEMINI_BATCH_PREFLIGHT_VERSION = "boundary-refiner-gemini-batch-preflight-v2"
 BOUNDARY_REFINER_GEMINI_BATCH_VERSION = "boundary-refiner-gemini-batch-v1"
 
 GeminiBoundaryRefinementTransportFactory = Callable[[], GeminiTransport]
@@ -94,7 +95,21 @@ class GeminiBoundaryRefinementBatchPreflightItem(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     candidate_id: str = Field(pattern=r"^cand_[0-9a-f]{16}$")
-    preflight: GeminiBoundaryRefinementPreflight
+    cache_hit: bool = False
+    provider_request_fingerprint: Sha256
+    preflight: GeminiBoundaryRefinementPreflight | None = None
+
+    @model_validator(mode="after")
+    def cache_state_matches_preflight(self) -> GeminiBoundaryRefinementBatchPreflightItem:
+        if self.cache_hit and self.preflight is not None:
+            raise ValueError("cache-hit boundary-refiner items must not create a new quote")
+        if not self.cache_hit and self.preflight is None:
+            raise ValueError("cache-miss boundary-refiner items require a cost preflight")
+        if self.preflight is not None and (
+            self.preflight.provider_request_fingerprint != self.provider_request_fingerprint
+        ):
+            raise ValueError("boundary-refiner item request fingerprint does not match preflight")
+        return self
 
 
 class GeminiBoundaryRefinementBatchPreflight(BaseModel):
@@ -201,23 +216,42 @@ def preflight_gemini_boundary_refinement_batch(
 
     preflight_items: list[GeminiBoundaryRefinementBatchPreflightItem] = []
     for candidate, media in selected:
-        preflight = preflight_gemini_boundary_refinement(
+        cache_hit, provider_request_fingerprint = inspect_gemini_boundary_refinement_cache(
             media,
             candidate,
             config,
             session_id=session_id,
             cost_service=cost_service,
         )
+        preflight = None
+        if not cache_hit:
+            preflight = preflight_gemini_boundary_refinement(
+                media,
+                candidate,
+                config,
+                session_id=session_id,
+                cost_service=cost_service,
+            )
         preflight_items.append(
             GeminiBoundaryRefinementBatchPreflightItem(
                 candidate_id=candidate.candidate_id,
+                cache_hit=cache_hit,
+                provider_request_fingerprint=provider_request_fingerprint,
                 preflight=preflight,
             )
         )
 
-    total_base = sum(item.preflight.quote.base_cost_micro_thb for item in preflight_items)
-    total_reserved = sum(item.preflight.quote.reserved_cost_micro_thb for item in preflight_items)
-    available = preflight_items[0].preflight.available_micro_thb
+    total_base = sum(
+        item.preflight.quote.base_cost_micro_thb
+        for item in preflight_items
+        if item.preflight is not None
+    )
+    total_reserved = sum(
+        item.preflight.quote.reserved_cost_micro_thb
+        for item in preflight_items
+        if item.preflight is not None
+    )
+    available = cost_service.summary().available_micro_thb
     if total_reserved > available:
         raise BudgetExceededError(
             hint=(
@@ -448,7 +482,7 @@ def _execute_prepared_batch(
     )
     refined_map = SessionMap.model_validate(refined_map.model_dump(mode="json"))
     final_by_id = {candidate.candidate_id: candidate for candidate in refined_map.candidates}
-    preflight_by_id = {item.candidate_id: item.preflight for item in preflight.items}
+    preflight_by_id = {item.candidate_id: item for item in preflight.items}
 
     item_artifacts = [
         GeminiBoundaryRefinementBatchItemArtifact(
