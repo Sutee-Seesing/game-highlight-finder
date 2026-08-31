@@ -503,6 +503,7 @@ def _benchmark_cross_case_suppression(
         "Normalized positive floor: "
         f"{result.protected_positive_min_audio_peak_over_loudness_db:.6f} dB"
     )
+    typer.echo(f"Reviewer kind: {result.reviewer_kind}")
     typer.echo(
         f"Rejected boring intervals: {result.rejected_boring_count}/{result.boring_count_total}"
     )

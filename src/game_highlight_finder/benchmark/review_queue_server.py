@@ -30,6 +30,7 @@ MAX_REQUEST_BYTES = 2 * 1024 * 1024
 VIDEO_CHUNK_BYTES = 64 * 1024
 REVIEW_ADJUDICATION_VERSION = 1
 ReviewDecision = Literal["POSITIVE", "BORING", "UNCERTAIN"]
+ReviewReviewerKind = Literal["HUMAN", "ASSISTANT_VISUAL"]
 
 
 class ReviewQueueInterval(BaseModel):
@@ -81,6 +82,7 @@ class ReviewAdjudicationDocument(BaseModel):
     updated_at: datetime
     selected_cases: tuple[str, ...]
     decisions: tuple[ReviewDecisionItem, ...]
+    reviewer_kind: ReviewReviewerKind = "HUMAN"
     provider_calls: Literal[0] = 0
 
 
@@ -256,6 +258,7 @@ class ReviewQueueServer:
                 "cases": cases,
                 "reviewed_count": len(existing),
                 "interval_count": len(self._intervals),
+                "reviewer_kind": "HUMAN",
                 "provider_calls": 0,
                 "warning": (
                     "Development calibration review only. Decisions are explicit visual labels and "
@@ -286,6 +289,7 @@ class ReviewQueueServer:
                 updated_at=datetime.now(UTC),
                 selected_cases=self.selected_cases,
                 decisions=tuple(decisions),
+                reviewer_kind="HUMAN",
             )
             try:
                 atomic_write_json(self.output_path, document.model_dump(mode="json"))

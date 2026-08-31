@@ -132,6 +132,7 @@ def test_queue_payload_is_selected_case_only_and_provider_free(
     assert payload["selected_cases"] == ["xonotic"]
     assert payload["interval_count"] == 1
     assert payload["reviewed_count"] == 0
+    assert payload["reviewer_kind"] == "HUMAN"
     assert payload["provider_calls"] == 0
     assert payload["cases"][0]["intervals"][0]["review_id"] == "xonotic-review-01"
 
@@ -179,6 +180,7 @@ def test_save_persists_explicit_decision_and_reloads_it(
     assert sidecar.is_file()
     persisted = json.loads(sidecar.read_text(encoding="utf-8"))
     assert persisted["decisions"][0]["decision"] == "BORING"
+    assert persisted["reviewer_kind"] == "HUMAN"
     assert persisted["provider_calls"] == 0
 
     status, _headers, body = _request(running_review_queue, "GET", "/api/queue")

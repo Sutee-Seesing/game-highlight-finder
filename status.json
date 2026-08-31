@@ -1,16 +1,17 @@
 {
   "task_id": "m8-v13-live-validation-2026-08-21",
-  "current_phase": "cross_source_evaluator_green_waiting_real_visual_adjudication",
-  "last_checkpoint": "Provider-free cross-case suppression evaluator is implemented and fail-closed: it binds to the exact review queue SHA, requires complete POSITIVE/BORING visual decisions, rejects UNCERTAIN, consumes only existing normalized audio-scale evidence, and never locks a production threshold. A live smoke against the current FreeDoom/Xonotic queue correctly failed because the adjudication sidecar does not exist. Targeted cross-case/review/suppression tests pass 15/15, Ruff passes src+tests, mypy passes 73 source files, full regression passes 331/331 in 307.33s, and provider calls remain zero.",
+  "current_phase": "visual_review_provenance_hardened_waiting_visual_adjudication",
+  "last_checkpoint": "Visual-review provenance is now explicit and provider-free: review sidecars distinguish HUMAN from ASSISTANT_VISUAL, the cross-case evaluator preserves reviewer_kind, assistant labels remain excluded from M8 acceptance, focused review/cross-case tests pass 13/13 in 2.43s, Ruff passes touched files, mypy passes 73 source files, and provider calls remain zero. The 12 FreeDoom/Xonotic intervals are still awaiting semantic visual labels.",
   "tests": {
-    "full_pytest": "331 passed in 307.33s with cross-case suppression evaluator",
-    "ruff": "passed over src + tests after cross-case evaluator",
+    "full_pytest": "pending rerun after reviewer provenance hardening",
+    "ruff": "passed over touched provenance source + tests",
     "mypy_source": "passed, 73 source files",
     "git_diff_check": "passed after cross-case evaluator",
     "targeted_suppression": "15 passed",
     "readiness_targeted": "8 passed in 0.96s",
     "review_queue_targeted": "19 passed in 5.30s including transient Windows bundle-lock retry regression",
-    "cross_case_targeted": "15 passed in 1.96s"
+    "cross_case_targeted": "15 passed in 1.96s",
+    "review_provenance_targeted": "13 passed in 2.43s"
   },
   "provider_attempts": {
     "cumulative_used": 10,
@@ -68,7 +69,7 @@
     "default_branch_untouched": true,
     "pr_created": false
   },
-  "blocker": "M8 remains not accepted. The provider-free review helper and cross-case evaluator are ready, but the 12 FreeDoom/Xonotic intervals still need real visual POSITIVE/BORING/UNCERTAIN adjudication. The evaluator deliberately fails closed until complete resolved POSITIVE/BORING labels exist. Absolute peak dB remains source-level-confounded; any fresh Gemini generation requires new explicit authorization; future acceptance still requires a fresh locked holdout.",
+  "blocker": "M8 remains not accepted. The 12 FreeDoom/Xonotic intervals still need resolved visual POSITIVE/BORING adjudication. Reviewer provenance is now explicit: HUMAN labels may support human-reviewed calibration evidence; ASSISTANT_VISUAL labels are diagnostic only and remain excluded from M8 acceptance. Any fresh Gemini generation requires new explicit authorization; future acceptance still requires a fresh locked holdout.",
   "post_v13_calibration": {
     "case_id": "external-fps-openarena-01",
     "split": "calibration",
@@ -151,7 +152,13 @@
       "evaluator_provider_calls": 0,
       "evaluator_live_smoke": "FAIL_CLOSED_MISSING_ADJUDICATION_SIDECAR",
       "production_threshold_locked": false,
-      "evaluator_full_regression": "331 passed in 307.33s"
+      "evaluator_full_regression": "331 passed in 307.33s",
+      "reviewer_kinds_supported": [
+        "HUMAN",
+        "ASSISTANT_VISUAL"
+      ],
+      "assistant_visual_labels_excluded_from_m8_acceptance": true,
+      "reviewer_provenance_hardened": true
     }
   },
   "offline_readiness": {

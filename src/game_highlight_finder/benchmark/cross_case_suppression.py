@@ -64,6 +64,7 @@ class CrossCaseSuppressionResult(BaseModel):
     queue_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     selected_cases: tuple[str, ...]
     reviewed_count: int = Field(ge=0)
+    reviewer_kind: Literal["HUMAN", "ASSISTANT_VISUAL"]
     positive_count: int = Field(ge=1)
     boring_count: int = Field(ge=1)
     protected_positive_min_audio_peak_over_loudness_db: float = Field(ge=-200, le=220)
@@ -192,6 +193,7 @@ def assess_cross_case_suppression(
         queue_sha256=queue_sha256,
         selected_cases=adjudication.selected_cases,
         reviewed_count=len(rows),
+        reviewer_kind=adjudication.reviewer_kind,
         positive_count=len(positives),
         boring_count=len(boring),
         protected_positive_min_audio_peak_over_loudness_db=threshold,

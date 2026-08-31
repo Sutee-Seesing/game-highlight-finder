@@ -224,3 +224,17 @@ label is invented and provider/API calls remain **ZERO**. Targeted cross-case + 
 + suppression tests pass **15/15**, Ruff passes over `src` + `tests`, and mypy passes **73
 source files**, and the full regression passes **331/331 in 307.33s**. The remaining gate is still real visual review of all 12 intervals, followed
 by this evaluator; the revealed v13 validation set remains forbidden for tuning.
+
+## 2026-09-01 visual-review provenance hardening
+
+The review sidecar and cross-case evaluator now preserve reviewer provenance explicitly.
+The local loopback review UI writes `reviewer_kind=HUMAN`; assistant/model visual decisions
+can instead be stored as `reviewer_kind=ASSISTANT_VISUAL`. The evaluator carries that value
+into its private diagnostic artifact while still enforcing `provider_calls=0` and
+`production_threshold_locked=false`. Assistant/model labels are development diagnostics
+only and must not be represented as human ground truth or used to accept M8.
+
+Focused review-queue + cross-case tests pass **13/13 in 2.43s**, Ruff passes the touched
+source/tests, and mypy still passes **73 source files**. No provider/API call was made.
+The 12 FreeDoom/Xonotic intervals remain semantically unlabeled until actual visual
+adjudication is completed.

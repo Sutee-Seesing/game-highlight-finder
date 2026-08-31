@@ -90,7 +90,10 @@ def _queue() -> ReviewQueueDocument:
 
 
 def _adjudication(
-    *, uncertain: bool = False, omit: str | None = None
+    *,
+    uncertain: bool = False,
+    omit: str | None = None,
+    reviewer_kind: str = "HUMAN",
 ) -> ReviewAdjudicationDocument:
     values = {
         "x-1": "BORING",
@@ -111,6 +114,7 @@ def _adjudication(
         updated_at=datetime(2026, 8, 31, tzinfo=UTC),
         selected_cases=("xonotic", "freedoom"),
         decisions=decisions,
+        reviewer_kind=reviewer_kind,
     )
 
 
@@ -150,12 +154,26 @@ def test_cross_case_normalized_peak_can_cleanly_separate_reviewed_negatives() ->
     )
 
     assert result.reviewed_count == 4
+    assert result.reviewer_kind == "HUMAN"
     assert result.positive_count == 2
     assert result.boring_count == 2
     assert result.protected_positive_min_audio_peak_over_loudness_db == 6.0
     assert result.rejected_boring_review_ids == ("f-1", "x-1")
     assert result.surviving_boring_review_ids == ()
     assert result.verdict == "NORMALIZED_AUDIO_PEAK_SEPARATES_REVIEWED_NEGATIVES"
+    assert result.provider_calls == 0
+    assert result.production_threshold_locked is False
+
+
+def test_cross_case_preserves_assistant_visual_provenance() -> None:
+    result = assess_cross_case_suppression(
+        _queue(),
+        _adjudication(reviewer_kind="ASSISTANT_VISUAL"),
+        _audio_scale(),
+        queue_sha256=_queue_sha(),
+    )
+
+    assert result.reviewer_kind == "ASSISTANT_VISUAL"
     assert result.provider_calls == 0
     assert result.production_threshold_locked is False
 
@@ -233,6 +251,7 @@ def test_cross_case_runner_and_cli_persist_private_provider_free_artifact(tmp_pa
     )
     assert cli.exit_code == 0, cli.output
     assert "provider/API calls: ZERO" in cli.output
+    assert "Reviewer kind: HUMAN" in cli.output
     assert "Rejected boring intervals: 2/2" in cli.output
     assert "Production threshold locked: NO" in cli.output
     assert cli_output.is_file()
