@@ -1,15 +1,16 @@
 {
   "task_id": "m8-v13-live-validation-2026-08-21",
-  "current_phase": "cross_source_visual_adjudication_helper_ready_full_regression_green",
-  "last_checkpoint": "Provider-free local review-queue helper is ready for 12 FreeDoom/Xonotic intervals with no fabricated labels and provider_calls=0. The first helper full regression exposed one transient Windows WinError 5 during portable boundary-feasibility bundle directory rename; bundle finalization now retries transient PermissionError with bounded backoff and has a deterministic injected-lock regression test. Targeted boundary-feasibility + review-queue tests are 19/19, Ruff passes src+tests, mypy passes 72 source files, git diff check passes, and the hardened full regression passes 325/325 in 313.44s.",
+  "current_phase": "cross_source_evaluator_green_waiting_real_visual_adjudication",
+  "last_checkpoint": "Provider-free cross-case suppression evaluator is implemented and fail-closed: it binds to the exact review queue SHA, requires complete POSITIVE/BORING visual decisions, rejects UNCERTAIN, consumes only existing normalized audio-scale evidence, and never locks a production threshold. A live smoke against the current FreeDoom/Xonotic queue correctly failed because the adjudication sidecar does not exist. Targeted cross-case/review/suppression tests pass 15/15, Ruff passes src+tests, mypy passes 73 source files, full regression passes 331/331 in 307.33s, and provider calls remain zero.",
   "tests": {
-    "full_pytest": "325 passed in 313.44s after transient Windows bundle-lock retry hardening",
-    "ruff": "passed over src + tests",
-    "mypy_source": "passed, 72 source files",
-    "git_diff_check": "passed after Windows bundle retry hardening",
+    "full_pytest": "331 passed in 307.33s with cross-case suppression evaluator",
+    "ruff": "passed over src + tests after cross-case evaluator",
+    "mypy_source": "passed, 73 source files",
+    "git_diff_check": "passed after cross-case evaluator",
     "targeted_suppression": "15 passed",
     "readiness_targeted": "8 passed in 0.96s",
-    "review_queue_targeted": "19 passed in 5.30s including transient Windows bundle-lock retry regression"
+    "review_queue_targeted": "19 passed in 5.30s including transient Windows bundle-lock retry regression",
+    "cross_case_targeted": "15 passed in 1.96s"
   },
   "provider_attempts": {
     "cumulative_used": 10,
@@ -67,7 +68,7 @@
     "default_branch_untouched": true,
     "pr_created": false
   },
-  "blocker": "M8 remains not accepted. The provider-free FreeDoom/Xonotic visual-review helper is ready, but the 12 cross-case intervals still need real visual POSITIVE/BORING/UNCERTAIN adjudication before audio_peak_over_loudness_db can be judged. Absolute peak dB remains source-level-confounded. Any fresh Gemini generation requires new explicit attempt/exposure authorization; future acceptance still requires a fresh locked holdout.",
+  "blocker": "M8 remains not accepted. The provider-free review helper and cross-case evaluator are ready, but the 12 FreeDoom/Xonotic intervals still need real visual POSITIVE/BORING/UNCERTAIN adjudication. The evaluator deliberately fails closed until complete resolved POSITIVE/BORING labels exist. Absolute peak dB remains source-level-confounded; any fresh Gemini generation requires new explicit authorization; future acceptance still requires a fresh locked holdout.",
   "post_v13_calibration": {
     "case_id": "external-fps-openarena-01",
     "split": "calibration",
@@ -144,7 +145,13 @@
       "windows_bundle_retry_hardened": true,
       "first_full_regression": "323 passed / 1 transient WinError5 failure",
       "targeted_after_fix": "19 passed",
-      "full_regression": "325 passed in 313.44s"
+      "full_regression": "325 passed in 313.44s",
+      "evaluator": "benchmark cross-case-suppression",
+      "evaluator_ready": true,
+      "evaluator_provider_calls": 0,
+      "evaluator_live_smoke": "FAIL_CLOSED_MISSING_ADJUDICATION_SIDECAR",
+      "production_threshold_locked": false,
+      "evaluator_full_regression": "331 passed in 307.33s"
     }
   },
   "offline_readiness": {

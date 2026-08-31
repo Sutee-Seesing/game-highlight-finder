@@ -208,3 +208,19 @@ intervals (5 + 7), with `provider_calls=0`; the initial sidecar has no fabricate
 labels. The first full **324-test** regression reached **323 passed / 1 failed** because Windows returned a transient `WinError 5` while renaming the temporary portable boundary-feasibility bundle directory. The affected module then passed **12/12** in isolation. Bundle finalization is now hardened with bounded retry on transient `PermissionError`, and a deterministic regression test injects one failed rename before success. Targeted boundary-feasibility + review-queue tests pass **19/19**, Ruff passes over `src` + `tests`, mypy passes **72 source files**, and the hardened full regression passes **325/325 in 313.44s**. The semantic gate is still
 open until those 12 intervals receive real visual decisions; only then may
 `audio_peak_over_loudness_db` be evaluated across cases.
+
+## 2026-08-31 provider-free cross-case evaluator
+
+A separate `benchmark cross-case-suppression` gate is now ready before any visual label is
+entered. It binds the adjudication sidecar to the exact review-queue SHA, requires complete
+coverage of the selected FreeDoom/Xonotic intervals, rejects `UNCERTAIN`, and joins only the
+existing provider-free `audio_peak_over_loudness_db` evidence. It reports whether a
+positive-preserving lower bound rejects reviewed boring intervals but always keeps
+`production_threshold_locked=false`.
+
+The current private queue has no adjudication sidecar yet. A live smoke therefore fails
+closed with `Cross-case adjudication sidecar does not exist`; no output threshold or semantic
+label is invented and provider/API calls remain **ZERO**. Targeted cross-case + review-queue
++ suppression tests pass **15/15**, Ruff passes over `src` + `tests`, and mypy passes **73
+source files**, and the full regression passes **331/331 in 307.33s**. The remaining gate is still real visual review of all 12 intervals, followed
+by this evaluator; the revealed v13 validation set remains forbidden for tuning.

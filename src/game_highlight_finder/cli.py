@@ -27,6 +27,7 @@ from game_highlight_finder.benchmark.calibration import (
     build_calibration_plan,
     write_calibration_artifacts,
 )
+from game_highlight_finder.benchmark.cross_case_suppression import run_cross_case_suppression
 from game_highlight_finder.benchmark.evaluator import (
     annotation_sha256,
     evaluate_session,
@@ -457,6 +458,62 @@ def _benchmark_review_queue(
         typer.echo("Review-queue server stopped.")
     finally:
         server.shutdown()
+
+
+@benchmark_app.command("cross-case-suppression")
+def benchmark_cross_case_suppression(
+    ctx: typer.Context,
+    queue: Annotated[Path, typer.Argument(help="Private development review_queue JSON.")],
+    adjudication: Annotated[
+        Path, typer.Option("--adjudication", help="Complete visual adjudication sidecar JSON.")
+    ],
+    audio_scale: Annotated[
+        Path, typer.Option("--audio-scale", help="Provider-free cross-source audio-scale JSON.")
+    ],
+    output: Annotated[
+        Path | None,
+        typer.Option("--output", help="Private cross-case suppression diagnostic JSON."),
+    ] = None,
+) -> None:
+    """Evaluate normalized audio prominence against explicit cross-case visual labels."""
+    _execute(
+        ctx,
+        lambda _options: _benchmark_cross_case_suppression(
+            queue, adjudication, audio_scale, output
+        ),
+    )
+
+
+def _benchmark_cross_case_suppression(
+    queue: Path,
+    adjudication: Path,
+    audio_scale: Path,
+    output: Path | None,
+) -> None:
+    result, target = run_cross_case_suppression(
+        queue, adjudication, audio_scale, output_path=output
+    )
+    typer.echo("[PASS] cross-case suppression diagnostic ready (provider/API calls: ZERO)")
+    typer.echo(f"Cases: {', '.join(result.selected_cases)}")
+    typer.echo(
+        f"Reviewed: {result.reviewed_count} | positives={result.positive_count} "
+        f"boring={result.boring_count}"
+    )
+    typer.echo(
+        "Normalized positive floor: "
+        f"{result.protected_positive_min_audio_peak_over_loudness_db:.6f} dB"
+    )
+    typer.echo(
+        f"Rejected boring intervals: {result.rejected_boring_count}/{result.boring_count_total}"
+    )
+    if result.surviving_boring_review_ids:
+        typer.echo(
+            "Boring intervals surviving the floor: "
+            + ", ".join(result.surviving_boring_review_ids)
+        )
+    typer.echo(f"Verdict: {result.verdict}")
+    typer.echo("Production threshold locked: NO")
+    typer.echo(f"Private artifact: {target}")
 
 
 @benchmark_app.command("make-review-proxies")
