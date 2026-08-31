@@ -225,7 +225,7 @@ def _recover_window_scout_provenance(
 def _finalize_bundle_directory(temp_root: Path, target_root: Path) -> None:
     for attempt in range(5):
         try:
-            _finalize_bundle_directory(temp_root, target_root)
+            temp_root.rename(target_root)
             return
         except PermissionError:
             if target_root.exists() or attempt == 4:
@@ -332,7 +332,7 @@ def pack_boundary_refinement_feasibility_bundle(
             scout_identity_fingerprint=identity_fingerprint,
         )
         atomic_write_json(temp_root / "bundle.json", manifest.model_dump(mode="json"))
-        temp_root.rename(target_root)
+        _finalize_bundle_directory(temp_root, target_root)
         return BoundaryFeasibilityBundleResult(
             root=target_root,
             manifest_path=target_root / "bundle.json",

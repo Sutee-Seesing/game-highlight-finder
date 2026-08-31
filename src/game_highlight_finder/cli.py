@@ -40,6 +40,7 @@ from game_highlight_finder.benchmark.review_proxy import (
     make_review_profile,
     make_review_proxies,
 )
+from game_highlight_finder.benchmark.review_queue_server import ReviewQueueServer
 from game_highlight_finder.benchmark.scout_readiness import (
     run_scout_calibration_readiness,
 )
@@ -392,6 +393,68 @@ def _benchmark_annotate(
         server.serve_forever()
     except KeyboardInterrupt:
         typer.echo("Annotation server stopped.")
+    finally:
+        server.shutdown()
+
+
+@benchmark_app.command("review-queue")
+def benchmark_review_queue(
+    ctx: typer.Context,
+    queue: Annotated[Path, typer.Argument(help="Private development review_queue JSON.")],
+    case: Annotated[
+        list[str] | None,
+        typer.Option("--case", help="Review only this case; repeat for multiple cases."),
+    ] = None,
+    output: Annotated[
+        Path | None,
+        typer.Option("--output", help="Private adjudication sidecar JSON output path."),
+    ] = None,
+    no_open: Annotated[
+        bool,
+        typer.Option("--no-open", help="Do not open the local loopback URL automatically."),
+    ] = False,
+    port: Annotated[
+        int,
+        typer.Option(
+            "--port",
+            min=0,
+            max=65_535,
+            help="Loopback port; 0 selects an available port automatically.",
+        ),
+    ] = 0,
+) -> None:
+    """Visually adjudicate a private calibration review queue without provider calls."""
+    _execute(
+        ctx,
+        lambda _options: _benchmark_review_queue(queue, case, output, no_open, port),
+    )
+
+
+def _benchmark_review_queue(
+    queue_path: Path,
+    cases: list[str] | None,
+    output: Path | None,
+    no_open: bool,
+    port: int,
+) -> None:
+    server = ReviewQueueServer(
+        queue_path,
+        cases=tuple(cases or ()),
+        output_path=output,
+        port=port,
+    )
+    typer.echo(f"Local review-queue URL: {server.url}")
+    typer.echo(f"Cases: {', '.join(server.selected_cases)}")
+    typer.echo(f"Adjudication sidecar: {server.output_path}")
+    typer.echo("provider calls: ZERO")
+    if not no_open:
+        import webbrowser
+
+        webbrowser.open(server.url)
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        typer.echo("Review-queue server stopped.")
     finally:
         server.shutdown()
 

@@ -585,6 +585,40 @@ def test_feasibility_bundle_is_media_free_portable_and_rerunnable(tmp_path: Path
     assert replay_path.is_file()
 
 
+def test_feasibility_bundle_retries_transient_windows_directory_lock(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    dataset_path, annotation_path, config = _write_private_case(
+        tmp_path / "source-machine",
+        split=BenchmarkSplit.CALIBRATION,
+    )
+    bundle_root = tmp_path / "transfer" / "cal-01"
+    original_rename = Path.rename
+    transient_failures = 0
+
+    def flaky_rename(self: Path, target: Path) -> Path:
+        nonlocal transient_failures
+        if self.name.startswith(".cal-01.partial-") and transient_failures == 0:
+            transient_failures += 1
+            raise PermissionError(5, "Access is denied")
+        return original_rename(self, target)
+
+    monkeypatch.setattr(Path, "rename", flaky_rename)
+    packed = pack_boundary_refinement_feasibility_bundle(
+        SESSION_ID,
+        dataset_path,
+        annotation_path,
+        config,
+        output_dir=bundle_root,
+    )
+
+    assert transient_failures == 1
+    assert packed.root == bundle_root.resolve()
+    assert (bundle_root / "bundle.json").is_file()
+    assert not list(bundle_root.parent.glob(".cal-01.partial-*"))
+
+
 def test_feasibility_bundle_rejects_validation_without_output(tmp_path: Path) -> None:
     dataset_path, annotation_path, config = _write_private_case(
         tmp_path / "source-machine",

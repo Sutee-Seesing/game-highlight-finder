@@ -1,14 +1,15 @@
 {
   "task_id": "m8-v13-live-validation-2026-08-21",
-  "current_phase": "cross_source_audio_scale_confounded_visual_adjudication_still_required",
-  "last_checkpoint": "Provider-free cross-source audio-scale sanity invalidated the OpenArena absolute audio-peak floor as a global rule before semantic labels were used: FreeDoom overall loudness -21.0 LUFS has 7/7 queued review intervals above -18.518034 dB, while Xonotic -31.6 LUFS has 0/5 above it. Absolute peak dB is therefore source-level-confounded. The suppression diagnostic now records peak-minus-overall-loudness as an exploratory normalized feature. No semantic FreeDoom/Xonotic labels were fabricated and no provider call was made.",
+  "current_phase": "cross_source_visual_adjudication_helper_ready_full_regression_green",
+  "last_checkpoint": "Provider-free local review-queue helper is ready for 12 FreeDoom/Xonotic intervals with no fabricated labels and provider_calls=0. The first helper full regression exposed one transient Windows WinError 5 during portable boundary-feasibility bundle directory rename; bundle finalization now retries transient PermissionError with bounded backoff and has a deterministic injected-lock regression test. Targeted boundary-feasibility + review-queue tests are 19/19, Ruff passes src+tests, mypy passes 72 source files, git diff check passes, and the hardened full regression passes 325/325 in 313.44s.",
   "tests": {
-    "full_pytest": "309 passed in 300.47s",
-    "ruff": "passed",
-    "mypy_source": "passed, 70 source files",
-    "git_diff_check": "passed",
+    "full_pytest": "325 passed in 313.44s after transient Windows bundle-lock retry hardening",
+    "ruff": "passed over src + tests",
+    "mypy_source": "passed, 72 source files",
+    "git_diff_check": "passed after Windows bundle retry hardening",
     "targeted_suppression": "15 passed",
-    "readiness_targeted": "8 passed in 0.96s"
+    "readiness_targeted": "8 passed in 0.96s",
+    "review_queue_targeted": "19 passed in 5.30s including transient Windows bundle-lock retry regression"
   },
   "provider_attempts": {
     "cumulative_used": 10,
@@ -66,7 +67,7 @@
     "default_branch_untouched": true,
     "pr_created": false
   },
-  "blocker": "M8 remains not accepted. Absolute audio peak dB is now known to be source-level-confounded and cannot become a production threshold. FreeDoom/Xonotic review material still needs visual semantic adjudication before the normalized peak-over-loudness feature can be judged. Any fresh Gemini generation requires new explicit attempt/exposure authorization; future acceptance still requires a fresh locked holdout.",
+  "blocker": "M8 remains not accepted. The provider-free FreeDoom/Xonotic visual-review helper is ready, but the 12 cross-case intervals still need real visual POSITIVE/BORING/UNCERTAIN adjudication before audio_peak_over_loudness_db can be judged. Absolute peak dB remains source-level-confounded. Any fresh Gemini generation requires new explicit attempt/exposure authorization; future acceptance still requires a fresh locked holdout.",
   "post_v13_calibration": {
     "case_id": "external-fps-openarena-01",
     "split": "calibration",
@@ -104,7 +105,7 @@
         "cand_e7a545c860337a96"
       ]
     },
-    "next_gate": "Provider-free visual adjudication of existing FreeDoom/Xonotic review material, followed by evaluation of audio_peak_over_loudness_db. Do not use the absolute OpenArena peak floor as a production threshold and do not call Gemini without new explicit authorization.",
+    "next_gate": "Use the provider-free local review-queue helper to visually adjudicate the 12 existing FreeDoom/Xonotic intervals, then evaluate audio_peak_over_loudness_db against those explicit labels. Do not use the absolute OpenArena peak floor as a production threshold and do not call Gemini without new explicit authorization.",
     "suppression_feasibility": {
       "provider_calls": 0,
       "score_confidence_threshold_headroom": false,
@@ -127,6 +128,23 @@
       },
       "audio_peak_over_loudness_positive_floor": 10.681966,
       "audio_peak_over_loudness_rejected_confirmed_negatives": 2
+    },
+    "cross_case_review": {
+      "provider_calls": 0,
+      "helper": "benchmark review-queue",
+      "cases": [
+        "xonotic",
+        "freedoom"
+      ],
+      "interval_count": 12,
+      "reviewed_count": 0,
+      "labels_fabricated": false,
+      "sidecar": "private queue-hash-bound adjudication JSON",
+      "full_regression_task": "696e3a6e-6642-450f-8191-094364cf2783",
+      "windows_bundle_retry_hardened": true,
+      "first_full_regression": "323 passed / 1 transient WinError5 failure",
+      "targeted_after_fix": "19 passed",
+      "full_regression": "325 passed in 313.44s"
     }
   },
   "offline_readiness": {

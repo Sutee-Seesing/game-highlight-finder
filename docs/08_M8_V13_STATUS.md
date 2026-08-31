@@ -193,3 +193,18 @@ calibration-only and is **not** a production rule. FreeDoom/Xonotic still requir
 semantic adjudication before the normalized feature can be accepted or rejected; no labels
 were fabricated and no provider call was made.
 
+## 2026-08-31 provider-free visual adjudication helper
+
+The FreeDoom/Xonotic cross-case gate no longer depends on an ad-hoc static review page.
+A local-only `benchmark review-queue` helper now validates the private development queue,
+serves only declared review clips over loopback, and persists explicit `POSITIVE`,
+`BORING`, or `UNCERTAIN` decisions to a queue-hash-bound sidecar. It supports case
+filtering, byte-range video playback, strict review-ID validation, and same-origin
+state-changing requests. It never calls a provider and never promotes a review decision
+into `BenchmarkAnnotations` automatically.
+
+The live helper was started for `xonotic` + `freedoom` only and exposes **12** review
+intervals (5 + 7), with `provider_calls=0`; the initial sidecar has no fabricated semantic
+labels. The first full **324-test** regression reached **323 passed / 1 failed** because Windows returned a transient `WinError 5` while renaming the temporary portable boundary-feasibility bundle directory. The affected module then passed **12/12** in isolation. Bundle finalization is now hardened with bounded retry on transient `PermissionError`, and a deterministic regression test injects one failed rename before success. Targeted boundary-feasibility + review-queue tests pass **19/19**, Ruff passes over `src` + `tests`, mypy passes **72 source files**, and the hardened full regression passes **325/325 in 313.44s**. The semantic gate is still
+open until those 12 intervals receive real visual decisions; only then may
+`audio_peak_over_loudness_db` be evaluated across cases.
