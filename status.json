@@ -1,7 +1,7 @@
 {
   "task_id": "m8-v13-live-validation-2026-08-21",
-  "current_phase": "assistant_visual_all_positive_need_control_windows",
-  "last_checkpoint": "Provider-free ASSISTANT_VISUAL review is complete for all 12 FreeDoom/Xonotic sheets: every queued high-audio window contains visible combat/action, with no visually BORING control in the selected set. The private assistant sidecar is queue-SHA-bound and separate from human ground truth. The cross-case evaluator correctly fails closed because at least one POSITIVE and one BORING label are required, so no suppression threshold is produced. Provider calls remain zero; next is deterministic non-overlapping control-window sampling plus visual adjudication.",
+  "current_phase": "assistant_visual_controls_evaluated_normalized_audio_no_clean_separation",
+  "last_checkpoint": "Provider-free ASSISTANT_VISUAL review now covers 20 FreeDoom/Xonotic windows: the original 12 high-audio windows are POSITIVE, and 8 deterministic non-overlapping controls add 3 POSITIVE plus 5 BORING decisions. The queue-SHA-bound cross-case evaluator runs successfully with reviewer_kind=ASSISTANT_VISUAL but rejects 0/5 BORING controls at the protected-positive normalized-audio floor (3.140291 dB), verdict NORMALIZED_AUDIO_PEAK_NO_CLEAN_SEPARATION. No production threshold is locked, these labels remain excluded from M8 acceptance, and provider/API calls remain zero.",
   "tests": {
     "full_pytest": "334 passed in 580.48s after cross-case scope binding",
     "ruff": "passed over src + tests after cross-case scope binding",
@@ -71,7 +71,7 @@
     "default_branch_untouched": true,
     "pr_created": false
   },
-  "blocker": "M8 remains not accepted. ASSISTANT_VISUAL review resolved the current 12 high-audio FreeDoom/Xonotic windows as combat/action positives, leaving zero BORING controls, so cross-case suppression cannot be identified and correctly fails closed. Add deterministic non-overlapping control windows and visually adjudicate them without inferring labels from audio. Assistant labels remain excluded from M8 acceptance; any fresh Gemini generation requires new explicit authorization and future acceptance still requires a fresh locked holdout.",
+  "blocker": "M8 remains not accepted. The deterministic control-window review produced both semantic classes, but audio_peak_over_loudness_db has no clean lower-bound separation across the 20 ASSISTANT_VISUAL windows: all 5 BORING controls survive the 3.140291 dB protected-positive floor. Do not promote this normalized-audio feature or any threshold to production. Continue only with provider-free calibration diagnostics that use independent existing local signals; assistant labels remain excluded from M8 acceptance, any fresh Gemini generation requires new explicit authorization, and future acceptance still requires a fresh locked holdout.",
   "post_v13_calibration": {
     "case_id": "external-fps-openarena-01",
     "split": "calibration",
@@ -109,7 +109,7 @@
         "cand_e7a545c860337a96"
       ]
     },
-    "next_gate": "The 12 existing high-audio FreeDoom/Xonotic intervals are now ASSISTANT_VISUAL positives, so sample deterministic non-overlapping control windows, visually adjudicate those controls with explicit provenance, and rerun audio_peak_over_loudness_db evaluation only if both POSITIVE and BORING classes are genuinely present. Do not infer BORING from audio, do not lock a production threshold, and do not call Gemini without new explicit authorization.",
+    "next_gate": "The 20-window ASSISTANT_VISUAL cross-case diagnostic disproves clean suppression by audio_peak_over_loudness_db alone: 0/5 BORING controls are rejected while all 15 POSITIVE windows are protected. Record this feature as non-separating and evaluate only already-available provider-free local signals or combinations on this calibration set, preserving explicit provenance and fail-closed semantics. Do not tune against revealed v13 validation, do not lock production thresholds, and do not call Gemini without new explicit authorization.",
     "suppression_feasibility": {
       "provider_calls": 0,
       "score_confidence_threshold_headroom": false,
@@ -140,12 +140,16 @@
         "xonotic",
         "freedoom"
       ],
-      "interval_count": 12,
-      "reviewed_count": 12,
+      "interval_count": 20,
+      "original_high_audio_interval_count": 12,
+      "control_interval_count": 8,
+      "reviewed_count": 20,
       "human_reviewed_count": 0,
-      "assistant_visual_reviewed_count": 12,
-      "assistant_visual_positive_count": 12,
-      "assistant_visual_boring_count": 0,
+      "assistant_visual_reviewed_count": 20,
+      "assistant_visual_positive_count": 15,
+      "assistant_visual_boring_count": 5,
+      "assistant_visual_control_positive_count": 3,
+      "assistant_visual_control_boring_count": 5,
       "labels_fabricated": false,
       "sidecar": "private queue-hash-bound adjudication JSON",
       "full_regression_task": "696e3a6e-6642-450f-8191-094364cf2783",
@@ -156,10 +160,14 @@
       "evaluator": "benchmark cross-case-suppression",
       "evaluator_ready": true,
       "evaluator_provider_calls": 0,
-      "evaluator_live_smoke": "FAIL_CLOSED_NO_BORING_LABELS",
-      "assistant_visual_sidecar": "review_queue.assistant_visual.adjudication.json",
-      "assistant_visual_queue_sha256": "f7e76ba8f35c3f644b9007da02e0044cd10e2b480cbd199bfa78925ef4bfd583",
-      "assistant_visual_evaluator_exit_code": 2,
+      "evaluator_live_smoke": "PASS_DIAGNOSTIC_NO_CLEAN_SEPARATION",
+      "assistant_visual_sidecar": "review_queue.assistant_controls.adjudication.json",
+      "assistant_visual_queue_sha256": "8d626eebba949bfa8e0fff6354731a97eda6206ea0bcb450544ffc47f3555594",
+      "assistant_visual_evaluator_exit_code": 0,
+      "assistant_visual_evaluator_verdict": "NORMALIZED_AUDIO_PEAK_NO_CLEAN_SEPARATION",
+      "assistant_visual_normalized_positive_floor_db": 3.140291,
+      "assistant_visual_rejected_boring_count": 0,
+      "assistant_visual_surviving_boring_count": 5,
       "production_threshold_locked": false,
       "evaluator_full_regression": "331 passed in 307.33s",
       "reviewer_kinds_supported": [
