@@ -298,7 +298,7 @@ The 63.48-minute provider-free structural run has now exercised the long-source 
 
 ## 7. Current next action after M8 v13
 
-The evaluator additionally now rejects an adjudication sidecar with duplicate or unknown selected cases rather than silently narrowing the reported review scope. The new provider-free regression needs rerun in the project development environment: this isolated task worktree has no project virtual environment or executable pytest/Ruff/mypy toolchain, so only changed-file syntax parsing and `git diff --check` were freshly performed here.
+The evaluator additionally now rejects an adjudication sidecar with duplicate or unknown selected cases rather than silently narrowing the reported review scope. Canonical MCP takeover verified this hardening in the project `.venv`: targeted cross-case tests pass **9/9 in 1.29s**, Ruff passes `src` + `tests`, mypy passes **73 source files**, `git diff --check` passes, and the full provider-free regression passes **334/334 in 580.48s**. No provider/API call was made.
 
 M7 implementation and acceptance hardening are complete. M8 v13 completed bounded validation but is **NOT ACCEPTED**. The fresh current-v18 OpenArena calibration and provider-free boundary-feasibility gate are now complete: the Scout recovered both currently human-confirmed calibration positives with no detection gap and no boundary-only headroom. The calibration annotation remains intentionally sparse, so source-level recall is not exhaustive and global/raw strict precision must not be used as a general threshold-tuning metric.
 

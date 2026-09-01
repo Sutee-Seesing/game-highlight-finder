@@ -1,12 +1,12 @@
 {
   "task_id": "m8-v13-live-validation-2026-08-21",
   "current_phase": "cross_case_scope_hardened_waiting_visual_adjudication",
-  "last_checkpoint": "Visual-review provenance remains explicit (HUMAN vs ASSISTANT_VISUAL) and the provider-free cross-case evaluator now also fails closed on duplicate or unknown selected cases instead of silently narrowing adjudication scope. Canonical MCP verification passes targeted cross-case 9/9, Ruff, mypy on 73 source files, git diff check, and full provider-free regression 334/334 in 392.02s. Provider calls remain zero and the 12 FreeDoom/Xonotic intervals still await semantic visual labels.",
+  "last_checkpoint": "Visual-review provenance remains explicit (HUMAN vs ASSISTANT_VISUAL) and the provider-free cross-case evaluator now also fails closed on duplicate or unknown selected cases instead of silently narrowing adjudication scope. Canonical MCP verification passes targeted cross-case 9/9, Ruff, mypy on 73 source files, git diff check, and full provider-free regression 334/334 in 580.48s. Provider calls remain zero and the 12 FreeDoom/Xonotic intervals still await semantic visual labels.",
   "tests": {
-    "full_pytest": "334 passed in 392.02s after cross-case scope binding",
+    "full_pytest": "334 passed in 580.48s after cross-case scope binding",
     "ruff": "passed over src + tests after cross-case scope binding",
     "mypy_source": "passed, 73 source files after cross-case scope binding",
-    "scope_binding_targeted": "9 passed in 1.44s under canonical project .venv",
+    "scope_binding_targeted": "9 passed in 1.29s under canonical project .venv",
     "git_diff_check": "passed after canonical cross-case scope integration",
 
     "targeted_suppression": "15 passed",

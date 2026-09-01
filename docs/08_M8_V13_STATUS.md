@@ -250,6 +250,6 @@ visual decision, media access, provider/API call, or production-threshold change
 The isolated Codex worktree passed changed-file syntax parsing and `git diff --check` but did
 not contain the project development environment. Canonical MCP takeover then reran the new
 scope-binding regression under the project `.venv`: targeted cross-case tests pass **9/9 in
-1.44s**, Ruff passes `src` + `tests`, mypy passes **73 source files**, `git diff --check`
-passes, and the full provider-free regression passes **334/334 in 392.02s**. No provider/API
+1.29s**, Ruff passes `src` + `tests`, mypy passes **73 source files**, `git diff --check`
+passes, and the full provider-free regression passes **334/334 in 580.48s**. No provider/API
 call was made.
