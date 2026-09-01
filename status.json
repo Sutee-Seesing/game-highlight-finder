@@ -1,7 +1,7 @@
 {
   "task_id": "m8-v13-live-validation-2026-08-21",
-  "current_phase": "cross_case_scope_hardened_waiting_visual_adjudication",
-  "last_checkpoint": "Visual-review provenance remains explicit (HUMAN vs ASSISTANT_VISUAL) and the provider-free cross-case evaluator now also fails closed on duplicate or unknown selected cases instead of silently narrowing adjudication scope. Canonical MCP verification passes targeted cross-case 9/9, Ruff, mypy on 73 source files, git diff check, and full provider-free regression 334/334 in 580.48s. Provider calls remain zero and the 12 FreeDoom/Xonotic intervals still await semantic visual labels.",
+  "current_phase": "assistant_visual_all_positive_need_control_windows",
+  "last_checkpoint": "Provider-free ASSISTANT_VISUAL review is complete for all 12 FreeDoom/Xonotic sheets: every queued high-audio window contains visible combat/action, with no visually BORING control in the selected set. The private assistant sidecar is queue-SHA-bound and separate from human ground truth. The cross-case evaluator correctly fails closed because at least one POSITIVE and one BORING label are required, so no suppression threshold is produced. Provider calls remain zero; next is deterministic non-overlapping control-window sampling plus visual adjudication.",
   "tests": {
     "full_pytest": "334 passed in 580.48s after cross-case scope binding",
     "ruff": "passed over src + tests after cross-case scope binding",
@@ -71,7 +71,7 @@
     "default_branch_untouched": true,
     "pr_created": false
   },
-  "blocker": "M8 remains not accepted. The 12 FreeDoom/Xonotic intervals still need resolved visual POSITIVE/BORING adjudication. Reviewer provenance is now explicit: HUMAN labels may support human-reviewed calibration evidence; ASSISTANT_VISUAL labels are diagnostic only and remain excluded from M8 acceptance. Any fresh Gemini generation requires new explicit authorization; future acceptance still requires a fresh locked holdout.",
+  "blocker": "M8 remains not accepted. ASSISTANT_VISUAL review resolved the current 12 high-audio FreeDoom/Xonotic windows as combat/action positives, leaving zero BORING controls, so cross-case suppression cannot be identified and correctly fails closed. Add deterministic non-overlapping control windows and visually adjudicate them without inferring labels from audio. Assistant labels remain excluded from M8 acceptance; any fresh Gemini generation requires new explicit authorization and future acceptance still requires a fresh locked holdout.",
   "post_v13_calibration": {
     "case_id": "external-fps-openarena-01",
     "split": "calibration",
@@ -109,7 +109,7 @@
         "cand_e7a545c860337a96"
       ]
     },
-    "next_gate": "Use the provider-free local review-queue helper to visually adjudicate the 12 existing FreeDoom/Xonotic intervals, then evaluate audio_peak_over_loudness_db against those explicit labels. Do not use the absolute OpenArena peak floor as a production threshold and do not call Gemini without new explicit authorization.",
+    "next_gate": "The 12 existing high-audio FreeDoom/Xonotic intervals are now ASSISTANT_VISUAL positives, so sample deterministic non-overlapping control windows, visually adjudicate those controls with explicit provenance, and rerun audio_peak_over_loudness_db evaluation only if both POSITIVE and BORING classes are genuinely present. Do not infer BORING from audio, do not lock a production threshold, and do not call Gemini without new explicit authorization.",
     "suppression_feasibility": {
       "provider_calls": 0,
       "score_confidence_threshold_headroom": false,
@@ -141,7 +141,11 @@
         "freedoom"
       ],
       "interval_count": 12,
-      "reviewed_count": 0,
+      "reviewed_count": 12,
+      "human_reviewed_count": 0,
+      "assistant_visual_reviewed_count": 12,
+      "assistant_visual_positive_count": 12,
+      "assistant_visual_boring_count": 0,
       "labels_fabricated": false,
       "sidecar": "private queue-hash-bound adjudication JSON",
       "full_regression_task": "696e3a6e-6642-450f-8191-094364cf2783",
@@ -152,7 +156,10 @@
       "evaluator": "benchmark cross-case-suppression",
       "evaluator_ready": true,
       "evaluator_provider_calls": 0,
-      "evaluator_live_smoke": "FAIL_CLOSED_MISSING_ADJUDICATION_SIDECAR",
+      "evaluator_live_smoke": "FAIL_CLOSED_NO_BORING_LABELS",
+      "assistant_visual_sidecar": "review_queue.assistant_visual.adjudication.json",
+      "assistant_visual_queue_sha256": "f7e76ba8f35c3f644b9007da02e0044cd10e2b480cbd199bfa78925ef4bfd583",
+      "assistant_visual_evaluator_exit_code": 2,
       "production_threshold_locked": false,
       "evaluator_full_regression": "331 passed in 307.33s",
       "reviewer_kinds_supported": [

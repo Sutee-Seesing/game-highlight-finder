@@ -253,3 +253,9 @@ scope-binding regression under the project `.venv`: targeted cross-case tests pa
 1.29s**, Ruff passes `src` + `tests`, mypy passes **73 source files**, `git diff --check`
 passes, and the full provider-free regression passes **334/334 in 580.48s**. No provider/API
 call was made.
+
+## 2026-09-01 assistant visual adjudication outcome
+
+The 12 uploaded FreeDoom/Xonotic review sheets were inspected visually without a provider/API call. The resulting private sidecar is queue-SHA-bound and records `reviewer_kind=ASSISTANT_VISUAL`, so these labels remain development diagnostics and are **not** human ground truth. Using the existing decision semantics, all **12/12** windows contain visible combat/action. The strongest visual highlight candidates are FreeDoom 02/06 and Xonotic 01/02/04; Xonotic 03/05 and several longer FreeDoom windows also contain action but include traversal/downtime around it.
+
+The assistant sidecar is deliberately separate from the default human-review sidecar. Running `benchmark cross-case-suppression` against the exact queue, this assistant sidecar, and the existing audio-scale artifact exits **2** and fails closed with `Cross-case suppression requires at least one POSITIVE and one BORING label`. No threshold/artifact is produced. This means the existing high-audio review queue is not a balanced semantic evaluation set: it contains useful positives but no visually boring control needed to measure negative rejection. The next provider-free remediation is therefore deterministic non-overlapping control-window sampling on FreeDoom/Xonotic followed by explicit visual adjudication. No BORING label will be invented from audio values, `production_threshold_locked` remains false, M8 remains **NOT ACCEPTED**, and provider/API calls remain **ZERO**.
