@@ -1,7 +1,7 @@
 {
   "task_id": "m8-v13-live-validation-2026-08-21",
-  "current_phase": "assistant_visual_controls_evaluated_normalized_audio_no_clean_separation",
-  "last_checkpoint": "Provider-free ASSISTANT_VISUAL review now covers 20 FreeDoom/Xonotic windows: the original 12 high-audio windows are POSITIVE, and 8 deterministic non-overlapping controls add 3 POSITIVE plus 5 BORING decisions. The queue-SHA-bound cross-case evaluator runs successfully with reviewer_kind=ASSISTANT_VISUAL but rejects 0/5 BORING controls at the protected-positive normalized-audio floor (3.140291 dB), verdict NORMALIZED_AUDIO_PEAK_NO_CLEAN_SEPARATION. No production threshold is locked, these labels remain excluded from M8 acceptance, and provider/API calls remain zero.",
+  "current_phase": "assistant_visual_controls_audio_domain_corrected_partial_rejection",
+  "last_checkpoint": "A provider-free provenance audit found the first control-window audio values were measured directly from source WebM while the original cross-case values and overall loudness came from runtime local-signals/activity.json, creating a mismatched audio domain. The 8 control features were rebuilt from the same local-signals domain, the assistant sidecar was rebound to queue SHA abb0004d409b842e903d28a3582d25278ecdeeb2424f54d6296947dbf20098e9, and the corrected evaluator rejects 3/5 BORING controls at the protected-positive 3.140291 dB floor; freedoom-control-03 and xonotic-control-03 survive. Verdict remains NORMALIZED_AUDIO_PEAK_NO_CLEAN_SEPARATION, production threshold remains unlocked, and provider/API calls remain zero.",
   "tests": {
     "full_pytest": "334 passed in 580.48s after cross-case scope binding",
     "ruff": "passed over src + tests after cross-case scope binding",
@@ -71,7 +71,7 @@
     "default_branch_untouched": true,
     "pr_created": false
   },
-  "blocker": "M8 remains not accepted. The deterministic control-window review produced both semantic classes, but audio_peak_over_loudness_db has no clean lower-bound separation across the 20 ASSISTANT_VISUAL windows: all 5 BORING controls survive the 3.140291 dB protected-positive floor. Do not promote this normalized-audio feature or any threshold to production. Continue only with provider-free calibration diagnostics that use independent existing local signals; assistant labels remain excluded from M8 acceptance, any fresh Gemini generation requires new explicit authorization, and future acceptance still requires a fresh locked holdout.",
+  "blocker": "M8 remains not accepted. After correcting control audio features into the same local-signals domain as the original cross-case intervals, audio_peak_over_loudness_db safely rejects 3/5 visually BORING controls while preserving all 15 ASSISTANT_VISUAL positives, but two BORING controls still survive, so there is no clean monotonic separator. Do not promote this feature or threshold to production. Inspect independent existing local-signal features for the two survivors without tuning against revealed v13 validation; assistant labels remain excluded from M8 acceptance, any fresh Gemini generation requires new explicit authorization, and future acceptance still requires a fresh locked holdout.",
   "post_v13_calibration": {
     "case_id": "external-fps-openarena-01",
     "split": "calibration",
@@ -109,7 +109,7 @@
         "cand_e7a545c860337a96"
       ]
     },
-    "next_gate": "The 20-window ASSISTANT_VISUAL cross-case diagnostic disproves clean suppression by audio_peak_over_loudness_db alone: 0/5 BORING controls are rejected while all 15 POSITIVE windows are protected. Record this feature as non-separating and evaluate only already-available provider-free local signals or combinations on this calibration set, preserving explicit provenance and fail-closed semantics. Do not tune against revealed v13 validation, do not lock production thresholds, and do not call Gemini without new explicit authorization.",
+    "next_gate": "The corrected 20-window ASSISTANT_VISUAL diagnostic rejects 3/5 BORING controls using audio_peak_over_loudness_db while preserving all 15 positives; freedoom-control-03 and xonotic-control-03 remain false-positive survivors. Evaluate only independent already-available provider-free local-signal features for those survivors, with exact signal-domain provenance and fail-closed semantics. Do not tune against revealed v13 validation, do not lock production thresholds, and do not call Gemini without new explicit authorization.",
     "suppression_feasibility": {
       "provider_calls": 0,
       "score_confidence_threshold_headroom": false,
@@ -162,12 +162,19 @@
       "evaluator_provider_calls": 0,
       "evaluator_live_smoke": "PASS_DIAGNOSTIC_NO_CLEAN_SEPARATION",
       "assistant_visual_sidecar": "review_queue.assistant_controls.adjudication.json",
-      "assistant_visual_queue_sha256": "8d626eebba949bfa8e0fff6354731a97eda6206ea0bcb450544ffc47f3555594",
+      "assistant_visual_queue_sha256": "abb0004d409b842e903d28a3582d25278ecdeeb2424f54d6296947dbf20098e9",
       "assistant_visual_evaluator_exit_code": 0,
       "assistant_visual_evaluator_verdict": "NORMALIZED_AUDIO_PEAK_NO_CLEAN_SEPARATION",
       "assistant_visual_normalized_positive_floor_db": 3.140291,
-      "assistant_visual_rejected_boring_count": 0,
-      "assistant_visual_surviving_boring_count": 5,
+      "assistant_visual_rejected_boring_count": 3,
+      "assistant_visual_surviving_boring_count": 2,
+      "assistant_visual_surviving_boring_review_ids": [
+        "freedoom-control-03",
+        "xonotic-control-03"
+      ],
+      "control_audio_feature_domain": "runtime local-signals/activity.json",
+      "superseded_control_audio_feature_domain": "direct source-WebM astats",
+      "audio_domain_mismatch_corrected": true,
       "production_threshold_locked": false,
       "evaluator_full_regression": "331 passed in 307.33s",
       "reviewer_kinds_supported": [
