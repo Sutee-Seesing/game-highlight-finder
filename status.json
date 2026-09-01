@@ -1,12 +1,12 @@
 {
   "task_id": "m8-v13-live-validation-2026-08-21",
   "current_phase": "visual_review_provenance_hardened_waiting_visual_adjudication",
-  "last_checkpoint": "Visual-review provenance is now explicit and provider-free: review sidecars distinguish HUMAN from ASSISTANT_VISUAL, the cross-case evaluator preserves reviewer_kind, assistant labels remain excluded from M8 acceptance, focused review/cross-case tests pass 13/13 in 2.43s, Ruff passes touched files, mypy passes 73 source files, and provider calls remain zero. The 12 FreeDoom/Xonotic intervals are still awaiting semantic visual labels.",
+  "last_checkpoint": "Visual-review provenance is explicit and provider-free: review sidecars distinguish HUMAN from ASSISTANT_VISUAL, the cross-case evaluator preserves reviewer_kind, focused review/cross-case tests pass 13/13 in 2.43s, Ruff passes src+tests, mypy passes 73 source files, full regression passes 332/332 in 297.80s, and provider calls remain zero. The 12 FreeDoom/Xonotic intervals are still awaiting semantic visual labels.",
   "tests": {
-    "full_pytest": "pending rerun after reviewer provenance hardening",
-    "ruff": "passed over touched provenance source + tests",
+    "full_pytest": "332 passed in 297.80s after reviewer provenance hardening",
+    "ruff": "passed over src + tests after reviewer provenance hardening",
     "mypy_source": "passed, 73 source files",
-    "git_diff_check": "passed after cross-case evaluator",
+    "git_diff_check": "passed after reviewer provenance hardening",
     "targeted_suppression": "15 passed",
     "readiness_targeted": "8 passed in 0.96s",
     "review_queue_targeted": "19 passed in 5.30s including transient Windows bundle-lock retry regression",

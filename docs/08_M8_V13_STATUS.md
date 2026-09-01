@@ -234,7 +234,7 @@ into its private diagnostic artifact while still enforcing `provider_calls=0` an
 `production_threshold_locked=false`. Assistant/model labels are development diagnostics
 only and must not be represented as human ground truth or used to accept M8.
 
-Focused review-queue + cross-case tests pass **13/13 in 2.43s**, Ruff passes the touched
-source/tests, and mypy still passes **73 source files**. No provider/API call was made.
-The 12 FreeDoom/Xonotic intervals remain semantically unlabeled until actual visual
-adjudication is completed.
+Focused review-queue + cross-case tests pass **13/13 in 2.43s**, Ruff passes `src` + `tests`,
+mypy still passes **73 source files**, and the full regression passes **332/332 in 297.80s**.
+No provider/API call was made. The 12 FreeDoom/Xonotic intervals remain semantically
+unlabeled until actual visual adjudication is completed.
