@@ -1,12 +1,14 @@
 {
   "task_id": "m8-v13-live-validation-2026-08-21",
-  "current_phase": "visual_review_provenance_hardened_waiting_visual_adjudication",
-  "last_checkpoint": "Visual-review provenance is explicit and provider-free: review sidecars distinguish HUMAN from ASSISTANT_VISUAL, the cross-case evaluator preserves reviewer_kind, focused review/cross-case tests pass 13/13 in 2.43s, Ruff passes src+tests, mypy passes 73 source files, full regression passes 332/332 in 297.80s, and provider calls remain zero. The 12 FreeDoom/Xonotic intervals are still awaiting semantic visual labels.",
+  "current_phase": "cross_case_scope_hardened_waiting_visual_adjudication",
+  "last_checkpoint": "Visual-review provenance remains explicit (HUMAN vs ASSISTANT_VISUAL) and the provider-free cross-case evaluator now also fails closed on duplicate or unknown selected cases instead of silently narrowing adjudication scope. Canonical MCP verification passes targeted cross-case 9/9, Ruff, mypy on 73 source files, git diff check, and full provider-free regression 334/334 in 392.02s. Provider calls remain zero and the 12 FreeDoom/Xonotic intervals still await semantic visual labels.",
   "tests": {
-    "full_pytest": "332 passed in 297.80s after reviewer provenance hardening",
-    "ruff": "passed over src + tests after reviewer provenance hardening",
-    "mypy_source": "passed, 73 source files",
-    "git_diff_check": "passed after reviewer provenance hardening",
+    "full_pytest": "334 passed in 392.02s after cross-case scope binding",
+    "ruff": "passed over src + tests after cross-case scope binding",
+    "mypy_source": "passed, 73 source files after cross-case scope binding",
+    "scope_binding_targeted": "9 passed in 1.44s under canonical project .venv",
+    "git_diff_check": "passed after canonical cross-case scope integration",
+
     "targeted_suppression": "15 passed",
     "readiness_targeted": "8 passed in 0.96s",
     "review_queue_targeted": "19 passed in 5.30s including transient Windows bundle-lock retry regression",

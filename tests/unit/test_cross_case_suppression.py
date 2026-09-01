@@ -218,6 +218,34 @@ def test_cross_case_rejects_queue_identity_mismatch() -> None:
         )
 
 
+@pytest.mark.parametrize(
+    ("selected_cases", "message"),
+    [
+        (("xonotic", "unknown-case"), "absent from the review queue"),
+        (("xonotic", "xonotic"), "duplicate selected cases"),
+    ],
+)
+def test_cross_case_rejects_unknown_or_duplicate_selected_cases(
+    selected_cases: tuple[str, ...], message: str
+) -> None:
+    adjudication = _adjudication().model_copy(
+        update={
+            "selected_cases": selected_cases,
+            "decisions": tuple(
+                item for item in _adjudication().decisions if item.review_id.startswith("x-")
+            ),
+        }
+    )
+
+    with pytest.raises(ValidationError, match=message):
+        assess_cross_case_suppression(
+            _queue(),
+            adjudication,
+            _audio_scale(),
+            queue_sha256=_queue_sha(),
+        )
+
+
 def test_cross_case_runner_and_cli_persist_private_provider_free_artifact(tmp_path: Path) -> None:
     queue_path = tmp_path / "review_queue.json"
     queue_path.write_bytes(_queue_bytes())

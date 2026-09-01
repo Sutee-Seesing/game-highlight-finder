@@ -104,7 +104,18 @@ def assess_cross_case_suppression(
     if not adjudication.selected_cases:
         raise ValidationError("Cross-case adjudication must declare selected cases")
 
+    queue_case_names = tuple(case.case for case in queue.cases)
+    if len(set(queue_case_names)) != len(queue_case_names):
+        raise ValidationError("Cross-case review queue contains duplicate case names")
     selected = set(adjudication.selected_cases)
+    if len(selected) != len(adjudication.selected_cases):
+        raise ValidationError("Cross-case adjudication contains duplicate selected cases")
+    unknown_cases = sorted(selected - set(queue_case_names))
+    if unknown_cases:
+        raise ValidationError(
+            "Cross-case adjudication selects cases absent from the review queue",
+            hint=", ".join(unknown_cases),
+        )
     queue_rows: dict[str, str] = {}
     for case in queue.cases:
         if case.case not in selected:

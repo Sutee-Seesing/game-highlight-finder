@@ -238,3 +238,18 @@ Focused review-queue + cross-case tests pass **13/13 in 2.43s**, Ruff passes `sr
 mypy still passes **73 source files**, and the full regression passes **332/332 in 297.80s**.
 No provider/API call was made. The 12 FreeDoom/Xonotic intervals remain semantically
 unlabeled until actual visual adjudication is completed.
+
+## 2026-09-01 cross-case scope-binding hardening
+
+The provider-free evaluator now fails closed if an adjudication sidecar repeats a selected
+case or names a case absent from the exact review queue. Previously either malformed scope
+could be silently reduced to the matching queue cases, while the result still reported the
+original selected-case tuple. New regression coverage locks both failure modes down; no
+visual decision, media access, provider/API call, or production-threshold change occurred.
+
+The isolated Codex worktree passed changed-file syntax parsing and `git diff --check` but did
+not contain the project development environment. Canonical MCP takeover then reran the new
+scope-binding regression under the project `.venv`: targeted cross-case tests pass **9/9 in
+1.44s**, Ruff passes `src` + `tests`, mypy passes **73 source files**, `git diff --check`
+passes, and the full provider-free regression passes **334/334 in 392.02s**. No provider/API
+call was made.

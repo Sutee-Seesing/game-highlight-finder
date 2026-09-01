@@ -298,6 +298,8 @@ The 63.48-minute provider-free structural run has now exercised the long-source 
 
 ## 7. Current next action after M8 v13
 
+The evaluator additionally now rejects an adjudication sidecar with duplicate or unknown selected cases rather than silently narrowing the reported review scope. The new provider-free regression needs rerun in the project development environment: this isolated task worktree has no project virtual environment or executable pytest/Ruff/mypy toolchain, so only changed-file syntax parsing and `git diff --check` were freshly performed here.
+
 M7 implementation and acceptance hardening are complete. M8 v13 completed bounded validation but is **NOT ACCEPTED**. The fresh current-v18 OpenArena calibration and provider-free boundary-feasibility gate are now complete: the Scout recovered both currently human-confirmed calibration positives with no detection gap and no boundary-only headroom. The calibration annotation remains intentionally sparse, so source-level recall is not exhaustive and global/raw strict precision must not be used as a general threshold-tuning metric.
 
 Human review is complete for all four predictions from this exact OpenArena Scout run. The early 0-5s candidate is an additional `WORTH_REVIEW` combat sequence, the existing 24-26s frag remains positive, and the 47-51s plus 57-62s candidates are confirmed boring/traversal predictions. For this adjudicated prediction set the raw strict result is 2/4 (0.5), but that number remains diagnostic rather than a general precision estimate because the rest of the source is not exhaustively annotated.
