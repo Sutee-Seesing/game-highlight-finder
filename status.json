@@ -1,7 +1,7 @@
 {
   "task_id": "m8-v13-live-validation-2026-08-21",
-  "current_phase": "assistant_visual_controls_audio_domain_corrected_partial_rejection",
-  "last_checkpoint": "A provider-free provenance audit found the first control-window audio values were measured directly from source WebM while the original cross-case values and overall loudness came from runtime local-signals/activity.json, creating a mismatched audio domain. The 8 control features were rebuilt from the same local-signals domain, the assistant sidecar was rebound to queue SHA abb0004d409b842e903d28a3582d25278ecdeeb2424f54d6296947dbf20098e9, and the corrected evaluator rejects 3/5 BORING controls at the protected-positive 3.140291 dB floor; freedoom-control-03 and xonotic-control-03 survive. Verdict remains NORMALIZED_AUDIO_PEAK_NO_CLEAN_SEPARATION, production threshold remains unlocked, and provider/API calls remain zero.",
+  "current_phase": "v19_semantic_prompt_prepared_full_regression_green",
+  "last_checkpoint": "Experimental gemini-scout-window-v19 semantic guidance is implemented provider-free while v18 behavior and the configured default remain unchanged. v19 makes local-signal hints navigation-only, rejects pure traversal/idle/UI-only activity without visible payoff, requires visible evidence, and preserves visibly real but uncertain interactions at lower score/confidence. Targeted Gemini tests pass 26/26 in 30.21s, Ruff passes src + tests, mypy passes 73 source files, and full regression passes 335/335 in 440.29s. No provider/API call was made; live v19 quality evaluation still requires fresh explicit authorization.",
   "tests": {
     "full_pytest": "334 passed in 580.48s after cross-case scope binding",
     "ruff": "passed over src + tests after cross-case scope binding",
@@ -13,7 +13,12 @@
     "readiness_targeted": "8 passed in 0.96s",
     "review_queue_targeted": "19 passed in 5.30s including transient Windows bundle-lock retry regression",
     "cross_case_targeted": "15 passed in 1.96s",
-    "review_provenance_targeted": "13 passed in 2.43s"
+    "review_provenance_targeted": "13 passed in 2.43s",
+    "v19_prompt_targeted": "26 passed in 30.21s",
+    "v19_prompt_ruff": "passed over src + tests",
+    "v19_prompt_mypy": "passed, 73 source files",
+    "v19_full_pytest": "335 passed in 440.29s",
+    "v19_full_regression_task": "d018f96b-9560-49f9-a3b0-b17e6901a580"
   },
   "provider_attempts": {
     "cumulative_used": 10,
@@ -71,7 +76,7 @@
     "default_branch_untouched": true,
     "pr_created": false
   },
-  "blocker": "M8 remains not accepted. After correcting control audio features into the same local-signals domain as the original cross-case intervals, audio_peak_over_loudness_db safely rejects 3/5 visually BORING controls while preserving all 15 ASSISTANT_VISUAL positives, but two BORING controls still survive, so there is no clean monotonic separator. Do not promote this feature or threshold to production. Inspect independent existing local-signal features for the two survivors without tuning against revealed v13 validation; assistant labels remain excluded from M8 acceptance, any fresh Gemini generation requires new explicit authorization, and future acceptance still requires a fresh locked holdout.",
+  "blocker": "M8 remains not accepted. Existing provider-free audio and exploratory proxy-motion signals do not yield a clean source-agnostic suppression rule without overfitting the 20-window assistant calibration set. Experimental gemini-scout-window-v19 is fully regression-green but intentionally remains non-default and has no live quality evidence yet. Any fresh Gemini generation requires new explicit authorization; revealed v13 validation remains forbidden for tuning, assistant labels remain excluded from M8 acceptance, and future acceptance still requires a fresh locked holdout.",
   "post_v13_calibration": {
     "case_id": "external-fps-openarena-01",
     "split": "calibration",
@@ -109,7 +114,7 @@
         "cand_e7a545c860337a96"
       ]
     },
-    "next_gate": "The corrected 20-window ASSISTANT_VISUAL diagnostic rejects 3/5 BORING controls using audio_peak_over_loudness_db while preserving all 15 positives; freedoom-control-03 and xonotic-control-03 remain false-positive survivors. Evaluate only independent already-available provider-free local-signal features for those survivors, with exact signal-domain provenance and fail-closed semantics. Do not tune against revealed v13 validation, do not lock production thresholds, and do not call Gemini without new explicit authorization.",
+    "next_gate": "Keep v18 as the default and prepare a provider-free v19 calibration preflight only. Do not execute Gemini without fresh explicit authorization. If a live v19 calibration is later authorized, use calibration data only; revealed v13 validation remains forbidden for tuning, and unbiased M8 acceptance still requires a fresh locked holdout prepared before predictions.",
     "suppression_feasibility": {
       "provider_calls": 0,
       "score_confidence_threshold_headroom": false,
@@ -184,6 +189,22 @@
       "assistant_visual_labels_excluded_from_m8_acceptance": true,
       "reviewer_provenance_hardened": true
     }
+  },
+  "v19_prompt_calibration": {
+    "prompt_version": "gemini-scout-window-v19",
+    "default_activated": false,
+    "provider_calls": 0,
+    "semantic_hardening": [
+      "local signals are navigation-only, not semantic evidence",
+      "pure traversal, rotation, idle weapon movement, ambient effects, and UI-only activity are not candidates without visible payoff",
+      "visibly real but uncertain interactions are retained at lower score or confidence",
+      "candidate reason and evidence must cite visible on-screen cues"
+    ],
+    "v18_behavior_preserved": true,
+    "targeted_tests": "26 passed in 30.21s",
+    "full_regression": "335 passed in 440.29s",
+    "live_quality_validated": false,
+    "fresh_authorization_required": true
   },
   "offline_readiness": {
     "case_id": "external-fps-openarena-01",

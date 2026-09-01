@@ -10,6 +10,7 @@ from typing import Any
 from game_highlight_finder.domain.models import CandidateCategory
 
 GEMINI_PROMPT_VERSION = "gemini-scout-v1"
+GEMINI_WINDOW_CALIBRATION_PROMPT_VERSION = "gemini-scout-window-v19"
 GEMINI_SCHEMA_VERSION = 1
 # ScoutConfig permits windows up to 3,600 seconds. Keep provider-side
 # relative timestamps bounded to the same ceiling so malformed generations
@@ -172,6 +173,35 @@ def schema_hash() -> str:
     return hashlib.sha256(schema_json().encode("utf-8")).hexdigest()
 
 
+def _calibration_semantic_guidance(prompt_version: str) -> tuple[str, ...]:
+    if prompt_version != GEMINI_WINDOW_CALIBRATION_PROMPT_VERSION:
+        return ()
+    return (
+        (
+            "Treat bounded local-signal hints as navigation cues only; loudness or activity "
+            "is never semantic proof that a moment is a highlight."
+        ),
+        (
+            "A Candidate Moment needs visible on-screen evidence of a distinct clip-worthy "
+            "event, interaction, payoff, skill display, reaction, fail, or unexpected moment."
+        ),
+        (
+            "Do not emit a candidate for pure traversal, rotation, idle weapon movement, "
+            "ambient effects, or UI-only activity when no visible event or payoff occurs, "
+            "even if the local audio signal is strong."
+        ),
+        (
+            "Preserve recall for visibly real interactions: when an event is clearly present "
+            "but clip-worthiness is uncertain, include it with a lower score or confidence "
+            "rather than omitting the event."
+        ),
+        (
+            "Candidate reasons and evidence summaries must name the visible on-screen cue "
+            "that makes the interval eventful; do not cite loudness alone as evidence."
+        ),
+    )
+
+
 def build_gemini_prompt(
     *,
     duration_ms: int,
@@ -185,6 +215,7 @@ def build_gemini_prompt(
         raise ValueError("duration_ms must be positive")
     summary = dict(local_signal_summary or {})
     summary_json = json.dumps(summary, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    semantic_guidance = _calibration_semantic_guidance(prompt_version)
     return "\n".join(
         (
             f"You are Game Highlight Finder Scout prompt {prompt_version}.",
@@ -211,6 +242,7 @@ def build_gemini_prompt(
                 "reasoning or thought steps."
             ),
             "Candidate categories must use the existing M3 taxonomy.",
+            *semantic_guidance,
             f"Source duration (milliseconds): {duration_ms}",
             f"Game profile: {game_profile}",
             f"Bounded local-signal hints: {summary_json}",
@@ -221,6 +253,7 @@ def build_gemini_prompt(
 __all__ = [
     "GEMINI_PROMPT_VERSION",
     "GEMINI_SCHEMA_VERSION",
+    "GEMINI_WINDOW_CALIBRATION_PROMPT_VERSION",
     "build_gemini_prompt",
     "gemini_scout_schema",
     "gemini_window_scout_schema",

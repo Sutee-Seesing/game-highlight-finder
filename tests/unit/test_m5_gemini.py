@@ -32,6 +32,7 @@ from game_highlight_finder.errors import (
     ValidationError,
 )
 from game_highlight_finder.pipeline.gemini_contract import (
+    GEMINI_WINDOW_CALIBRATION_PROMPT_VERSION,
     build_gemini_prompt,
     gemini_scout_schema,
     schema_hash,
@@ -148,6 +149,31 @@ def test_prompt_and_schema_are_deterministic_and_non_quota() -> None:
     assert usage.input_video_tokens == 700
     assert usage.input_audio_tokens == 320
     assert usage.billable_output_tokens == 150
+
+
+def test_v19_calibration_prompt_hardens_semantics_without_changing_v18() -> None:
+    summary = {"audio_activity": [{"start_ms": 0, "end_ms": 500, "peak_db": -10.0}]}
+    v18 = build_gemini_prompt(
+        duration_ms=10_000,
+        local_signal_summary=summary,
+        prompt_version="gemini-scout-window-v18",
+    )
+    v19 = build_gemini_prompt(
+        duration_ms=10_000,
+        local_signal_summary=summary,
+        prompt_version=GEMINI_WINDOW_CALIBRATION_PROMPT_VERSION,
+    )
+
+    assert "navigation cues only" not in v18
+    assert "navigation cues only" in v19
+    assert "pure traversal" in v19
+    assert "Preserve recall for visibly real interactions" in v19
+    assert "do not cite loudness alone as evidence" in v19
+    assert v18 == build_gemini_prompt(
+        duration_ms=10_000,
+        local_signal_summary=summary,
+        prompt_version="gemini-scout-window-v18",
+    )
 
 
 def test_gemini_defaults_are_fake_and_secret_safe() -> None:
