@@ -132,6 +132,8 @@ def test_hybrid_judge_prompt_and_schema_keep_navigation_nonsemantic() -> None:
 
     assert "navigation hints only" in prompt
     assert "do not cite loudness alone" in prompt
+    assert "score on a 0-10 scale" in prompt
+    assert "confidence on a 0-1 scale" in prompt
     assert "proposal-relative" in prompt
     assert "KEEP" in prompt and "REJECT" in prompt and "UNCERTAIN" in prompt
     assert schema["additionalProperties"] is False

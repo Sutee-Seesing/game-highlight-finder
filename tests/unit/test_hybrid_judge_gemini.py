@@ -168,6 +168,62 @@ def _provider_response() -> dict[str, object]:
     }
 
 
+def test_completed_provider_call_with_invalid_semantic_json_settles_without_retry(
+    tmp_path: Path,
+) -> None:
+    proposal = _proposal("proposal_9999999999999999", 0, 20_000)
+    preparation = _preparation(tmp_path, [proposal])
+    config = _config(tmp_path)
+    service = _service(config)
+    invalid = _provider_response()
+    invalid["output_text"] = json.dumps(
+        {
+            "decision": "KEEP",
+            "summary": "visible fight but confidence uses the wrong scale",
+            "events": [
+                {
+                    "event_start_ms": 4_000,
+                    "event_end_ms": 11_000,
+                    "category": "SKILL",
+                    "score": 8.0,
+                    "confidence": 6.8,
+                    "reason": "visible multi-kill engagement",
+                    "visible_evidence": ["two visible eliminations before the fight ends"],
+                }
+            ],
+        }
+    )
+    transport = FakeGeminiTransport(response=invalid)
+
+    with pytest.raises(ValidationError, match="strict contract"):
+        run_gemini_hybrid_judge_with_transport(
+            preparation,
+            preparation.prepared[0],
+            config,
+            transport=transport,
+            cost_service=service,
+        )
+
+    assert transport.generation_count == 1
+    assert len(service.calls()) == 1
+    assert service.calls()[0].status.value == "SETTLED"
+    item_dir = preparation.prepared[0].proxy_path.parent
+    assert read_json(item_dir / "cost.judge.gemini.json")["state"] == "SETTLED"
+    raw = read_json(item_dir / "response.judge.gemini.raw.json")
+    assert raw["envelope"]["status"] == "completed"
+    assert not (item_dir / "response.judge.gemini.json").exists()
+
+    with pytest.raises(ValidationError, match=r"settled.*no reusable response"):
+        run_gemini_hybrid_judge_with_transport(
+            preparation,
+            preparation.prepared[0],
+            config,
+            transport=transport,
+            cost_service=service,
+        )
+    assert transport.generation_count == 1
+
+
 def test_batch_preflight_quotes_all_proposals_without_ledger_writes(tmp_path: Path) -> None:
     preparation = _preparation(
         tmp_path,

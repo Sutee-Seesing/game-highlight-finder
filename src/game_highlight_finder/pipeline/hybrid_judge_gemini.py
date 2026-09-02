@@ -211,6 +211,7 @@ def run_gemini_hybrid_judge_with_transport(
     item_dir = prepared.proxy_path.parent
     request_meta_path = item_dir / "request.judge.gemini.json"
     response_path = item_dir / "response.judge.gemini.json"
+    raw_response_path = item_dir / "response.judge.gemini.raw.json"
     remote_metadata_path = item_dir / "remote.judge.gemini.json"
     cost_path = item_dir / "cost.judge.gemini.json"
 
@@ -280,6 +281,7 @@ def run_gemini_hybrid_judge_with_transport(
     thinking = effective_gemini_thinking(config)
     reserved = False
     in_flight = False
+    settled = False
 
     def mark_in_flight() -> None:
         nonlocal in_flight
@@ -317,7 +319,29 @@ def run_gemini_hybrid_judge_with_transport(
             before_generation=mark_in_flight,
             upload_validator=validate_proposal_upload,
         )
+        try:
+            service.settle(
+                call_id,
+                result.usage,
+                provider_request_id=result.provider_request_id,
+            )
+            settled = True
+        finally:
+            _write_cost_artifact(service, call_id, cost_path)
         envelope = GeminiInteractionEnvelope.model_validate(result.result)
+        atomic_write_json(
+            raw_response_path,
+            {
+                "version": HYBRID_JUDGE_GEMINI_VERSION,
+                "backend": "gemini",
+                "execution_mode": "injected_transport",
+                "session_id": preparation.plan.session_id,
+                "proposal_id": request.proposal_id,
+                "provider_request_fingerprint": cost_request.request_fingerprint,
+                "judge_request_fingerprint": request.request_fingerprint,
+                "envelope": envelope.model_dump(mode="json"),
+            },
+        )
         response = parse_hybrid_judge_response(
             envelope.output_text,
             proposal_duration_ms=request.proposal_duration_ms,
@@ -336,14 +360,6 @@ def run_gemini_hybrid_judge_with_transport(
                 "response": response.model_dump(mode="json"),
             },
         )
-        try:
-            service.settle(
-                call_id,
-                result.usage,
-                provider_request_id=result.provider_request_id,
-            )
-        finally:
-            _write_cost_artifact(service, call_id, cost_path)
         return GeminiHybridJudgeProposalResult(
             cache_hit=False,
             session_id=preparation.plan.session_id,
@@ -371,12 +387,13 @@ def run_gemini_hybrid_judge_with_transport(
             hint="No automatic Gemini hybrid-judge generation retry was attempted.",
         ) from exc
     except BaseException:
-        if in_flight:
-            with suppress(Exception):
-                service.mark_ambiguous(call_id, "local-post-dispatch-failure")
-        elif reserved:
-            with suppress(Exception):
-                service.release(call_id)
+        if not settled:
+            if in_flight:
+                with suppress(Exception):
+                    service.mark_ambiguous(call_id, "local-post-dispatch-failure")
+            elif reserved:
+                with suppress(Exception):
+                    service.release(call_id)
         with suppress(Exception):
             _write_cost_artifact(service, call_id, cost_path)
         raise

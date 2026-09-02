@@ -250,6 +250,7 @@ def build_hybrid_judge_prompt(proposal: HybridProposal) -> str:
                 "Every kept event must cite concise visible on-screen evidence; do not cite "
                 "loudness alone."
             ),
+            "Use score on a 0-10 scale and confidence on a 0-1 scale.",
             "Do not emit hidden reasoning or thought steps.",
             f"Proposal duration (milliseconds): {duration_ms}",
             f"Source interval: {proposal.start_ms}-{proposal.end_ms} ms",

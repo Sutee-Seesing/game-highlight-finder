@@ -218,14 +218,27 @@ quarter of each ten-minute calibration source. H4 now implements a provider-free
 semantic-judge contract over only those bounded proposal clips: `KEEP | REJECT |
 UNCERTAIN`, proposal-relative event bounds, visible evidence, source-time mapping,
 local overlap dedupe, aggregate cost preflight, exact upload/hash validation,
-`SETTLED`-only cache reuse, and ambiguous-call no-auto-retry behavior. Current H4
-verification is 29/29 targeted PASS, Ruff PASS, mypy PASS over 76 source files, and
-364/364 full pytest PASS in 111.83 s. No real Gemini generation was made for this
-checkpoint. The real calibration proposal-batch preflight is now complete on T with a
-fresh Bank of Thailand USD/THB snapshot (33.2030, 01 Sep 2026). `gemini-3.7-flash`
-quotes cal-01 at 7 proposal generations / THB 2.758416 maximum reservation and cal-02
-at 6 / THB 2.374214; provider calls, uploads, and ledger reservations remain zero.
-Execution now stops at the fresh-authorization boundary before any paid semantic judgment.
+`SETTLED`-only cache reuse, and ambiguous-call no-auto-retry behavior. H4 verification
+was 29/29 targeted PASS, Ruff PASS, mypy PASS over 76 source files, and 364/364 full
+pytest PASS in 111.83 s. The real calibration proposal-batch preflight on T used a
+fresh Bank of Thailand USD/THB snapshot (33.2030, 01 Sep 2026); `gemini-3.7-flash`
+quoted cal-01 at 7 proposal generations / THB 2.758416 maximum reservation and cal-02
+at 6 / THB 2.374214.
+
+The first authorized H5 cal-01 live run then stopped after 2/7 distinct proposal calls,
+with no automatic retry. The 56-76 s proposal was correctly rejected as buy-phase/spawn
+activity and settled at THB 0.056155 with remote cleanup deleted. The 115-135 s proposal
+overlaps calibration highlight `hl-0001` (120-136 s), but Gemini emitted
+`confidence=6.8` against the strict 0-1 contract, so the local parser refused the result;
+the pre-hardening lifecycle conservatively left that call AMBIGUOUS at THB 0.384830
+reserved and remote cleanup still deleted. The remaining five proposals were not sent.
+Provider-free hardening now states score/confidence scales explicitly, settles known
+completed provider usage before semantic parsing, persists the sanitized raw envelope
+before parsing, and prevents a later local contract failure from being mislabeled as
+provider ambiguity. Post-hardening verification is 14/14 targeted PASS, Ruff PASS,
+mypy PASS over 76 source files, and 365/365 full pytest PASS in 99.85 s. Because the
+request identity changed and the prior authorization explicitly prohibited automatic
+retry, live continuation now stops at a fresh-authorization boundary.
 
 ### M9 — Optional Reviewer
 

@@ -1,7 +1,7 @@
 {
   "task_id": "m8-v13-live-validation-2026-08-21",
-  "current_phase": "hybrid_h5_preflight_ready_authorization_required",
-  "last_checkpoint": "Hybrid H1/H2/H4 is provider-free and regression-green at 364/364. Real H5 proposal-batch preflight now passes on T with a fresh Bank of Thailand USD/THB snapshot (33.2030, 01 Sep 2026): provider_calls=0, remote_uploads=0, ledger_reservations=0. gemini-3.7-flash quotes cal-01 at 7 proposal calls / max THB 2.758416 and cal-02 at 6 calls / max THB 2.374214 (THB 5.132630 combined). gemini-3.5-flash-lite quotes THB 1.674566 + THB 1.439285 (THB 3.113851 combined). Quality remains the blocker, so the next intended experiment is cal-01 only with gemini-3.7-flash, but no live provider generation is authorized yet and M8 remains not accepted.",
+  "current_phase": "hybrid_h5_partial_live_contract_hardened_authorization_required",
+  "last_checkpoint": "Authorized H5 cal-01 on T stopped safely after 2/7 Gemini 3.7 Flash proposal calls with no retry. Proposal 56-76s was REJECT, SETTLED at THB 0.056155, remote deleted. Proposal 115-135s overlaps hl-0001 but returned confidence=6.8, violating the strict 0-1 contract; the old lifecycle conservatively marked it AMBIGUOUS with THB 0.384830 reserved, remote deleted, and the remaining 5 proposals were not called. Provider-free hardening now states score/confidence ranges explicitly, settles completed provider usage before semantic parsing, persists the sanitized raw envelope first, and prevents local parse failure from becoming provider ambiguity. Fresh authorization is required before any changed-request live continuation; M8 remains not accepted.",
   "tests": {
     "full_pytest": "334 passed in 580.48s after cross-case scope binding",
     "ruff": "passed over src + tests after cross-case scope binding",
@@ -28,26 +28,39 @@
     "hybrid_h4_ruff": "passed over H4 source + targeted tests",
     "hybrid_h4_mypy": "passed, 76 source files",
     "hybrid_h4_full_pytest": "364 passed in 111.83s",
-    "hybrid_h4_full_regression_task": "f6aa9c48-8ad0-429b-aed7-69fde9879d23"
+    "hybrid_h4_full_regression_task": "f6aa9c48-8ad0-429b-aed7-69fde9879d23",
+    "hybrid_h5_contract_targeted": "14 passed in 1.31s",
+    "hybrid_h5_contract_ruff": "passed over changed H5 source + tests",
+    "hybrid_h5_contract_mypy": "passed, 76 source files",
+    "hybrid_h5_contract_full_pytest": "365 passed in 99.85s",
+    "hybrid_h5_contract_full_regression_task": "86781030-2ecd-418d-bfd4-ab81097d7feb"
   },
   "provider_attempts": {
-    "cumulative_used": 10,
-    "authorized_cap": 10,
+    "cumulative_used": 12,
+    "authorized_cap": 17,
     "v11_used": 6,
     "v12_cal02_settled": 1,
     "v12_val01_ambiguous": 1,
     "v13_val01_settled": 1,
     "v13_val02_settled": 1,
     "v13_remote_cleanup_deleted": 2,
+    "h5_cal01_authorized_cap": 7,
+    "h5_cal01_used": 2,
+    "h5_cal01_settled": 1,
+    "h5_cal01_ambiguous": 1,
+    "h5_cal01_remaining_not_called": 5,
     "automatic_retries": 0,
     "new_authorization_required": true
   },
   "exposure": {
-    "known_settled_thb": "15.041438",
-    "ambiguous_reserved_thb": "5.187459",
-    "cumulative_worst_case_thb": "20.228897",
-    "authorized_cumulative_cap_thb": "23.000000",
-    "v13_settled_thb": "3.757246"
+    "known_settled_thb": "15.097593",
+    "ambiguous_reserved_thb": "5.572289",
+    "cumulative_worst_case_thb": "20.669882",
+    "authorized_cumulative_cap_thb": "25.760000",
+    "v13_settled_thb": "3.757246",
+    "h5_cal01_settled_thb": "0.056155",
+    "h5_cal01_ambiguous_reserved_thb": "0.384830",
+    "h5_cal01_authorized_exposure_cap_thb": "2.760000"
   },
   "validation": {
     "m8-real-val-01": {
@@ -86,7 +99,7 @@
     "default_branch_untouched": true,
     "pr_created": false
   },
-  "blocker": "M8 remains not accepted. Hybrid H1/H2 covers 5/5 annotated calibration highlights while forwarding about one quarter of each calibration source, H4 is provider-free regression-green at 364/364, and the real H5 proposal-batch cost preflight now passes with zero calls/uploads/reservations. The next action is intentionally blocked on fresh explicit authorization for a cal-01-only gemini-3.7-flash judge run: at most 7 proposal generations and THB 2.758416 maximum reservation exposure, with no automatic generation retry. Optional Valorant-specific H3 evidence is only needed if the measured hybrid shortlist still shows a proposer problem. Revealed v13 validation remains forbidden for tuning, assistant labels remain excluded from M8 acceptance, and final acceptance still requires a fresh locked holdout.",
+  "blocker": "M8 remains not accepted. The first authorized H5 cal-01 run stopped after 2/7 calls as required by the no-retry policy: one boring proposal was correctly REJECTed and settled, while the next proposal overlapped a known highlight but used an invalid confidence scale and was refused by the strict contract. The remaining five proposals were never called. Provider-free hardening changes the request identity and corrects settlement ordering/raw-response persistence, so another live continuation or retry requires fresh explicit authorization. The revealed v13 validation remains forbidden for tuning, assistant labels remain excluded from M8 acceptance, and final acceptance still requires a fresh locked holdout.",
   "post_v13_calibration": {
     "case_id": "external-fps-openarena-01",
     "split": "calibration",
@@ -268,6 +281,40 @@
       "combined_max_reserved_thb": "3.113851"
     },
     "fresh_authorization_required": true
+  },
+  "hybrid_h5_live_cal01": {
+    "model": "gemini-3.7-flash",
+    "authorized_attempt_cap": 7,
+    "attempts_used": 2,
+    "remaining_not_called": 5,
+    "authorized_exposure_cap_thb": "2.760000",
+    "automatic_generation_retries": 0,
+    "proposal_56_76s": {
+      "proposal_id": "proposal_6db54b5f2b122458",
+      "decision": "REJECT",
+      "summary": "buy phase and spawn area with no combat engagement",
+      "ledger_status": "SETTLED",
+      "settled_thb": "0.056155",
+      "remote_cleanup": "deleted"
+    },
+    "proposal_115_135s": {
+      "proposal_id": "proposal_c77c48bbf687142e",
+      "overlaps_annotation": "hl-0001:120000-136000",
+      "provider_response_completed": true,
+      "strict_contract_failure": "confidence=6.8 outside required 0-1 range",
+      "ledger_status": "AMBIGUOUS",
+      "reserved_thb": "0.384830",
+      "remote_cleanup": "deleted"
+    },
+    "provider_free_hardening": [
+      "prompt states score 0-10 and confidence 0-1",
+      "completed provider usage settles before semantic parsing",
+      "sanitized raw completed envelope persists before semantic parsing",
+      "local post-settlement semantic parse failure does not become AMBIGUOUS",
+      "settled invalid-response request remains non-retriable without changed identity"
+    ],
+    "fresh_authorization_required": true,
+    "m8_acceptance": false
   },
   "offline_readiness": {
     "case_id": "external-fps-openarena-01",
