@@ -371,3 +371,9 @@ def test_injected_batch_preflights_then_reuses_every_settled_item(tmp_path: Path
     assert len(service.calls()) == 2
 
     preflight = preflight_gemini_hybrid_judge_batch(preparation, config, cost_service=service)
+    assert preflight.planned_generation_calls == 0
+    assert preflight.cache_hit_count == 2
+    assert preflight.aggregate_maximum_reserved_micro_thb == 0
+    assert preflight.provider_calls == 0
+    assert preflight.remote_uploads == 0
+    assert preflight.ledger_reservations == 0

@@ -208,6 +208,22 @@ M9 is **NOT STARTED** and V1 defaults are **NOT LOCKED**. The revealed validatio
 holdout cannot be tuned against; any future unbiased decision requires fresh locked
 human ground truth.
 
+#### M8 hybrid architecture amendment — 2026-09-01 onward
+
+The additive plan in `docs/10_M8_HYBRID_PROPOSAL_PLAN.md` supersedes prompt-only
+tuning as the active remediation path without deleting the earlier M8 history. H1/H2
+now proposes overlapping event-centered clips from local audio/motion evidence and
+covers 5/5 currently annotated calibration highlights while forwarding about one
+quarter of each ten-minute calibration source. H4 now implements a provider-free
+semantic-judge contract over only those bounded proposal clips: `KEEP | REJECT |
+UNCERTAIN`, proposal-relative event bounds, visible evidence, source-time mapping,
+local overlap dedupe, aggregate cost preflight, exact upload/hash validation,
+`SETTLED`-only cache reuse, and ambiguous-call no-auto-retry behavior. Current H4
+verification is 29/29 targeted PASS, Ruff PASS, mypy PASS over 76 source files, and
+364/364 full pytest PASS in 111.83 s. No real Gemini generation was made for this
+checkpoint. The next gate is real calibration proposal-batch preflight with a fresh
+explicit FX snapshot, then an authorization stop before any paid semantic judgment.
+
 ### M9 — Optional Reviewer
 
 - Batch only extracted candidates; enforce independent reservations and cache keys.

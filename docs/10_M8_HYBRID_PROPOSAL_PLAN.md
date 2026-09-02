@@ -163,6 +163,8 @@ Provider-free exploration on the two existing calibration cases tested audio, 4 
 
 H2 boundary hardening now adds a 60 s default maximum proposal duration with a bounded 10 s overlap when a nearby anchor cluster would exceed that cap. Each anchor's own event-centered pre/post context is preserved in at least one proposal. Parameterized regression places an event across internal analysis boundaries throughout a ten-minute source, and the complete event remains visible inside at least one proposal. Long anchor clusters are also forced through the duration cap and verified to split with overlap rather than an arbitrary hard cut. Targeted hybrid verification is **16/16 PASS**; full Ruff passes `src` + `tests`; mypy passes **74 source files**; and the full provider-free regression passes **351/351 in 101.98 s**.
 
+H4 now implements the bounded semantic-judge seam without changing the local proposer contract. It accepts only hash-bound `analysis_proposal.mp4` media, returns `KEEP | REJECT | UNCERTAIN` with proposal-relative event bounds and visible evidence, maps kept bounds back to source time, and deduplicates duplicate judgments from overlapping proposals. Fake and injected Gemini transports share aggregate cost preflight, cache identity, upload validation, cleanup, and ambiguous-call safety. Targeted Hybrid/H4 verification is **29/29 PASS**, Ruff passes, mypy passes **76 source files**, and the full provider-free suite passes **364/364 in 111.83 s**. Real Gemini generations remain **0** for this H4 checkpoint.
+
 This is **not** M8 acceptance evidence. It is calibration-only evidence that a local proposal layer can materially reduce search area without destroying recall on the currently labelled calibration moments. Exact top-K values and future game-profile cues remain experimental; the revealed v13 validation holdout is still forbidden for tuning.
 
 ## 8. GitHub architecture adaptations
@@ -272,13 +274,13 @@ Exit: profile adds proposal recall/precision benefit on calibration without beco
 
 ### H4 — Gemini judge contract
 
-- [ ] New semantic-judge prompt/schema accepts only bounded proposal media.
-- [ ] Return `KEEP | REJECT | UNCERTAIN`, semantic category, score/confidence, visible evidence, and proposal-relative event bounds.
-- [ ] Judge may return multiple distinct events from one merged proposal when necessary.
-- [ ] Deduplicate across overlapping proposals locally.
-- [ ] Reuse current M4/M5 cost ledger, cache, upload privacy, and cleanup lifecycle.
+- [x] New semantic-judge prompt/schema accepts only bounded proposal media.
+- [x] Return `KEEP | REJECT | UNCERTAIN`, semantic category, score/confidence, visible evidence, and proposal-relative event bounds.
+- [x] Judge may return multiple distinct events from one merged proposal when necessary.
+- [x] Deduplicate across overlapping proposals locally.
+- [x] Reuse current M4/M5 cost ledger, cache, upload privacy, and cleanup lifecycle.
 
-Exit: fake/injected transport tests green; provider-free aggregate preflight shows exact proposal count and exposure before any live call.
+Exit: fake/injected transport tests green; provider-free aggregate preflight shows exact proposal count and exposure before any live call. **Implemented provider-free on 2026-09-02:** targeted Hybrid/H4 verification is 29/29 PASS, Ruff passes, mypy passes 76 source files, and the full suite is 364/364 PASS in 111.83 s. The injected-transport path validates exact proposal-media hashes, preflights the whole batch before reservation, persists the existing cost lifecycle, treats ambiguous post-dispatch state as non-retriable, and reuses only verified `SETTLED` cache entries. No real provider generation was executed.
 
 ### H5 — Calibration decision
 

@@ -1,7 +1,7 @@
 {
   "task_id": "m8-v13-live-validation-2026-08-21",
-  "current_phase": "hybrid_h2_checkpoint_regression_green",
-  "last_checkpoint": "Hybrid local proposer H1/H2 is provider-free and regression-green. Real calibration cal-01 produced 7 proposals covering 26.7938% of the source and overlaps 3/3 currently annotated highlights; cal-02 produced 6 proposals covering 23.4660% and overlaps 2/2. H2 caps proposals at 60s, preserves event-centered context, and uses bounded overlap when nearby clusters must split. Hybrid targeted tests pass 16/16, Ruff passes src + tests, mypy passes 74 source files, and full regression passes 351/351 in 101.98s. provider_calls=0 and semantic_labels_inferred=false; this remains calibration evidence, not M8 acceptance.",
+  "current_phase": "hybrid_h4_checkpoint_regression_green",
+  "last_checkpoint": "Hybrid H1/H2/H4 is provider-free and regression-green. The local proposer still covers 5/5 currently annotated calibration highlights while forwarding 26.7938% of cal-01 and 23.4660% of cal-02. H4 adds a bounded semantic judge contract over hash-bound proposal clips only: KEEP/REJECT/UNCERTAIN, proposal-relative event bounds, visible evidence, source-time mapping, local overlap dedupe, aggregate cost preflight, exact upload validation, SETTLED-only cache reuse, and no automatic retry after ambiguous dispatch. Hybrid/H4 targeted tests pass 29/29, Ruff passes, mypy passes 76 source files, and full regression passes 364/364 in 111.83s. Real provider generations for this checkpoint are 0; M8 remains not accepted.",
   "tests": {
     "full_pytest": "334 passed in 580.48s after cross-case scope binding",
     "ruff": "passed over src + tests after cross-case scope binding",
@@ -23,7 +23,12 @@
     "hybrid_ruff": "passed over src + tests",
     "hybrid_mypy": "passed, 74 source files",
     "hybrid_full_pytest": "351 passed in 101.98s",
-    "hybrid_full_regression_task": "50ef2232-95ec-422c-8521-4bce42f4999c"
+    "hybrid_full_regression_task": "50ef2232-95ec-422c-8521-4bce42f4999c",
+    "hybrid_h4_targeted": "29 passed in 4.12s on T",
+    "hybrid_h4_ruff": "passed over H4 source + targeted tests",
+    "hybrid_h4_mypy": "passed, 76 source files",
+    "hybrid_h4_full_pytest": "364 passed in 111.83s",
+    "hybrid_h4_full_regression_task": "f6aa9c48-8ad0-429b-aed7-69fde9879d23"
   },
   "provider_attempts": {
     "cumulative_used": 10,
@@ -81,7 +86,7 @@
     "default_branch_untouched": true,
     "pr_created": false
   },
-  "blocker": "M8 remains not accepted, but the active remediation path is now the hybrid proposer plus bounded semantic judge rather than more prompt-only tuning. H1/H2 currently covers 5/5 annotated calibration highlights while forwarding about one quarter of each calibration source and passes the provider-free 351-test regression. The next engineering gate is H3/H4: optional Valorant-specific proposal evidence and a fake/injected Gemini judge contract over proposal clips only. Any live Gemini generation still requires new explicit authorization; revealed v13 validation remains forbidden for tuning, assistant labels remain excluded from M8 acceptance, and final acceptance still requires a fresh locked holdout.",
+  "blocker": "M8 remains not accepted, but the active remediation path is the hybrid proposer plus bounded semantic judge rather than more prompt-only tuning. H1/H2 covers 5/5 annotated calibration highlights while forwarding about one quarter of each calibration source. H4 is now implemented and provider-free regression-green at 364/364. The next gate is a real calibration proposal-batch preflight on T with a fresh explicit FX snapshot, followed by a stop at the authorization boundary; optional Valorant-specific H3 evidence is only needed if proposer recall/precision proves insufficient. Any live Gemini generation still requires new explicit authorization; revealed v13 validation remains forbidden for tuning, assistant labels remain excluded from M8 acceptance, and final acceptance still requires a fresh locked holdout.",
   "post_v13_calibration": {
     "case_id": "external-fps-openarena-01",
     "split": "calibration",
