@@ -1,7 +1,7 @@
 {
   "task_id": "m8-v13-live-validation-2026-08-21",
-  "current_phase": "hybrid_h5_must_catch_no_sdk_retry_ready_live_authorization_required",
-  "last_checkpoint": "The authorized stable-v1 generateContent cal-02 subset consumed both bounded application-level calls. Proposal 386-421s completed KEEP/FUNNY with a source event around 399-411s overlapping WORTH_REVIEW hl-0001 at 401-417s; it is SETTLED at THB 0.108898 and cleanup is deleted. Proposal 574-594s covering MUST_CATCH hl-0002 reached Gemini but failed HTTP 503 UNAVAILABLE/high demand, is conservatively AMBIGUOUS at THB 0.385248 reserved, has no semantic response, and cleanup is deleted. Source hash remains unchanged, so cal-02 has one confirmed positive match but remains semantic-inconclusive until MUST_CATCH is adjudicated. Audit found google-genai 2.21.0 defaults to up to 5 SDK HTTP attempts on retryable 408/429/5xx when retry options are omitted; application retries were 0 but exact SDK-internal HTTP attempts for the 503 call are unknown. Provider-free hardening now pins retry_options.attempts=1, fails closed before provider I/O unless sdk_http_attempts=1, and includes that invariant in request/cost identity. Verification is 39/39 targeted PASS, Ruff PASS, mypy over 76 source files PASS, and 371/371 full pytest PASS in 113.16s under task 611d6a96-4bee-4196-bb5e-e4fc42e2af5a. A fresh MUST_CATCH-only preflight is 1 call / THB 0.385248 with 0 calls/uploads/reservations, 0 judge cache hits, syntax-valid helper, and absent fresh ledger/summary. No further paid call is allowed without a fresh explicit authorization.",
+  "current_phase": "hybrid_h5_cal02_closed_quality_failure_alternate_judge_plan_next",
+  "last_checkpoint": "The separately authorized stable-v1 generateContent MUST_CATCH continuation ran exactly once under Gemini 3.7 Flash with attempt cap 1, THB 0.39 exposure cap, SDK HTTP attempts=1, and no application retry. Proposal 574-594s completed normally at the provider level but returned REJECT with zero events, missing locked MUST_CATCH hl-0002 at 574-590s. The call is SETTLED at THB 0.056977, remote cleanup is deleted, and source SHA-256/size remain immutable. Combining the four earlier settled REJECTs outside annotations, the prior KEEP/FUNNY event around source 399-411s matching WORTH_REVIEW hl-0001, and this final REJECT yields cal-02 TP=1 / FP=0 / FN=1, precision 1.00, recall 0.50, WORTH_REVIEW recall 1.00, MUST_CATCH recall 0.00. The proposer covered both known positives, so cal-02 closes as a Gemini semantic-judge quality failure rather than proposal-recall or infrastructure failure. H5 is closed, M8 remains NOT ACCEPTED, and V1 defaults remain unlocked. The next step is provider-free planning for a bounded same-calibration alternate-judge comparison; no additional paid call is authorized.",
   "tests": {
     "full_pytest": "334 passed in 580.48s after cross-case scope binding",
     "ruff": "passed over src + tests after cross-case scope binding",
@@ -51,8 +51,8 @@
     "hybrid_h5_sdk_no_retry_full_regression_task": "611d6a96-4bee-4196-bb5e-e4fc42e2af5a"
   },
   "provider_attempts": {
-    "cumulative_used": 27,
-    "authorized_cap": 34,
+    "cumulative_used": 28,
+    "authorized_cap": 35,
     "v11_used": 6,
     "v12_cal02_settled": 1,
     "v12_val01_ambiguous": 1,
@@ -82,17 +82,22 @@
     "h5_generate_content_subset_settled": 1,
     "h5_generate_content_subset_ambiguous": 1,
     "h5_generate_content_subset_remaining_not_called": 0,
+    "h5_must_catch_no_sdk_retry_authorized_cap": 1,
+    "h5_must_catch_no_sdk_retry_used": 1,
+    "h5_must_catch_no_sdk_retry_settled": 1,
+    "h5_must_catch_no_sdk_retry_rejected": 1,
+    "h5_must_catch_no_sdk_retry_sdk_http_attempts": 1,
     "application_automatic_retries": 0,
     "sdk_default_retry_max_attempts_discovered": 5,
     "sdk_internal_http_attempt_count_for_503": "UNKNOWN",
     "automatic_retries": 0,
-    "cal02_new_authorization_required": true
+    "cal02_new_authorization_required": false
   },
   "exposure": {
-    "known_settled_thb": "15.967185",
+    "known_settled_thb": "16.024162",
     "ambiguous_reserved_thb": "6.820729",
-    "cumulative_worst_case_thb": "22.787914",
-    "authorized_cumulative_cap_thb": "32.560000",
+    "cumulative_worst_case_thb": "22.844891",
+    "authorized_cumulative_cap_thb": "32.950000",
     "v13_settled_thb": "3.757246",
     "h5_cal01_settled_thb": "0.056155",
     "h5_cal01_ambiguous_reserved_thb": "0.384830",
@@ -111,7 +116,9 @@
     "h5_generate_content_subset_ambiguous_reserved_thb": "0.385248",
     "h5_generate_content_subset_authorized_exposure_cap_thb": "0.820000",
     "h5_must_catch_no_sdk_retry_preflight_max_reserved_thb": "0.385248",
-    "h5_must_catch_no_sdk_retry_recommended_cap_thb": "0.390000"
+    "h5_must_catch_no_sdk_retry_recommended_cap_thb": "0.390000",
+    "h5_must_catch_no_sdk_retry_settled_thb": "0.056977",
+    "h5_must_catch_no_sdk_retry_authorized_exposure_cap_thb": "0.390000"
   },
   "validation": {
     "m8-real-val-01": {
@@ -150,7 +157,7 @@
     "default_branch_untouched": true,
     "pr_created": false
   },
-  "blocker": "M8 remains not accepted. Hardened H5 cal-01 is strongly positive. In cal-02, stable-v1 generateContent has successfully KEEP/FUNNY-matched WORTH_REVIEW hl-0001 at approximately 399-411s source time, settled at THB 0.108898, but MUST_CATCH hl-0002 at 574-590s is still unresolved because its 574-594s proposal failed HTTP 503 UNAVAILABLE/high demand and remains AMBIGUOUS at THB 0.385248 reserved. Both remote uploads were deleted and source immutability is intact. Audit found google-genai 2.21.0 may internally retry retryable HTTP errors up to 5 attempts by default, so no-automatic-retry hardening now pins SDK retry_options.attempts=1, fail-closes before provider I/O unless sdk_http_attempts=1, and changes request/cost identity. Verification is 39/39 targeted PASS, Ruff PASS, mypy over 76 source files PASS, and 371/371 full pytest PASS in 113.16s under task 611d6a96-4bee-4196-bb5e-e4fc42e2af5a. A provider-free MUST_CATCH-only continuation is ready at 1 Gemini 3.7 Flash call / THB 0.385248 maximum reservation, with 0 calls/uploads/reservations, 0 judge cache hits, syntax-valid helper, and absent fresh ledger/summary. Fresh explicit authorization is required before that paid continuation. Revealed v13 validation remains forbidden for tuning, assistant labels remain excluded from M8 acceptance, and final acceptance still requires a fresh locked holdout prepared before predictions.",
+  "blocker": "M8 remains not accepted. H5 calibration is now closed. Hardened cal-01 was strongly positive, but cal-02 closes as a Gemini semantic-judge quality failure: the proposer covered both locked positives, Gemini KEEP/FUNNY-matched WORTH_REVIEW hl-0001 around source 399-411s, then a fresh stable-v1 generateContent request with SDK HTTP attempts=1 REJECTED proposal 574-594s and therefore missed locked MUST_CATCH hl-0002 at 574-590s. Final cal-02 metrics are TP=1, FP=0, FN=1, precision 1.00, recall 0.50, WORTH_REVIEW recall 1.00, MUST_CATCH recall 0.00. The final call is SETTLED at THB 0.056977, cleanup is deleted, and source immutability is intact. The earlier 503 remains historical AMBIGUOUS billing evidence and is not rewritten. Current Gemini Hybrid Judge therefore does not qualify as the V1 semantic gate. Revealed v13 validation remains forbidden for tuning, assistant labels remain excluded from M8 acceptance, and final acceptance still requires a fresh locked holdout prepared before predictions. Before that holdout, the next sensible step is a bounded provider-free plan for a same-calibration alternate-judge comparison; no additional paid call is authorized.",
   "post_v13_calibration": {
     "case_id": "external-fps-openarena-01",
     "split": "calibration",
@@ -590,10 +597,44 @@
       "judge_cache_hits": 0,
       "clip_cache_hits": 1,
       "helper_syntax_valid": true,
-      "dedicated_live_ledger_exists": false,
-      "dedicated_live_summary_exists": false
+      "dedicated_live_ledger_exists": true,
+      "dedicated_live_summary_exists": true
     },
-    "fresh_live_authorization_required": true,
+    "must_catch_no_sdk_retry_live": {
+      "authorized_attempt_cap": 1,
+      "attempts_used": 1,
+      "authorized_exposure_cap_thb": "0.390000",
+      "sdk_http_attempts": 1,
+      "application_retries": 0,
+      "proposal_id": "proposal_cebe7e1d9383a872",
+      "proposal_interval_ms": [574000, 594000],
+      "decision": "REJECT",
+      "event_count": 0,
+      "summary": "Standard hide and seek gameplay showing basic exploration and timer running down with no highlight-worthy moment.",
+      "overlaps_annotation": "hl-0002:574000-590000",
+      "importance": "MUST_CATCH",
+      "ledger_state": "SETTLED",
+      "reserved_thb": "0.385248",
+      "settled_thb": "0.056977",
+      "remote_cleanup": "deleted",
+      "source_matches_manifest": true,
+      "authorization_consumed": true
+    },
+    "final_cal02_semantic": {
+      "predictions": 1,
+      "ground_truth_highlights": 2,
+      "true_positives": 1,
+      "false_positives": 0,
+      "false_negatives": 1,
+      "precision": 1.0,
+      "recall": 0.5,
+      "f1": 0.6666666666666666,
+      "worth_review_recall": 1.0,
+      "must_catch_recall": 0.0,
+      "proposer_known_positive_coverage": "2/2",
+      "verdict": "FAIL_MUST_CATCH_SEMANTIC_JUDGE"
+    },
+    "fresh_live_authorization_required": false,
     "m8_acceptance": false
   },
   "offline_readiness": {

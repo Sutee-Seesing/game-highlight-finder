@@ -321,12 +321,24 @@ that invariant is present, and includes `sdk_http_attempts=1` in provider-reques
 Targeted verification is 39/39 PASS, Ruff PASS, mypy PASS over 76 source files, and canonical full
 pytest is 371/371 PASS in 113.16 s under durable task `611d6a96-4bee-4196-bb5e-e4fc42e2af5a`.
 
-A provider-free MUST_CATCH-only continuation is prepared under the new no-SDK-retry identity.
-It selects only proposal `574-594s`, reuses its cached clip, has 0 judge cache hits, and quotes
-exactly 1 planned generation call / THB 0.385248 maximum reservation with 0 provider calls / 0
-uploads / 0 ledger reservations during preflight. Its helper is syntax-valid, pins SDK HTTP
-attempts to 1, uses a proposed THB 0.39 exposure cap, and its dedicated ledger/summary do not
-exist. No further paid call is permitted without a fresh explicit authorization.
+The separately authorized MUST_CATCH-only continuation then ran exactly once under the new
+no-SDK-retry identity: stable `v1` generateContent, Gemini 3.7 Flash, attempt cap 1, THB 0.39
+exposure cap, SDK HTTP attempts 1, and no application retry. Proposal `574-594s` completed
+successfully at the provider level but returned REJECT with zero events and the summary that it
+was standard hide-and-seek exploration with no highlight-worthy moment. The call is SETTLED at
+THB 0.056977, remote cleanup is `deleted`, and the source still matches the immutable
+2,805,344,323-byte SHA-256 `8d973547b93d432a4deb5f4880ea08fe6cbb7466a6c08a5de0d2e94f0ace2126`.
+
+H5 cal-02 is therefore closed as a **semantic quality failure**, not an infrastructure
+inconclusive result. Combining the four historical settled REJECTs outside the annotations, the
+successful KEEP/FUNNY prediction around source `399-411s`, and the final MUST_CATCH REJECT gives
+1 prediction against 2 annotated highlights: TP=1, FP=0, FN=1, precision=1.00, recall=0.50,
+WORTH_REVIEW recall=1.00, and MUST_CATCH recall=0.00. The local proposer did cover both known
+positives, so this calibration isolates the failure to the Gemini semantic judge on the
+MUST_CATCH example rather than proposal recall. H5 is closed; M8 remains NOT ACCEPTED and V1
+defaults remain unlocked. Before any fresh locked holdout, the next sensible provider-free step
+is to define a bounded same-calibration alternate-judge comparison rather than tune against the
+revealed validation holdout.
 
 ### M9 — Optional Reviewer
 
