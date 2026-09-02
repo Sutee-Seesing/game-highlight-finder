@@ -1,7 +1,7 @@
 {
   "task_id": "m8-v13-live-validation-2026-08-21",
-  "current_phase": "hybrid_h5_partial_live_contract_hardened_authorization_required",
-  "last_checkpoint": "Authorized H5 cal-01 on T stopped safely after 2/7 Gemini 3.7 Flash proposal calls with no retry. Proposal 56-76s was REJECT, SETTLED at THB 0.056155, remote deleted. Proposal 115-135s overlaps hl-0001 but returned confidence=6.8, violating the strict 0-1 contract; the old lifecycle conservatively marked it AMBIGUOUS with THB 0.384830 reserved, remote deleted, and the remaining 5 proposals were not called. Provider-free hardening now states score/confidence ranges explicitly, settles completed provider usage before semantic parsing, persists the sanitized raw envelope first, and prevents local parse failure from becoming provider ambiguity. Fresh authorization is required before any changed-request live continuation; M8 remains not accepted.",
+  "current_phase": "hybrid_h5_hardened_cal01_complete_cal02_authorization_required",
+  "last_checkpoint": "Newly authorized H5 hardened cal-01 rerun completed 7/7 Gemini 3.7 Flash proposal calls with no automatic retry. All seven ledger rows are SETTLED, actual settled usage is THB 0.517870 against THB 2.761373 maximum reservation, and all seven remote media objects were deleted. Against the three currently annotated cal-01 highlights, the hybrid output is 4 candidates with 3 TP / 1 FP / 0 FN: precision 0.75, recall 1.00, MUST_CATCH recall 1.00, WORTH_REVIEW recall 1.00. The four kept event intervals total 55 s / 600.886 s = 9.1532% of source duration after the proposer forwarded 26.7938%. Source SHA-256 and size still match the persisted source manifest. This is strong positive cal-01 evidence, but M8 remains not accepted; hardened cal-02 requires separate fresh authorization and final acceptance still requires a fresh locked holdout.",
   "tests": {
     "full_pytest": "334 passed in 580.48s after cross-case scope binding",
     "ruff": "passed over src + tests after cross-case scope binding",
@@ -36,8 +36,8 @@
     "hybrid_h5_contract_full_regression_task": "86781030-2ecd-418d-bfd4-ab81097d7feb"
   },
   "provider_attempts": {
-    "cumulative_used": 12,
-    "authorized_cap": 17,
+    "cumulative_used": 19,
+    "authorized_cap": 24,
     "v11_used": 6,
     "v12_cal02_settled": 1,
     "v12_val01_ambiguous": 1,
@@ -49,18 +49,25 @@
     "h5_cal01_settled": 1,
     "h5_cal01_ambiguous": 1,
     "h5_cal01_remaining_not_called": 5,
+    "h5_hardened_cal01_authorized_cap": 7,
+    "h5_hardened_cal01_used": 7,
+    "h5_hardened_cal01_settled": 7,
+    "h5_hardened_cal01_remaining_not_called": 0,
     "automatic_retries": 0,
-    "new_authorization_required": true
+    "cal02_new_authorization_required": true
   },
   "exposure": {
-    "known_settled_thb": "15.097593",
+    "known_settled_thb": "15.615463",
     "ambiguous_reserved_thb": "5.572289",
-    "cumulative_worst_case_thb": "20.669882",
-    "authorized_cumulative_cap_thb": "25.760000",
+    "cumulative_worst_case_thb": "21.187752",
+    "authorized_cumulative_cap_thb": "28.530000",
     "v13_settled_thb": "3.757246",
     "h5_cal01_settled_thb": "0.056155",
     "h5_cal01_ambiguous_reserved_thb": "0.384830",
-    "h5_cal01_authorized_exposure_cap_thb": "2.760000"
+    "h5_cal01_authorized_exposure_cap_thb": "2.760000",
+    "h5_hardened_cal01_settled_thb": "0.517870",
+    "h5_hardened_cal01_max_reserved_thb": "2.761373",
+    "h5_hardened_cal01_authorized_exposure_cap_thb": "2.770000"
   },
   "validation": {
     "m8-real-val-01": {
@@ -99,7 +106,7 @@
     "default_branch_untouched": true,
     "pr_created": false
   },
-  "blocker": "M8 remains not accepted. The first authorized H5 cal-01 run stopped after 2/7 calls as required by the no-retry policy: one boring proposal was correctly REJECTed and settled, while the next proposal overlapped a known highlight but used an invalid confidence scale and was refused by the strict contract. The remaining five proposals were never called. Provider-free hardening changes the request identity and corrects settlement ordering/raw-response persistence, so another live continuation or retry requires fresh explicit authorization. The revealed v13 validation remains forbidden for tuning, assistant labels remain excluded from M8 acceptance, and final acceptance still requires a fresh locked holdout.",
+  "blocker": "M8 remains not accepted. Hardened H5 cal-01 is now complete and strongly positive on the currently annotated calibration case: 7/7 calls SETTLED, 3 TP / 1 FP / 0 FN, precision 0.75, recall 1.00, 55 s kept review duration, THB 0.517870 actual cost, all remote media deleted, and source immutability verified by SHA-256. Hardened cal-02 has not been called and requires fresh explicit attempt/exposure authorization. The revealed v13 validation remains forbidden for tuning, assistant labels remain excluded from M8 acceptance, and final acceptance still requires a fresh locked holdout prepared before predictions.",
   "post_v13_calibration": {
     "case_id": "external-fps-openarena-01",
     "split": "calibration",
@@ -280,7 +287,7 @@
       "cal02_max_reserved_thb": "1.439285",
       "combined_max_reserved_thb": "3.113851"
     },
-    "fresh_authorization_required": true
+    "cal02_fresh_authorization_required": true
   },
   "hybrid_h5_live_cal01": {
     "model": "gemini-3.7-flash",
@@ -316,6 +323,42 @@
     "post_hardening_cal01_max_reserved_thb": "2.761373",
     "recommended_next_exposure_cap_thb": "2.770000",
     "fresh_authorization_required": true,
+    "m8_acceptance": false
+  },
+  "hybrid_h5_hardened_cal01_rerun": {
+    "model": "gemini-3.7-flash",
+    "authorized_attempt_cap": 7,
+    "attempts_used": 7,
+    "authorized_exposure_cap_thb": "2.770000",
+    "preflight_max_reserved_thb": "2.761373",
+    "automatic_generation_retries": 0,
+    "ledger_records": 7,
+    "ledger_states": ["SETTLED", "SETTLED", "SETTLED", "SETTLED", "SETTLED", "SETTLED", "SETTLED"],
+    "settled_thb": "0.517870",
+    "remote_cleanup_deleted": "7/7",
+    "semantic": {
+      "predictions": 4,
+      "ground_truth_highlights": 3,
+      "true_positives": 3,
+      "false_positives": 1,
+      "false_negatives": 0,
+      "precision": 0.75,
+      "recall": 1.0,
+      "must_catch_recall": 1.0,
+      "worth_review_recall": 1.0,
+      "matched_annotation_ids": ["hl-0001", "hl-0002", "hl-0003"]
+    },
+    "proposal_duration_seconds": 161.0,
+    "proposal_ratio": 0.26793767869446117,
+    "kept_event_duration_seconds": 55.0,
+    "kept_event_review_ratio": 0.09153150514407059,
+    "actual_cost_per_source_hour_thb": 3.102638437241008,
+    "source_immutability": {
+      "size_bytes": 6282414778,
+      "sha256": "7db9940058f764d1725f89340e8c1226d80b31671953739b7be9aeb06d2ac726",
+      "matches_manifest": true
+    },
+    "cal02_fresh_authorization_required": true,
     "m8_acceptance": false
   },
   "offline_readiness": {

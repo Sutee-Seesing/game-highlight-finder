@@ -244,6 +244,20 @@ identity changed and the prior authorization explicitly prohibited automatic ret
 live continuation now stops at a fresh-authorization boundary; the old THB 2.76 cap
 is also THB 0.001373 below the complete hardened cal-01 quote.
 
+A newly authorized hardened cal-01 rerun then completed all 7/7 proposal calls under
+THB 2.77 maximum exposure with zero automatic retries. All seven ledger rows are
+SETTLED; actual settled usage is THB 0.517870 versus THB 2.761373 maximum reservation,
+and all seven remote media objects were deleted. Against the three currently annotated
+cal-01 highlights, the hybrid judge produced four candidates with 3 TP / 1 FP / 0 FN:
+precision 0.75, recall 1.00, MUST_CATCH recall 1.00, and WORTH_REVIEW recall 1.00.
+The proposer forwarded 161.0 s / 600.886 s = 26.7938% of the source and the four kept
+event intervals total 55 s / 600.886 s = 9.1532%, at approximately THB 3.1026 per
+source-hour of actual judge cost. The original source was re-hashed after the run and
+still matches `7db9940058f764d1725f89340e8c1226d80b31671953739b7be9aeb06d2ac726`
+with its original 6,282,414,778-byte size. This materially positive cal-01 evidence does
+not accept M8 by itself: hardened cal-02 remains unrun, revealed v13 validation remains
+forbidden for tuning, and final acceptance still requires a fresh locked holdout.
+
 ### M9 — Optional Reviewer
 
 - Batch only extracted candidates; enforce independent reservations and cache keys.
