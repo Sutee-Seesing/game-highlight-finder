@@ -248,8 +248,19 @@ def _resolve_gemini_api_key(api_key_env: str, environ: Mapping[str, str]) -> str
 class GenAITransport:
     """Lazy wrapper around the official ``google-genai`` Python SDK."""
 
-    def __init__(self, *, api_key_env: str = "GEMINI_API_KEY") -> None:
+    def __init__(
+        self,
+        *,
+        api_key_env: str = "GEMINI_API_KEY",
+        api_version: str | None = None,
+    ) -> None:
         key = _resolve_gemini_api_key(api_key_env, os.environ)
+        self.api_version = api_version
+        if api_version is not None and api_version not in {"v1", "v1beta"}:
+            raise GeminiConfigurationError(
+                f"Unsupported Gemini API version {api_version!r}.",
+                may_have_dispatched=False,
+            )
         try:
             from google import genai  # type: ignore[import-not-found, unused-ignore]
         except ImportError as exc:  # pragma: no cover - exercised when optional extra is absent
@@ -257,8 +268,11 @@ class GenAITransport:
                 "The optional google-genai dependency is not installed.",
                 may_have_dispatched=False,
             ) from exc
+        client_kwargs: dict[str, Any] = {"api_key": key}
+        if api_version is not None:
+            client_kwargs["http_options"] = {"api_version": api_version}
         try:
-            self._client = genai.Client(api_key=key)
+            self._client = genai.Client(**client_kwargs)
         except Exception as exc:  # pragma: no cover - SDK-specific construction errors
             raise GeminiConfigurationError("Cannot initialize the Gemini SDK client.") from exc
 
@@ -836,7 +850,9 @@ class FakeGeminiTransport:
         processing_states: Sequence[str] = ("ACTIVE",),
         generation_error: Exception | None = None,
         delete_error: Exception | None = None,
+        api_version: str = "v1",
     ) -> None:
+        self.api_version = api_version
         self.response = response or {
             "status": "completed",
             "id": "fake-interaction-1",

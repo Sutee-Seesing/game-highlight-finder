@@ -56,6 +56,7 @@ from game_highlight_finder.storage.atomic import atomic_write_json, read_json
 from game_highlight_finder.storage.hashing import hash_file
 
 HYBRID_JUDGE_GEMINI_VERSION = "hybrid-judge-gemini-v1"
+HYBRID_JUDGE_GEMINI_API_VERSION = "v1"
 HYBRID_JUDGE_MAX_OUTPUT_TOKENS = 1_024
 
 
@@ -205,6 +206,10 @@ def run_gemini_hybrid_judge_with_transport(
 
     if not config.scout.allow_remote_upload:
         raise ValidationError("Gemini hybrid judge requires explicit remote-upload opt-in.")
+    if getattr(transport, "api_version", None) != HYBRID_JUDGE_GEMINI_API_VERSION:
+        raise ValidationError(
+            "Gemini hybrid judge requires an explicitly pinned stable v1 transport."
+        )
     request, cost_request = _request_parts(preparation, prepared, config)
     service = cost_service or build_gemini_hybrid_judge_cost_service(config)
     call_id = cost_request.call_id
@@ -259,6 +264,7 @@ def run_gemini_hybrid_judge_with_transport(
             "execution_mode": "injected_transport",
             "provider": "gemini",
             "model": config.scout.model,
+            "api_version": HYBRID_JUDGE_GEMINI_API_VERSION,
             "billing_mode": config.scout.billing_mode,
             "session_id": preparation.plan.session_id,
             "proposal_id": request.proposal_id,
@@ -474,6 +480,7 @@ def _request_parts(
         "media_sha256": request.media_sha256,
         "response_schema_sha256": canonical_payload_sha256(request.response_schema),
         "prompt_sha256": canonical_payload_sha256(request.prompt),
+        "api_version": HYBRID_JUDGE_GEMINI_API_VERSION,
         "media_resolution": config.scout.media_resolution,
         "wire_media_resolution": media_config.wire_level,
         "thinking_level": thinking.wire_level,
@@ -598,6 +605,7 @@ def build_gemini_hybrid_judge_cost_service(config: AppConfig) -> CostService:
 
 
 __all__ = [
+    "HYBRID_JUDGE_GEMINI_API_VERSION",
     "HYBRID_JUDGE_GEMINI_VERSION",
     "HYBRID_JUDGE_MAX_OUTPUT_TOKENS",
     "GeminiHybridJudgeBatchPreflight",

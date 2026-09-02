@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import sys
+import types
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -54,6 +56,7 @@ from game_highlight_finder.providers.gemini import (
     GeminiPrivacyError,
     GeminiProvider,
     GeminiProviderError,
+    GenAITransport,
     sanitize_interaction_response,
     usage_from_envelope,
     validate_proxy_upload,
@@ -189,6 +192,29 @@ def test_gemini_defaults_are_fake_and_secret_safe() -> None:
     assert config_payload(config, redacted=False)["scout"]["api_key_env"] == "GEMINI_API_KEY"
     with pytest.raises(PydanticValidationError):
         ScoutConfig(backend="unsupported")  # type: ignore[arg-type]
+
+
+def test_genai_transport_can_pin_stable_api_version(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, object] = {}
+
+    class FakeClient:
+        def __init__(self, **kwargs: object) -> None:
+            captured.update(kwargs)
+
+    fake_genai = types.ModuleType("google.genai")
+    fake_genai.__dict__["Client"] = FakeClient
+    fake_google = types.ModuleType("google")
+    fake_google.__dict__["genai"] = fake_genai
+    monkeypatch.setitem(sys.modules, "google", fake_google)
+    monkeypatch.setitem(sys.modules, "google.genai", fake_genai)
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+
+    GenAITransport(api_version="v1")
+
+    assert captured == {
+        "api_key": "test-key",
+        "http_options": {"api_version": "v1"},
+    }
 
 
 def test_exact_gemini_pricing_is_versioned_and_freshness_is_fail_closed() -> None:

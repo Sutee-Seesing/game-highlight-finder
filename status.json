@@ -1,7 +1,7 @@
 {
   "task_id": "m8-v13-live-validation-2026-08-21",
-  "current_phase": "hybrid_h5_hardened_cal02_partial_auth_failure_authorization_required",
-  "last_checkpoint": "H5 hardened cal-02 was explicitly authorized for Gemini 3.7 Flash with attempt cap 6, exposure cap THB 2.39, and no automatic retry. The run stopped safely after 5/6 distinct proposal calls when the fifth request (386-421s) returned HTTP 401 authentication after dispatch. Ledger state is 4 SETTLED + 1 AMBIGUOUS, with THB 0.242824 actually settled and THB 0.431596 reserved on the ambiguous request; the sixth proposal was never sent. Remote cleanup is deleted 5/5. The four settled calls all returned REJECT but do not overlap the two known positives. The ambiguous fifth proposal overlaps hl-0001 at 401-417s and the unsent sixth proposal overlaps MUST_CATCH hl-0002 at 574-590s, so semantic quality is inconclusive rather than failed. Source SHA-256 and size still match the persisted cal-02 manifest. No retry or sixth call is permitted without fresh explicit authorization; M8 remains not accepted and final acceptance still requires a fresh locked holdout.",
+  "current_phase": "hybrid_h5_stable_v1_hardening_complete_live_authorization_required",
+  "last_checkpoint": "After the partial hardened cal-02 run stopped safely at 5/6 calls on a dispatched HTTP 401, provider-free remediation pinned only the Hybrid Judge to stable Gemini Interactions API v1. api_version=v1 is now part of the provider-request/cost identity and persisted request metadata, and the Hybrid Judge fails closed before reservation/upload/generation unless the injected transport explicitly declares stable v1. Verification is 35/35 targeted PASS, Ruff PASS, mypy PASS over 76 source files, and canonical full regression 367/367 PASS in 111.27s. Fresh stable-v1 preflight remains provider-free with 0 calls, 0 uploads, 0 ledger reservations, 0 Hybrid Judge cache hits, and a cal-02 quote of 6 calls / THB 2.376752 maximum reservation. The dedicated stable-v1 ledger and summary do not exist, proving no stable-v1 live call has occurred. M8 remains not accepted; live cal-02 continuation requires fresh explicit authorization because the request/endpoint identity changed, and final acceptance still requires a fresh locked holdout.",
   "tests": {
     "full_pytest": "334 passed in 580.48s after cross-case scope binding",
     "ruff": "passed over src + tests after cross-case scope binding",
@@ -33,7 +33,12 @@
     "hybrid_h5_contract_ruff": "passed over changed H5 source + tests",
     "hybrid_h5_contract_mypy": "passed, 76 source files",
     "hybrid_h5_contract_full_pytest": "365 passed in 99.85s",
-    "hybrid_h5_contract_full_regression_task": "86781030-2ecd-418d-bfd4-ab81097d7feb"
+    "hybrid_h5_contract_full_regression_task": "86781030-2ecd-418d-bfd4-ab81097d7feb",
+    "hybrid_h5_stable_v1_targeted": "35 passed in 13.62s",
+    "hybrid_h5_stable_v1_ruff": "passed over src + tests",
+    "hybrid_h5_stable_v1_mypy": "passed, 76 source files",
+    "hybrid_h5_stable_v1_full_pytest": "367 passed in 111.27s",
+    "hybrid_h5_stable_v1_full_regression_task": "b91519c2-63bf-45b0-805b-677bc3c6a156"
   },
   "provider_attempts": {
     "cumulative_used": 24,
@@ -115,7 +120,7 @@
     "default_branch_untouched": true,
     "pr_created": false
   },
-  "blocker": "M8 remains not accepted. Hardened H5 cal-01 is complete and strongly positive, but hardened cal-02 stopped after 5/6 calls on an HTTP 401 authentication failure after dispatch. The partial cal-02 ledger is 4 SETTLED + 1 AMBIGUOUS with one proposal never sent; all five uploaded media objects were deleted and source immutability is intact. Both currently annotated cal-02 positives lie in the unresolved fifth and unsent sixth proposals, so cal-02 semantic quality is inconclusive rather than failed. No retry or sixth call may be made without fresh explicit authorization. The revealed v13 validation remains forbidden for tuning, assistant labels remain excluded from M8 acceptance, and final acceptance still requires a fresh locked holdout prepared before predictions.",
+  "blocker": "M8 remains not accepted. Hardened H5 cal-01 is strongly positive, while the first hardened cal-02 attempt stopped safely after 5/6 calls on a dispatched HTTP 401 and remains semantic-inconclusive because both known positives were in the unresolved fifth and unsent sixth proposals. Provider-free remediation is now complete: the Hybrid Judge is pinned to stable Gemini Interactions API v1, api_version is part of request identity, non-v1 transports fail closed before provider I/O, and verification passes 35/35 targeted, Ruff, mypy over 76 source files, and 367/367 full pytest. Stable-v1 preflight makes 0 calls/uploads/reservations and quotes cal-02 at 6 calls / THB 2.376752; no stable-v1 live ledger or summary exists. A fresh explicit live authorization is required before any stable-v1 cal-02 call. Revealed v13 validation remains forbidden for tuning, assistant labels remain excluded from M8 acceptance, and final acceptance still requires a fresh locked holdout prepared before predictions.",
   "post_v13_calibration": {
     "case_id": "external-fps-openarena-01",
     "split": "calibration",
@@ -409,6 +414,33 @@
       "matches_manifest": true
     },
     "fresh_authorization_required": true,
+    "m8_acceptance": false
+  },
+  "hybrid_h5_stable_v1_hardening": {
+    "provider": "gemini",
+    "model": "gemini-3.7-flash",
+    "api_version": "v1",
+    "scope": "hybrid_judge_only",
+    "request_identity_includes_api_version": true,
+    "non_v1_transport_fails_before_provider_io": true,
+    "provider_free_preflight": {
+      "provider_calls": 0,
+      "remote_uploads": 0,
+      "ledger_reservations": 0,
+      "judge_cache_hits": 0,
+      "cal02_planned_calls": 6,
+      "cal02_max_reserved_thb": "2.376752"
+    },
+    "dedicated_live_ledger_exists": false,
+    "dedicated_live_summary_exists": false,
+    "verification": {
+      "targeted": "35/35 PASS",
+      "ruff": "PASS",
+      "mypy_source": "76 files PASS",
+      "full_pytest": "367/367 PASS in 111.27s",
+      "full_regression_task": "b91519c2-63bf-45b0-805b-677bc3c6a156"
+    },
+    "fresh_live_authorization_required": true,
     "m8_acceptance": false
   },
   "offline_readiness": {

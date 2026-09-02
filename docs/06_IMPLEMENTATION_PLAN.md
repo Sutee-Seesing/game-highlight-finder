@@ -274,6 +274,19 @@ was successfully adjudicated. The source was re-hashed after the stop and still 
 2,805,344,323-byte size. No retry or sixth call is permitted without a fresh explicit
 authorization boundary.
 
+Provider-free remediation after the 401 pins the Hybrid Judge only to the stable Gemini
+Interactions API `v1`; other Gemini subsystems keep their existing transport behavior.
+`api_version=v1` is part of the Hybrid Judge provider-request/cost identity and request
+metadata, and the execution path now fails closed before reservation/upload/generation if
+an injected transport does not explicitly declare stable `v1`. This prevents a request
+fingerprint from claiming `v1` while actually using the SDK default API version. Verification
+after this hardening is 35/35 targeted PASS, Ruff PASS, mypy PASS over 76 source files,
+and 367/367 full pytest PASS in 111.27 s. Fresh stable-v1 preflight remains provider-free
+(0 calls / 0 uploads / 0 reservations), has zero Hybrid Judge cache hits under the changed
+request identity, and still quotes cal-02 at 6 calls / THB 2.376752 maximum reservation.
+No stable-v1 live provider call has been made; continuation requires fresh explicit live
+authorization because the request identity and endpoint contract changed.
+
 ### M9 — Optional Reviewer
 
 - Batch only extracted candidates; enforce independent reservations and cache keys.
