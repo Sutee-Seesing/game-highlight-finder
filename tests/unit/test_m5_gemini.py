@@ -56,6 +56,7 @@ from game_highlight_finder.providers.gemini import (
     GeminiPrivacyError,
     GeminiProvider,
     GeminiProviderError,
+    GenAIGenerateContentTransport,
     GenAITransport,
     sanitize_interaction_response,
     usage_from_envelope,
@@ -215,6 +216,70 @@ def test_genai_transport_can_pin_stable_api_version(monkeypatch: pytest.MonkeyPa
         "api_key": "test-key",
         "http_options": {"api_version": "v1"},
     }
+
+
+def test_generate_content_transport_maps_video_and_authoritative_usage() -> None:
+    captured: dict[str, object] = {}
+
+    class FakeModels:
+        def generate_content(self, **kwargs: object) -> dict[str, object]:
+            captured.update(kwargs)
+            return {
+                "response_id": "response-1",
+                "text": "{}",
+                "usage_metadata": {
+                    "prompt_token_count": 2_000,
+                    "candidates_token_count": 40,
+                    "thoughts_token_count": 5,
+                    "cached_content_token_count": 0,
+                    "prompt_tokens_details": [
+                        {"modality": "VIDEO", "token_count": 1_400},
+                        {"modality": "AUDIO", "token_count": 320},
+                        {"modality": "TEXT", "token_count": 280},
+                    ],
+                },
+                "candidates": [{"finish_reason": "STOP"}],
+            }
+
+    transport = object.__new__(GenAIGenerateContentTransport)
+    transport.api_version = "v1"
+    transport.api_surface = "generate_content"
+    transport._client = types.SimpleNamespace(models=FakeModels())  # type: ignore[attr-defined]
+
+    raw = transport.create_interaction(
+        model="gemini-3.7-flash",
+        remote_uri="https://example.invalid/files/video",
+        prompt="Return JSON",
+        response_schema={"type": "object"},
+        media_resolution="low",
+        max_output_tokens=1_024,
+        thinking_level="low",
+        store=False,
+    )
+    envelope = sanitize_interaction_response(
+        raw,
+        model="gemini-3.7-flash",
+        remote_file_name="files/video",
+        max_bytes=4_096,
+    )
+    usage = usage_from_envelope(envelope)
+
+    assert usage.input_video_tokens == 1_400
+    assert usage.input_audio_tokens == 320
+    assert usage.input_text_tokens == 280
+    assert usage.output_tokens == 40
+    assert usage.thinking_tokens == 5
+    assert usage.provider_request_id == "response-1"
+    contents = captured["contents"]
+    assert isinstance(contents, list)
+    video_part = contents[0]
+    assert video_part.file_data.file_uri == "https://example.invalid/files/video"
+    assert video_part.file_data.mime_type == "video/mp4"
+    assert video_part.media_resolution.level.value == "MEDIA_RESOLUTION_LOW"
+    config = captured["config"]
+    assert config.response_mime_type == "application/json"  # type: ignore[attr-defined]
+    thinking_config = config.thinking_config  # type: ignore[attr-defined]
+    assert thinking_config.thinking_level.value == "LOW"
 
 
 def test_exact_gemini_pricing_is_versioned_and_freshness_is_fail_closed() -> None:

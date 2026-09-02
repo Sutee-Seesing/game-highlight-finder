@@ -274,29 +274,34 @@ was successfully adjudicated. The source was re-hashed after the stop and still 
 2,805,344,323-byte size. No retry or sixth call is permitted without a fresh explicit
 authorization boundary.
 
-Provider-free remediation after the 401 pins the Hybrid Judge only to the stable Gemini
-Interactions API `v1`; other Gemini subsystems keep their existing transport behavior.
-`api_version=v1` is part of the Hybrid Judge provider-request/cost identity and request
-metadata, and the execution path now fails closed before reservation/upload/generation if
-an injected transport does not explicitly declare stable `v1`. This prevents a request
-fingerprint from claiming `v1` while actually using the SDK default API version. Verification
-after this hardening is 35/35 targeted PASS, Ruff PASS, mypy PASS over 76 source files,
-and 367/367 full pytest PASS in 111.27 s. Fresh stable-v1 preflight remains provider-free
-(0 calls / 0 uploads / 0 reservations), has zero Hybrid Judge cache hits under the changed
-request identity, and still quotes cal-02 at 6 calls / THB 2.376752 maximum reservation.
-No stable-v1 live provider call has been made; continuation requires fresh explicit live
-authorization because the request identity and endpoint contract changed.
+Provider-free remediation after the 401 first pinned the Hybrid Judge to stable Gemini
+Interactions API `v1`, with `api_version=v1` included in provider-request/cost identity.
+That path passed 35/35 targeted tests, Ruff, mypy over 76 source files, and 367/367 full
+pytest before a separately authorized 2-call / THB 0.82 positive-subset run was attempted.
+The stable-v1 Interactions run stopped after its first proposal with HTTP 400
+`invalid_request`: the stable endpoint rejected `type=video` and listed document/image/
+audio/text as supported input content types. The ledger conservatively records 1 AMBIGUOUS
+call at THB 0.431596 reserved with THB 0 settled; remote cleanup is `deleted`, proposal 2
+was never sent, and cal-02 source hash/size remain unchanged. This is an endpoint-contract
+failure, not semantic evidence, and the consumed authorization must not be reused.
 
-A tighter provider-free continuation plan now targets only cal-02 proposals `386-421s`
-and `574-594s`, because those are the two unresolved proposal windows that overlap the two
-currently annotated positives. The four earlier settled REJECTs are outside both known
-positive intervals and do not need to be regenerated merely to answer the remaining H5
-semantic question. Stable-v1 subset preflight makes 0 calls / 0 uploads / 0 reservations,
-uses the two already-cached proposal clips, has 0 judge cache hits under the new identity,
-and quotes exactly 2 generation calls / THB 0.816844 maximum reservation. A dedicated
-subset live helper is syntax-valid, enforces attempt cap 2 / exposure cap THB 0.82 /
-no automatic retry / stable `v1`, and its dedicated ledger and summary are still absent.
-This is the preferred next live experiment if separately authorized.
+The next provider-free remediation keeps stable API `v1` but moves only Hybrid Judge
+generation to `models.generate_content`, which supports Files/video input. Request identity
+now includes both `api_version=v1` and `api_surface=generate_content`; non-matching transports
+fail closed before reservation/upload/generation. The adapter preserves the existing Files
+upload/cleanup lifecycle and maps authoritative generateContent usage metadata, including
+VIDEO/AUDIO/TEXT prompt-token breakdown, back into the existing cost ledger contract.
+Verification is 37/37 targeted PASS, Ruff PASS, mypy PASS over 76 source files, and
+369/369 full pytest PASS in 147.38 s under durable task
+`9ec4d11a-c5cb-45b5-900a-fbe3f53047f7`.
+
+The narrowed cal-02 plan remains proposals `386-421s` and `574-594s`, the two unresolved
+windows overlapping the annotated positives. Fresh generateContent request identity has 0
+judge cache hits and provider-free preflight remains exactly 2 planned calls / THB 0.816844
+maximum reservation with 0 calls / 0 uploads / 0 ledger reservations. The generateContent
+live helper is syntax-valid, still hard-guards attempt cap 2 / THB 0.82 / no automatic retry,
+and its dedicated ledger and summary do not exist. Any generateContent live execution needs
+a new explicit authorization after full regression closes.
 
 ### M9 — Optional Reviewer
 

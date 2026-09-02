@@ -1,7 +1,7 @@
 {
   "task_id": "m8-v13-live-validation-2026-08-21",
-  "current_phase": "hybrid_h5_stable_v1_positive_subset_ready_live_authorization_required",
-  "last_checkpoint": "Stable-v1 Hybrid Judge hardening is complete and verified at 35/35 targeted PASS, Ruff PASS, mypy PASS over 76 source files, and 367/367 full pytest PASS in 111.27s. To avoid rerunning four cal-02 proposals that already settled REJECT outside both known positives, a provider-free continuation preflight now selects only proposal 386-421s (overlaps hl-0001 at 401-417s) and proposal 574-594s (overlaps MUST_CATCH hl-0002 at 574-590s). This subset uses two cached proposal clips, has 0 judge cache hits under stable-v1 request identity, and requires exactly 2 planned Gemini 3.7 Flash calls / THB 0.816844 maximum reservation. Preflight made 0 provider calls, 0 uploads, and 0 ledger reservations. The dedicated continuation helper is syntax-valid and hard-guards attempt cap 2, exposure cap THB 0.82, no automatic retry, and API v1; its dedicated ledger and summary do not exist. No stable-v1 live call has occurred. M8 remains not accepted and the subset requires fresh explicit authorization before execution.",
+  "current_phase": "hybrid_h5_stable_v1_generate_content_ready_live_authorization_required",
+  "last_checkpoint": "The authorized stable-v1 Interactions positive-subset run stopped safely after 1/2 calls on HTTP 400 invalid_request because the stable Interactions v1 input surface rejects type=video. The one call is conservatively AMBIGUOUS at THB 0.431596 reserved / THB 0 settled, remote cleanup is deleted, proposal 2 was never sent, and source SHA-256/size remain unchanged. This is an endpoint-contract failure, not semantic evidence, and that authorization is consumed. Provider-free remediation now keeps stable API v1 but moves only Hybrid Judge generation to models.generate_content, with api_surface=generate_content added to request/cost identity and a fail-closed endpoint guard. The adapter maps authoritative VIDEO/AUDIO/TEXT generateContent usage back into the existing ledger contract. Verification is 37/37 targeted PASS, Ruff PASS, mypy over 76 source files PASS, and 369/369 full pytest PASS in 147.38s under task 9ec4d11a-c5cb-45b5-900a-fbe3f53047f7. Fresh generateContent subset preflight remains 2 calls / THB 0.816844 with 0 calls, 0 uploads, 0 reservations, 0 judge cache hits, and the dedicated generateContent live ledger/summary are absent. M8 remains not accepted; a fresh explicit authorization is required before any generateContent live call.",
   "tests": {
     "full_pytest": "334 passed in 580.48s after cross-case scope binding",
     "ruff": "passed over src + tests after cross-case scope binding",
@@ -38,11 +38,16 @@
     "hybrid_h5_stable_v1_ruff": "passed over src + tests",
     "hybrid_h5_stable_v1_mypy": "passed, 76 source files",
     "hybrid_h5_stable_v1_full_pytest": "367 passed in 111.27s",
-    "hybrid_h5_stable_v1_full_regression_task": "b91519c2-63bf-45b0-805b-677bc3c6a156"
+    "hybrid_h5_stable_v1_full_regression_task": "b91519c2-63bf-45b0-805b-677bc3c6a156",
+    "hybrid_h5_generate_content_targeted": "37 passed in 17.61s",
+    "hybrid_h5_generate_content_ruff": "passed over src + tests",
+    "hybrid_h5_generate_content_mypy": "passed, 76 source files",
+    "hybrid_h5_generate_content_full_pytest": "369 passed in 147.38s",
+    "hybrid_h5_generate_content_full_regression_task": "9ec4d11a-c5cb-45b5-900a-fbe3f53047f7"
   },
   "provider_attempts": {
-    "cumulative_used": 24,
-    "authorized_cap": 30,
+    "cumulative_used": 25,
+    "authorized_cap": 32,
     "v11_used": 6,
     "v12_cal02_settled": 1,
     "v12_val01_ambiguous": 1,
@@ -63,14 +68,18 @@
     "h5_hardened_cal02_settled": 4,
     "h5_hardened_cal02_ambiguous": 1,
     "h5_hardened_cal02_remaining_not_called": 1,
+    "h5_stable_v1_interactions_subset_authorized_cap": 2,
+    "h5_stable_v1_interactions_subset_used": 1,
+    "h5_stable_v1_interactions_subset_ambiguous": 1,
+    "h5_stable_v1_interactions_subset_remaining_not_called": 1,
     "automatic_retries": 0,
     "cal02_new_authorization_required": true
   },
   "exposure": {
     "known_settled_thb": "15.858287",
-    "ambiguous_reserved_thb": "6.003885",
-    "cumulative_worst_case_thb": "21.862172",
-    "authorized_cumulative_cap_thb": "30.920000",
+    "ambiguous_reserved_thb": "6.435481",
+    "cumulative_worst_case_thb": "22.293768",
+    "authorized_cumulative_cap_thb": "31.740000",
     "v13_settled_thb": "3.757246",
     "h5_cal01_settled_thb": "0.056155",
     "h5_cal01_ambiguous_reserved_thb": "0.384830",
@@ -81,7 +90,10 @@
     "h5_hardened_cal02_settled_thb": "0.242824",
     "h5_hardened_cal02_ambiguous_reserved_thb": "0.431596",
     "h5_hardened_cal02_preflight_max_reserved_thb": "2.376752",
-    "h5_hardened_cal02_authorized_exposure_cap_thb": "2.390000"
+    "h5_hardened_cal02_authorized_exposure_cap_thb": "2.390000",
+    "h5_stable_v1_interactions_subset_ambiguous_reserved_thb": "0.431596",
+    "h5_stable_v1_interactions_subset_settled_thb": "0.000000",
+    "h5_stable_v1_interactions_subset_authorized_exposure_cap_thb": "0.820000"
   },
   "validation": {
     "m8-real-val-01": {
@@ -120,7 +132,7 @@
     "default_branch_untouched": true,
     "pr_created": false
   },
-  "blocker": "M8 remains not accepted. Hardened H5 cal-01 is strongly positive, while the first cal-02 attempt remains semantic-inconclusive because both known positives were in the unresolved fifth and unsent sixth proposal windows. Stable-v1 Hybrid Judge remediation is complete and verified. The preferred continuation now targets only those two positive-covering proposals, requiring 2 Gemini 3.7 Flash calls with THB 0.816844 maximum reservation instead of rerunning all 6 proposals. Provider-free subset preflight made 0 calls/uploads/reservations, and the dedicated helper enforces attempt cap 2 / exposure cap THB 0.82 / no automatic retry / API v1 with no live ledger or summary present. Fresh explicit authorization is required before this two-call continuation. Revealed v13 validation remains forbidden for tuning, assistant labels remain excluded from M8 acceptance, and final acceptance still requires a fresh locked holdout prepared before predictions.",
+  "blocker": "M8 remains not accepted. Hardened H5 cal-01 is strongly positive, while cal-02 remains semantic-inconclusive because neither annotated positive has yet been successfully adjudicated. The authorized stable-v1 Interactions subset attempt stopped after 1/2 calls on HTTP 400 invalid_request because that stable Interactions surface rejects video input; the call is AMBIGUOUS at THB 0.431596 reserved / THB 0 settled, cleanup is deleted, proposal 2 was never sent, and source immutability is intact. Provider-free remediation to stable-v1 models.generate_content is now complete and verified at 37/37 targeted PASS, Ruff PASS, mypy over 76 source files PASS, and 369/369 full pytest PASS. Fresh generateContent subset preflight requires 2 Gemini 3.7 Flash calls / THB 0.816844 maximum reservation with 0 calls/uploads/reservations and a fresh request identity. The prior THB 0.82 authorization is consumed; fresh explicit authorization is required before any generateContent live call. Revealed v13 validation remains forbidden for tuning, assistant labels remain excluded from M8 acceptance, and final acceptance still requires a fresh locked holdout prepared before predictions.",
   "post_v13_calibration": {
     "case_id": "external-fps-openarena-01",
     "split": "calibration",
@@ -431,7 +443,7 @@
       "cal02_planned_calls": 6,
       "cal02_max_reserved_thb": "2.376752"
     },
-    "positive_subset_continuation": {
+    "positive_subset_interactions_attempt": {
       "proposal_ids": [
         "proposal_ede0b3c7692c8572",
         "proposal_cebe7e1d9383a872"
@@ -440,27 +452,68 @@
         [386000, 421000],
         [574000, 594000]
       ],
-      "provider_calls": 0,
-      "remote_uploads": 0,
-      "ledger_reservations": 0,
-      "judge_cache_hits": 0,
-      "planned_generation_calls": 2,
-      "maximum_reserved_thb": "0.816844",
-      "recommended_authorized_exposure_cap_thb": "0.820000",
-      "live_attempt_cap": 2,
+      "authorized_attempt_cap": 2,
+      "attempts_used": 1,
+      "remaining_not_called": 1,
+      "authorized_exposure_cap_thb": "0.820000",
       "automatic_retries": 0,
-      "helper_syntax_valid": true,
-      "dedicated_live_ledger_exists": false,
-      "dedicated_live_summary_exists": false
+      "api_surface": "interactions",
+      "ledger_states": ["AMBIGUOUS"],
+      "ambiguous_reserved_thb": "0.431596",
+      "settled_thb": "0.000000",
+      "http_status": 400,
+      "failure_code": "invalid_request",
+      "failure_reason": "stable v1 Interactions rejects video input content type",
+      "remote_cleanup": "deleted",
+      "second_proposal_sent": false,
+      "semantic_quality": "INCONCLUSIVE",
+      "source_matches_manifest": true,
+      "authorization_consumed": true
     },
-    "dedicated_live_ledger_exists": false,
-    "dedicated_live_summary_exists": false,
+    "historical_interactions_live_ledger_exists": true,
+    "historical_interactions_live_summary_exists": true,
     "verification": {
       "targeted": "35/35 PASS",
       "ruff": "PASS",
       "mypy_source": "76 files PASS",
       "full_pytest": "367/367 PASS in 111.27s",
       "full_regression_task": "b91519c2-63bf-45b0-805b-677bc3c6a156"
+    },
+    "fresh_live_authorization_required": true,
+    "m8_acceptance": false
+  },
+  "hybrid_h5_generate_content_hardening": {
+    "provider": "gemini",
+    "model": "gemini-3.7-flash",
+    "api_version": "v1",
+    "api_surface": "generate_content",
+    "scope": "hybrid_judge_only",
+    "request_identity_includes_api_version": true,
+    "request_identity_includes_api_surface": true,
+    "nonmatching_transport_fails_before_provider_io": true,
+    "authoritative_usage_modality_mapping": true,
+    "provider_free_preflight": {
+      "proposal_ids": [
+        "proposal_ede0b3c7692c8572",
+        "proposal_cebe7e1d9383a872"
+      ],
+      "provider_calls": 0,
+      "remote_uploads": 0,
+      "ledger_reservations": 0,
+      "judge_cache_hits": 0,
+      "planned_generation_calls": 2,
+      "maximum_reserved_thb": "0.816844",
+      "recommended_authorized_exposure_cap_thb": "0.820000"
+    },
+    "helper_syntax_valid": true,
+    "dedicated_live_ledger_exists": false,
+    "dedicated_live_summary_exists": false,
+    "verification": {
+      "targeted": "37/37 PASS",
+      "ruff": "PASS",
+      "mypy_source": "76 files PASS",
+      "full_pytest": "369/369 PASS in 147.38s",
+      "full_regression_task": "9ec4d11a-c5cb-45b5-900a-fbe3f53047f7"
     },
     "fresh_live_authorization_required": true,
     "m8_acceptance": false

@@ -278,6 +278,7 @@ def test_injected_fake_transport_settles_maps_event_and_cache_reuses(tmp_path: P
     request_meta = read_json(first.request_meta_path)
     assert request_meta["execution_mode"] == "injected_transport"
     assert request_meta["api_version"] == "v1"
+    assert request_meta["api_surface"] == "generate_content"
     assert read_json(first.cost_path)["state"] == "SETTLED"
     assert read_json(first.remote_metadata_path)["deletion_status"] == "deleted"
 
@@ -335,6 +336,32 @@ def test_hybrid_judge_rejects_unpinned_v1beta_transport_before_reservation(tmp_p
     transport = FakeGeminiTransport(response=_provider_response(), api_version="v1beta")
 
     with pytest.raises(ValidationError, match="stable v1 transport"):
+        run_gemini_hybrid_judge_with_transport(
+            preparation,
+            preparation.prepared[0],
+            config,
+            transport=transport,
+            cost_service=service,
+        )
+    assert service.calls() == ()
+    assert transport.upload_count == 0
+    assert transport.generation_count == 0
+
+
+def test_hybrid_judge_rejects_interactions_surface_before_reservation(tmp_path: Path) -> None:
+    preparation = _preparation(
+        tmp_path,
+        [_proposal("proposal_bbbbbbbbbbbbbbbb", 0, 20_000)],
+    )
+    config = _config(tmp_path)
+    service = _service(config)
+    transport = FakeGeminiTransport(
+        response=_provider_response(),
+        api_version="v1",
+        api_surface="interactions",
+    )
+
+    with pytest.raises(ValidationError, match="generateContent transport"):
         run_gemini_hybrid_judge_with_transport(
             preparation,
             preparation.prepared[0],

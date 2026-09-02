@@ -256,6 +256,7 @@ class GenAITransport:
     ) -> None:
         key = _resolve_gemini_api_key(api_key_env, os.environ)
         self.api_version = api_version
+        self.api_surface = "interactions"
         if api_version is not None and api_version not in {"v1", "v1beta"}:
             raise GeminiConfigurationError(
                 f"Unsupported Gemini API version {api_version!r}.",
@@ -364,6 +365,164 @@ class GenAITransport:
             if _is_not_found_error(exc):
                 return
             raise GeminiCleanupError("Gemini remote file deletion failed.") from exc
+
+
+class GenAIGenerateContentTransport(GenAITransport):
+    """Stable-v1 video transport using the legacy generateContent surface."""
+
+    def __init__(
+        self,
+        *,
+        api_key_env: str = "GEMINI_API_KEY",
+        api_version: str = "v1",
+    ) -> None:
+        super().__init__(api_key_env=api_key_env, api_version=api_version)
+        self.api_surface = "generate_content"
+
+    def create_interaction(
+        self,
+        *,
+        model: str,
+        remote_uri: str,
+        prompt: str,
+        response_schema: Mapping[str, Any],
+        media_resolution: str,
+        max_output_tokens: int,
+        thinking_level: str | None,
+        store: bool,
+    ) -> Any:
+        del store  # generateContent has no server-side interaction storage flag.
+        try:
+            validate_wire_thinking_level(model, thinking_level)
+        except ValueError as exc:
+            raise GeminiConfigurationError(str(exc), may_have_dispatched=False) from exc
+        try:
+            media = resolve_gemini_media_resolution(model, media_resolution)
+        except ValueError as exc:
+            raise GeminiConfigurationError(str(exc), may_have_dispatched=False) from exc
+        try:
+            from google.genai import types  # type: ignore[import-not-found, unused-ignore]
+        except ImportError as exc:  # pragma: no cover - optional dependency boundary
+            raise GeminiConfigurationError(
+                "The optional google-genai dependency is not installed.",
+                may_have_dispatched=False,
+            ) from exc
+
+        part_resolution = (
+            f"MEDIA_RESOLUTION_{media.wire_level.upper()}" if media.wire_level is not None else None
+        )
+        video_part = types.Part.from_uri(
+            file_uri=remote_uri,
+            mime_type="video/mp4",
+            media_resolution=part_resolution,
+        )
+        generation_config = types.GenerateContentConfig(
+            max_output_tokens=max_output_tokens,
+            response_mime_type="application/json",
+            response_json_schema=dict(response_schema),
+            thinking_config=(
+                types.ThinkingConfig(thinking_level=types.ThinkingLevel(thinking_level.upper()))
+                if thinking_level is not None
+                else None
+            ),
+        )
+        try:
+            response = self._client.models.generate_content(
+                model=model,
+                contents=[video_part, prompt],
+                config=generation_config,
+            )
+        except Exception as exc:  # pragma: no cover - requires SDK/network
+            diagnostic = diagnose_gemini_exception(exc)
+            raise GeminiDispatchError(
+                _diagnostic_message(diagnostic),
+                may_have_dispatched=diagnostic.dispatch != "NO",
+                provider_request_id=diagnostic.provider_request_id,
+                diagnostic=diagnostic,
+            ) from exc
+
+        usage = _generate_content_usage(response)
+        candidates = _field(response, "candidates", None)
+        finish_reason: str | None = None
+        if isinstance(candidates, Sequence) and candidates:
+            finish_reason = (
+                _enum_name(_field(candidates[0], "finish_reason", None), default="") or None
+            )
+        prompt_feedback = _field(response, "prompt_feedback", None)
+        block_reason = (
+            _field(prompt_feedback, "block_reason", None)
+            if prompt_feedback is not None
+            else None
+        )
+        return {
+            "status": "completed",
+            "id": _field(response, "response_id", None),
+            "output_text": _field(response, "text", ""),
+            "usage": usage,
+            "finish_reason": finish_reason,
+            "safety_block_reason": (
+                _enum_name(block_reason, default="") if block_reason is not None else None
+            ),
+        }
+
+
+def _generate_content_usage(response: Any) -> dict[str, Any]:
+    raw = _jsonable(_field(response, "usage_metadata", None))
+    if not isinstance(raw, Mapping):
+        raise GeminiMissingUsageError(
+            "Gemini generateContent returned no authoritative usage metadata.",
+            may_have_dispatched=True,
+            provider_request_id=_safe_request_id(_field(response, "response_id", None)),
+        )
+
+    prompt_count = raw.get("prompt_token_count")
+    output_count = raw.get("candidates_token_count")
+    if isinstance(prompt_count, bool) or not isinstance(prompt_count, int):
+        raise GeminiMissingUsageError(
+            "Gemini generateContent returned no authoritative prompt token count.",
+            may_have_dispatched=True,
+            provider_request_id=_safe_request_id(_field(response, "response_id", None)),
+        )
+    if isinstance(output_count, bool) or not isinstance(output_count, int):
+        raise GeminiMissingUsageError(
+            "Gemini generateContent returned no authoritative output token count.",
+            may_have_dispatched=True,
+            provider_request_id=_safe_request_id(_field(response, "response_id", None)),
+        )
+
+    details = raw.get("prompt_tokens_details")
+    if not isinstance(details, Sequence) or isinstance(details, (str, bytes, bytearray)):
+        raise GeminiMissingUsageError(
+            "Gemini generateContent returned no prompt modality breakdown.",
+            may_have_dispatched=True,
+            provider_request_id=_safe_request_id(_field(response, "response_id", None)),
+        )
+    breakdown: list[dict[str, Any]] = []
+    for item in details:
+        if not isinstance(item, Mapping):
+            continue
+        modality = str(item.get("modality", "")).upper().removeprefix("MODALITY_").lower()
+        tokens = item.get("token_count")
+        if (
+            modality in _USAGE_MODALITIES
+            and isinstance(tokens, int)
+            and not isinstance(tokens, bool)
+        ):
+            breakdown.append({"modality": modality, "tokens": tokens})
+    if not breakdown or sum(int(item["tokens"]) for item in breakdown) > prompt_count:
+        raise GeminiMissingUsageError(
+            "Gemini generateContent returned an unsafe prompt modality breakdown.",
+            may_have_dispatched=True,
+            provider_request_id=_safe_request_id(_field(response, "response_id", None)),
+        )
+
+    return {
+        "total_input_tokens": prompt_count,
+        "total_output_tokens": output_count,
+        "total_thought_tokens": int(raw.get("thoughts_token_count") or 0),
+        "total_cached_tokens": int(raw.get("cached_content_token_count") or 0),
+        "input_tokens_by_modality": breakdown,
+    }
 
 
 _SECRET_PATTERNS = (
@@ -851,8 +1010,10 @@ class FakeGeminiTransport:
         generation_error: Exception | None = None,
         delete_error: Exception | None = None,
         api_version: str = "v1",
+        api_surface: str = "generate_content",
     ) -> None:
         self.api_version = api_version
+        self.api_surface = api_surface
         self.response = response or {
             "status": "completed",
             "id": "fake-interaction-1",

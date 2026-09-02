@@ -57,6 +57,7 @@ from game_highlight_finder.storage.hashing import hash_file
 
 HYBRID_JUDGE_GEMINI_VERSION = "hybrid-judge-gemini-v1"
 HYBRID_JUDGE_GEMINI_API_VERSION = "v1"
+HYBRID_JUDGE_GEMINI_API_SURFACE = "generate_content"
 HYBRID_JUDGE_MAX_OUTPUT_TOKENS = 1_024
 
 
@@ -210,6 +211,10 @@ def run_gemini_hybrid_judge_with_transport(
         raise ValidationError(
             "Gemini hybrid judge requires an explicitly pinned stable v1 transport."
         )
+    if getattr(transport, "api_surface", None) != HYBRID_JUDGE_GEMINI_API_SURFACE:
+        raise ValidationError(
+            "Gemini hybrid judge requires the stable-v1 generateContent transport."
+        )
     request, cost_request = _request_parts(preparation, prepared, config)
     service = cost_service or build_gemini_hybrid_judge_cost_service(config)
     call_id = cost_request.call_id
@@ -265,6 +270,7 @@ def run_gemini_hybrid_judge_with_transport(
             "provider": "gemini",
             "model": config.scout.model,
             "api_version": HYBRID_JUDGE_GEMINI_API_VERSION,
+            "api_surface": HYBRID_JUDGE_GEMINI_API_SURFACE,
             "billing_mode": config.scout.billing_mode,
             "session_id": preparation.plan.session_id,
             "proposal_id": request.proposal_id,
@@ -481,6 +487,7 @@ def _request_parts(
         "response_schema_sha256": canonical_payload_sha256(request.response_schema),
         "prompt_sha256": canonical_payload_sha256(request.prompt),
         "api_version": HYBRID_JUDGE_GEMINI_API_VERSION,
+        "api_surface": HYBRID_JUDGE_GEMINI_API_SURFACE,
         "media_resolution": config.scout.media_resolution,
         "wire_media_resolution": media_config.wire_level,
         "thinking_level": thinking.wire_level,
@@ -605,6 +612,7 @@ def build_gemini_hybrid_judge_cost_service(config: AppConfig) -> CostService:
 
 
 __all__ = [
+    "HYBRID_JUDGE_GEMINI_API_SURFACE",
     "HYBRID_JUDGE_GEMINI_API_VERSION",
     "HYBRID_JUDGE_GEMINI_VERSION",
     "HYBRID_JUDGE_MAX_OUTPUT_TOKENS",
