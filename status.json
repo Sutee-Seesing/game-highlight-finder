@@ -1,7 +1,7 @@
 {
   "task_id": "m8-v13-live-validation-2026-08-21",
-  "current_phase": "hybrid_h5_hardened_cal01_complete_cal02_authorization_required",
-  "last_checkpoint": "Newly authorized H5 hardened cal-01 rerun completed 7/7 Gemini 3.7 Flash proposal calls with no automatic retry. All seven ledger rows are SETTLED, actual settled usage is THB 0.517870 against THB 2.761373 maximum reservation, and all seven remote media objects were deleted. Against the three currently annotated cal-01 highlights, the hybrid output is 4 candidates with 3 TP / 1 FP / 0 FN: precision 0.75, recall 1.00, MUST_CATCH recall 1.00, WORTH_REVIEW recall 1.00. The four kept event intervals total 55 s / 600.886 s = 9.1532% of source duration after the proposer forwarded 26.7938%. Source SHA-256 and size still match the persisted source manifest. This is strong positive cal-01 evidence, but M8 remains not accepted; hardened cal-02 requires separate fresh authorization and final acceptance still requires a fresh locked holdout.",
+  "current_phase": "hybrid_h5_hardened_cal02_partial_auth_failure_authorization_required",
+  "last_checkpoint": "H5 hardened cal-02 was explicitly authorized for Gemini 3.7 Flash with attempt cap 6, exposure cap THB 2.39, and no automatic retry. The run stopped safely after 5/6 distinct proposal calls when the fifth request (386-421s) returned HTTP 401 authentication after dispatch. Ledger state is 4 SETTLED + 1 AMBIGUOUS, with THB 0.242824 actually settled and THB 0.431596 reserved on the ambiguous request; the sixth proposal was never sent. Remote cleanup is deleted 5/5. The four settled calls all returned REJECT but do not overlap the two known positives. The ambiguous fifth proposal overlaps hl-0001 at 401-417s and the unsent sixth proposal overlaps MUST_CATCH hl-0002 at 574-590s, so semantic quality is inconclusive rather than failed. Source SHA-256 and size still match the persisted cal-02 manifest. No retry or sixth call is permitted without fresh explicit authorization; M8 remains not accepted and final acceptance still requires a fresh locked holdout.",
   "tests": {
     "full_pytest": "334 passed in 580.48s after cross-case scope binding",
     "ruff": "passed over src + tests after cross-case scope binding",
@@ -36,8 +36,8 @@
     "hybrid_h5_contract_full_regression_task": "86781030-2ecd-418d-bfd4-ab81097d7feb"
   },
   "provider_attempts": {
-    "cumulative_used": 19,
-    "authorized_cap": 24,
+    "cumulative_used": 24,
+    "authorized_cap": 30,
     "v11_used": 6,
     "v12_cal02_settled": 1,
     "v12_val01_ambiguous": 1,
@@ -53,21 +53,30 @@
     "h5_hardened_cal01_used": 7,
     "h5_hardened_cal01_settled": 7,
     "h5_hardened_cal01_remaining_not_called": 0,
+    "h5_hardened_cal02_authorized_cap": 6,
+    "h5_hardened_cal02_used": 5,
+    "h5_hardened_cal02_settled": 4,
+    "h5_hardened_cal02_ambiguous": 1,
+    "h5_hardened_cal02_remaining_not_called": 1,
     "automatic_retries": 0,
     "cal02_new_authorization_required": true
   },
   "exposure": {
-    "known_settled_thb": "15.615463",
-    "ambiguous_reserved_thb": "5.572289",
-    "cumulative_worst_case_thb": "21.187752",
-    "authorized_cumulative_cap_thb": "28.530000",
+    "known_settled_thb": "15.858287",
+    "ambiguous_reserved_thb": "6.003885",
+    "cumulative_worst_case_thb": "21.862172",
+    "authorized_cumulative_cap_thb": "30.920000",
     "v13_settled_thb": "3.757246",
     "h5_cal01_settled_thb": "0.056155",
     "h5_cal01_ambiguous_reserved_thb": "0.384830",
     "h5_cal01_authorized_exposure_cap_thb": "2.760000",
     "h5_hardened_cal01_settled_thb": "0.517870",
     "h5_hardened_cal01_max_reserved_thb": "2.761373",
-    "h5_hardened_cal01_authorized_exposure_cap_thb": "2.770000"
+    "h5_hardened_cal01_authorized_exposure_cap_thb": "2.770000",
+    "h5_hardened_cal02_settled_thb": "0.242824",
+    "h5_hardened_cal02_ambiguous_reserved_thb": "0.431596",
+    "h5_hardened_cal02_preflight_max_reserved_thb": "2.376752",
+    "h5_hardened_cal02_authorized_exposure_cap_thb": "2.390000"
   },
   "validation": {
     "m8-real-val-01": {
@@ -106,7 +115,7 @@
     "default_branch_untouched": true,
     "pr_created": false
   },
-  "blocker": "M8 remains not accepted. Hardened H5 cal-01 is now complete and strongly positive on the currently annotated calibration case: 7/7 calls SETTLED, 3 TP / 1 FP / 0 FN, precision 0.75, recall 1.00, 55 s kept review duration, THB 0.517870 actual cost, all remote media deleted, and source immutability verified by SHA-256. Hardened cal-02 has not been called and requires fresh explicit attempt/exposure authorization. The revealed v13 validation remains forbidden for tuning, assistant labels remain excluded from M8 acceptance, and final acceptance still requires a fresh locked holdout prepared before predictions.",
+  "blocker": "M8 remains not accepted. Hardened H5 cal-01 is complete and strongly positive, but hardened cal-02 stopped after 5/6 calls on an HTTP 401 authentication failure after dispatch. The partial cal-02 ledger is 4 SETTLED + 1 AMBIGUOUS with one proposal never sent; all five uploaded media objects were deleted and source immutability is intact. Both currently annotated cal-02 positives lie in the unresolved fifth and unsent sixth proposals, so cal-02 semantic quality is inconclusive rather than failed. No retry or sixth call may be made without fresh explicit authorization. The revealed v13 validation remains forbidden for tuning, assistant labels remain excluded from M8 acceptance, and final acceptance still requires a fresh locked holdout prepared before predictions.",
   "post_v13_calibration": {
     "case_id": "external-fps-openarena-01",
     "split": "calibration",
@@ -359,6 +368,47 @@
       "matches_manifest": true
     },
     "cal02_fresh_authorization_required": true,
+    "m8_acceptance": false
+  },
+  "hybrid_h5_hardened_cal02_partial": {
+    "model": "gemini-3.7-flash",
+    "authorized_attempt_cap": 6,
+    "attempts_used": 5,
+    "remaining_not_called": 1,
+    "authorized_exposure_cap_thb": "2.390000",
+    "preflight_max_reserved_thb": "2.376752",
+    "automatic_generation_retries": 0,
+    "ledger_records": 5,
+    "ledger_states": ["SETTLED", "SETTLED", "SETTLED", "SETTLED", "AMBIGUOUS"],
+    "settled_thb": "0.242824",
+    "ambiguous_reserved_thb": "0.431596",
+    "remote_cleanup_deleted": "5/5",
+    "settled_decisions": ["REJECT", "REJECT", "REJECT", "REJECT"],
+    "failure": {
+      "proposal_id": "proposal_ede0b3c7692c8572",
+      "proposal_interval_ms": [386000, 421000],
+      "http_status": 401,
+      "phase": "HTTP_OR_PROVIDER",
+      "dispatch": "YES",
+      "provider_request_id": null,
+      "ledger_status": "AMBIGUOUS",
+      "overlaps_annotation": "hl-0001:401000-417000"
+    },
+    "unsent_proposal": {
+      "proposal_id": "proposal_cebe7e1d9383a872",
+      "proposal_interval_ms": [574000, 594000],
+      "remote_artifact_exists": false,
+      "response_artifact_exists": false,
+      "overlaps_annotation": "hl-0002:574000-590000",
+      "importance": "MUST_CATCH"
+    },
+    "semantic_quality": "INCONCLUSIVE",
+    "source_immutability": {
+      "size_bytes": 2805344323,
+      "sha256": "8d973547b93d432a4deb5f4880ea08fe6cbb7466a6c08a5de0d2e94f0ace2126",
+      "matches_manifest": true
+    },
+    "fresh_authorization_required": true,
     "m8_acceptance": false
   },
   "offline_readiness": {

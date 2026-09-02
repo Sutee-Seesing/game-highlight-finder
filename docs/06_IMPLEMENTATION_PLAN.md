@@ -255,8 +255,24 @@ event intervals total 55 s / 600.886 s = 9.1532%, at approximately THB 3.1026 pe
 source-hour of actual judge cost. The original source was re-hashed after the run and
 still matches `7db9940058f764d1725f89340e8c1226d80b31671953739b7be9aeb06d2ac726`
 with its original 6,282,414,778-byte size. This materially positive cal-01 evidence does
-not accept M8 by itself: hardened cal-02 remains unrun, revealed v13 validation remains
-forbidden for tuning, and final acceptance still requires a fresh locked holdout.
+not accept M8 by itself: hardened cal-02 and a fresh locked holdout are still required,
+and revealed v13 validation remains forbidden for tuning.
+
+The separately authorized hardened cal-02 run used Gemini 3.7 Flash with a 6-attempt /
+THB 2.39 cap and zero automatic retries. It stopped safely after 5/6 distinct proposal
+calls when the fifth request returned HTTP 401 authentication after HTTP dispatch. The
+ledger therefore contains four SETTLED rows plus one conservatively AMBIGUOUS row; actual
+settled usage is THB 0.242824, the fifth-call reservation is THB 0.431596, and the sixth
+proposal was never sent. All five uploaded remote media objects, including the failed
+request's object, report cleanup `deleted`. The four completed proposals all returned
+REJECT and are outside both currently annotated cal-02 highlight intervals. The fifth
+proposal spans 386-421 s and overlaps `hl-0001` at 401-417 s, while the unsent sixth
+proposal spans 574-594 s and overlaps MUST_CATCH `hl-0002` at 574-590 s. Therefore this
+partial run is **semantic-inconclusive**, not a cal-02 quality failure: neither positive
+was successfully adjudicated. The source was re-hashed after the stop and still matches
+`8d973547b93d432a4deb5f4880ea08fe6cbb7466a6c08a5de0d2e94f0ace2126` with its original
+2,805,344,323-byte size. No retry or sixth call is permitted without a fresh explicit
+authorization boundary.
 
 ### M9 — Optional Reviewer
 
