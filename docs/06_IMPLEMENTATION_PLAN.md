@@ -236,9 +236,13 @@ Provider-free hardening now states score/confidence scales explicitly, settles k
 completed provider usage before semantic parsing, persists the sanitized raw envelope
 before parsing, and prevents a later local contract failure from being mislabeled as
 provider ambiguity. Post-hardening verification is 14/14 targeted PASS, Ruff PASS,
-mypy PASS over 76 source files, and 365/365 full pytest PASS in 99.85 s. Because the
-request identity changed and the prior authorization explicitly prohibited automatic
-retry, live continuation now stops at a fresh-authorization boundary.
+mypy PASS over 76 source files, and 365/365 full pytest PASS in 99.85 s. A fresh
+provider-free preflight of the hardened request identity makes zero calls/uploads/
+reservations and quotes `gemini-3.7-flash` cal-01 at 7 calls / THB 2.761373 maximum
+reservation, cal-02 at 6 / THB 2.376752, THB 5.138125 combined. Because the request
+identity changed and the prior authorization explicitly prohibited automatic retry,
+live continuation now stops at a fresh-authorization boundary; the old THB 2.76 cap
+is also THB 0.001373 below the complete hardened cal-01 quote.
 
 ### M9 — Optional Reviewer
 

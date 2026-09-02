@@ -268,10 +268,10 @@
     "preferred_live_experiment_case": "m8-real-cal-01",
     "gemini_3_7_flash": {
       "cal01_planned_calls": 7,
-      "cal01_max_reserved_thb": "2.758416",
+      "cal01_max_reserved_thb": "2.761373",
       "cal02_planned_calls": 6,
-      "cal02_max_reserved_thb": "2.374214",
-      "combined_max_reserved_thb": "5.132630"
+      "cal02_max_reserved_thb": "2.376752",
+      "combined_max_reserved_thb": "5.138125"
     },
     "gemini_3_5_flash_lite": {
       "cal01_planned_calls": 7,
@@ -313,6 +313,8 @@
       "local post-settlement semantic parse failure does not become AMBIGUOUS",
       "settled invalid-response request remains non-retriable without changed identity"
     ],
+    "post_hardening_cal01_max_reserved_thb": "2.761373",
+    "recommended_next_exposure_cap_thb": "2.770000",
     "fresh_authorization_required": true,
     "m8_acceptance": false
   },
