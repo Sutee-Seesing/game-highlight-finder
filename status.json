@@ -1,7 +1,7 @@
 {
   "task_id": "m8-v13-live-validation-2026-08-21",
-  "current_phase": "hybrid_h5_stable_v1_hardening_complete_live_authorization_required",
-  "last_checkpoint": "After the partial hardened cal-02 run stopped safely at 5/6 calls on a dispatched HTTP 401, provider-free remediation pinned only the Hybrid Judge to stable Gemini Interactions API v1. api_version=v1 is now part of the provider-request/cost identity and persisted request metadata, and the Hybrid Judge fails closed before reservation/upload/generation unless the injected transport explicitly declares stable v1. Verification is 35/35 targeted PASS, Ruff PASS, mypy PASS over 76 source files, and canonical full regression 367/367 PASS in 111.27s. Fresh stable-v1 preflight remains provider-free with 0 calls, 0 uploads, 0 ledger reservations, 0 Hybrid Judge cache hits, and a cal-02 quote of 6 calls / THB 2.376752 maximum reservation. The dedicated stable-v1 ledger and summary do not exist, proving no stable-v1 live call has occurred. M8 remains not accepted; live cal-02 continuation requires fresh explicit authorization because the request/endpoint identity changed, and final acceptance still requires a fresh locked holdout.",
+  "current_phase": "hybrid_h5_stable_v1_positive_subset_ready_live_authorization_required",
+  "last_checkpoint": "Stable-v1 Hybrid Judge hardening is complete and verified at 35/35 targeted PASS, Ruff PASS, mypy PASS over 76 source files, and 367/367 full pytest PASS in 111.27s. To avoid rerunning four cal-02 proposals that already settled REJECT outside both known positives, a provider-free continuation preflight now selects only proposal 386-421s (overlaps hl-0001 at 401-417s) and proposal 574-594s (overlaps MUST_CATCH hl-0002 at 574-590s). This subset uses two cached proposal clips, has 0 judge cache hits under stable-v1 request identity, and requires exactly 2 planned Gemini 3.7 Flash calls / THB 0.816844 maximum reservation. Preflight made 0 provider calls, 0 uploads, and 0 ledger reservations. The dedicated continuation helper is syntax-valid and hard-guards attempt cap 2, exposure cap THB 0.82, no automatic retry, and API v1; its dedicated ledger and summary do not exist. No stable-v1 live call has occurred. M8 remains not accepted and the subset requires fresh explicit authorization before execution.",
   "tests": {
     "full_pytest": "334 passed in 580.48s after cross-case scope binding",
     "ruff": "passed over src + tests after cross-case scope binding",
@@ -120,7 +120,7 @@
     "default_branch_untouched": true,
     "pr_created": false
   },
-  "blocker": "M8 remains not accepted. Hardened H5 cal-01 is strongly positive, while the first hardened cal-02 attempt stopped safely after 5/6 calls on a dispatched HTTP 401 and remains semantic-inconclusive because both known positives were in the unresolved fifth and unsent sixth proposals. Provider-free remediation is now complete: the Hybrid Judge is pinned to stable Gemini Interactions API v1, api_version is part of request identity, non-v1 transports fail closed before provider I/O, and verification passes 35/35 targeted, Ruff, mypy over 76 source files, and 367/367 full pytest. Stable-v1 preflight makes 0 calls/uploads/reservations and quotes cal-02 at 6 calls / THB 2.376752; no stable-v1 live ledger or summary exists. A fresh explicit live authorization is required before any stable-v1 cal-02 call. Revealed v13 validation remains forbidden for tuning, assistant labels remain excluded from M8 acceptance, and final acceptance still requires a fresh locked holdout prepared before predictions.",
+  "blocker": "M8 remains not accepted. Hardened H5 cal-01 is strongly positive, while the first cal-02 attempt remains semantic-inconclusive because both known positives were in the unresolved fifth and unsent sixth proposal windows. Stable-v1 Hybrid Judge remediation is complete and verified. The preferred continuation now targets only those two positive-covering proposals, requiring 2 Gemini 3.7 Flash calls with THB 0.816844 maximum reservation instead of rerunning all 6 proposals. Provider-free subset preflight made 0 calls/uploads/reservations, and the dedicated helper enforces attempt cap 2 / exposure cap THB 0.82 / no automatic retry / API v1 with no live ledger or summary present. Fresh explicit authorization is required before this two-call continuation. Revealed v13 validation remains forbidden for tuning, assistant labels remain excluded from M8 acceptance, and final acceptance still requires a fresh locked holdout prepared before predictions.",
   "post_v13_calibration": {
     "case_id": "external-fps-openarena-01",
     "split": "calibration",
@@ -430,6 +430,28 @@
       "judge_cache_hits": 0,
       "cal02_planned_calls": 6,
       "cal02_max_reserved_thb": "2.376752"
+    },
+    "positive_subset_continuation": {
+      "proposal_ids": [
+        "proposal_ede0b3c7692c8572",
+        "proposal_cebe7e1d9383a872"
+      ],
+      "proposal_intervals_ms": [
+        [386000, 421000],
+        [574000, 594000]
+      ],
+      "provider_calls": 0,
+      "remote_uploads": 0,
+      "ledger_reservations": 0,
+      "judge_cache_hits": 0,
+      "planned_generation_calls": 2,
+      "maximum_reserved_thb": "0.816844",
+      "recommended_authorized_exposure_cap_thb": "0.820000",
+      "live_attempt_cap": 2,
+      "automatic_retries": 0,
+      "helper_syntax_valid": true,
+      "dedicated_live_ledger_exists": false,
+      "dedicated_live_summary_exists": false
     },
     "dedicated_live_ledger_exists": false,
     "dedicated_live_summary_exists": false,

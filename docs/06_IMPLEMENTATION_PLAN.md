@@ -287,6 +287,17 @@ request identity, and still quotes cal-02 at 6 calls / THB 2.376752 maximum rese
 No stable-v1 live provider call has been made; continuation requires fresh explicit live
 authorization because the request identity and endpoint contract changed.
 
+A tighter provider-free continuation plan now targets only cal-02 proposals `386-421s`
+and `574-594s`, because those are the two unresolved proposal windows that overlap the two
+currently annotated positives. The four earlier settled REJECTs are outside both known
+positive intervals and do not need to be regenerated merely to answer the remaining H5
+semantic question. Stable-v1 subset preflight makes 0 calls / 0 uploads / 0 reservations,
+uses the two already-cached proposal clips, has 0 judge cache hits under the new identity,
+and quotes exactly 2 generation calls / THB 0.816844 maximum reservation. A dedicated
+subset live helper is syntax-valid, enforces attempt cap 2 / exposure cap THB 0.82 /
+no automatic retry / stable `v1`, and its dedicated ledger and summary are still absent.
+This is the preferred next live experiment if separately authorized.
+
 ### M9 — Optional Reviewer
 
 - Batch only extracted candidates; enforce independent reservations and cache keys.
