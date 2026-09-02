@@ -218,6 +218,35 @@ def test_genai_transport_can_pin_stable_api_version(monkeypatch: pytest.MonkeyPa
     }
 
 
+def test_generate_content_transport_disables_sdk_http_retries(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    class FakeClient:
+        def __init__(self, **kwargs: object) -> None:
+            captured.update(kwargs)
+
+    fake_genai = types.ModuleType("google.genai")
+    fake_genai.__dict__["Client"] = FakeClient
+    fake_google = types.ModuleType("google")
+    fake_google.__dict__["genai"] = fake_genai
+    monkeypatch.setitem(sys.modules, "google", fake_google)
+    monkeypatch.setitem(sys.modules, "google.genai", fake_genai)
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+
+    transport = GenAIGenerateContentTransport(api_version="v1")
+
+    assert transport.http_retry_attempts == 1
+    assert captured == {
+        "api_key": "test-key",
+        "http_options": {
+            "api_version": "v1",
+            "retry_options": {"attempts": 1},
+        },
+    }
+
+
 def test_generate_content_transport_maps_video_and_authoritative_usage() -> None:
     captured: dict[str, object] = {}
 

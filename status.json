@@ -1,7 +1,7 @@
 {
   "task_id": "m8-v13-live-validation-2026-08-21",
-  "current_phase": "hybrid_h5_stable_v1_generate_content_ready_live_authorization_required",
-  "last_checkpoint": "The authorized stable-v1 Interactions positive-subset run stopped safely after 1/2 calls on HTTP 400 invalid_request because the stable Interactions v1 input surface rejects type=video. The one call is conservatively AMBIGUOUS at THB 0.431596 reserved / THB 0 settled, remote cleanup is deleted, proposal 2 was never sent, and source SHA-256/size remain unchanged. This is an endpoint-contract failure, not semantic evidence, and that authorization is consumed. Provider-free remediation now keeps stable API v1 but moves only Hybrid Judge generation to models.generate_content, with api_surface=generate_content added to request/cost identity and a fail-closed endpoint guard. The adapter maps authoritative VIDEO/AUDIO/TEXT generateContent usage back into the existing ledger contract. Verification is 37/37 targeted PASS, Ruff PASS, mypy over 76 source files PASS, and 369/369 full pytest PASS in 147.38s under task 9ec4d11a-c5cb-45b5-900a-fbe3f53047f7. Fresh generateContent subset preflight remains 2 calls / THB 0.816844 with 0 calls, 0 uploads, 0 reservations, 0 judge cache hits, and the dedicated generateContent live ledger/summary are absent. M8 remains not accepted; a fresh explicit authorization is required before any generateContent live call.",
+  "current_phase": "hybrid_h5_must_catch_no_sdk_retry_ready_live_authorization_required",
+  "last_checkpoint": "The authorized stable-v1 generateContent cal-02 subset consumed both bounded application-level calls. Proposal 386-421s completed KEEP/FUNNY with a source event around 399-411s overlapping WORTH_REVIEW hl-0001 at 401-417s; it is SETTLED at THB 0.108898 and cleanup is deleted. Proposal 574-594s covering MUST_CATCH hl-0002 reached Gemini but failed HTTP 503 UNAVAILABLE/high demand, is conservatively AMBIGUOUS at THB 0.385248 reserved, has no semantic response, and cleanup is deleted. Source hash remains unchanged, so cal-02 has one confirmed positive match but remains semantic-inconclusive until MUST_CATCH is adjudicated. Audit found google-genai 2.21.0 defaults to up to 5 SDK HTTP attempts on retryable 408/429/5xx when retry options are omitted; application retries were 0 but exact SDK-internal HTTP attempts for the 503 call are unknown. Provider-free hardening now pins retry_options.attempts=1, fails closed before provider I/O unless sdk_http_attempts=1, and includes that invariant in request/cost identity. Verification is 39/39 targeted PASS, Ruff PASS, mypy over 76 source files PASS, and 371/371 full pytest PASS in 113.16s under task 611d6a96-4bee-4196-bb5e-e4fc42e2af5a. A fresh MUST_CATCH-only preflight is 1 call / THB 0.385248 with 0 calls/uploads/reservations, 0 judge cache hits, syntax-valid helper, and absent fresh ledger/summary. No further paid call is allowed without a fresh explicit authorization.",
   "tests": {
     "full_pytest": "334 passed in 580.48s after cross-case scope binding",
     "ruff": "passed over src + tests after cross-case scope binding",
@@ -43,11 +43,16 @@
     "hybrid_h5_generate_content_ruff": "passed over src + tests",
     "hybrid_h5_generate_content_mypy": "passed, 76 source files",
     "hybrid_h5_generate_content_full_pytest": "369 passed in 147.38s",
-    "hybrid_h5_generate_content_full_regression_task": "9ec4d11a-c5cb-45b5-900a-fbe3f53047f7"
+    "hybrid_h5_generate_content_full_regression_task": "9ec4d11a-c5cb-45b5-900a-fbe3f53047f7",
+    "hybrid_h5_sdk_no_retry_targeted": "39 passed in 19.75s",
+    "hybrid_h5_sdk_no_retry_ruff": "passed over src + tests",
+    "hybrid_h5_sdk_no_retry_mypy": "passed, 76 source files",
+    "hybrid_h5_sdk_no_retry_full_pytest": "371 passed in 113.16s",
+    "hybrid_h5_sdk_no_retry_full_regression_task": "611d6a96-4bee-4196-bb5e-e4fc42e2af5a"
   },
   "provider_attempts": {
-    "cumulative_used": 25,
-    "authorized_cap": 32,
+    "cumulative_used": 27,
+    "authorized_cap": 34,
     "v11_used": 6,
     "v12_cal02_settled": 1,
     "v12_val01_ambiguous": 1,
@@ -72,14 +77,22 @@
     "h5_stable_v1_interactions_subset_used": 1,
     "h5_stable_v1_interactions_subset_ambiguous": 1,
     "h5_stable_v1_interactions_subset_remaining_not_called": 1,
+    "h5_generate_content_subset_authorized_cap": 2,
+    "h5_generate_content_subset_used": 2,
+    "h5_generate_content_subset_settled": 1,
+    "h5_generate_content_subset_ambiguous": 1,
+    "h5_generate_content_subset_remaining_not_called": 0,
+    "application_automatic_retries": 0,
+    "sdk_default_retry_max_attempts_discovered": 5,
+    "sdk_internal_http_attempt_count_for_503": "UNKNOWN",
     "automatic_retries": 0,
     "cal02_new_authorization_required": true
   },
   "exposure": {
-    "known_settled_thb": "15.858287",
-    "ambiguous_reserved_thb": "6.435481",
-    "cumulative_worst_case_thb": "22.293768",
-    "authorized_cumulative_cap_thb": "31.740000",
+    "known_settled_thb": "15.967185",
+    "ambiguous_reserved_thb": "6.820729",
+    "cumulative_worst_case_thb": "22.787914",
+    "authorized_cumulative_cap_thb": "32.560000",
     "v13_settled_thb": "3.757246",
     "h5_cal01_settled_thb": "0.056155",
     "h5_cal01_ambiguous_reserved_thb": "0.384830",
@@ -93,7 +106,12 @@
     "h5_hardened_cal02_authorized_exposure_cap_thb": "2.390000",
     "h5_stable_v1_interactions_subset_ambiguous_reserved_thb": "0.431596",
     "h5_stable_v1_interactions_subset_settled_thb": "0.000000",
-    "h5_stable_v1_interactions_subset_authorized_exposure_cap_thb": "0.820000"
+    "h5_stable_v1_interactions_subset_authorized_exposure_cap_thb": "0.820000",
+    "h5_generate_content_subset_settled_thb": "0.108898",
+    "h5_generate_content_subset_ambiguous_reserved_thb": "0.385248",
+    "h5_generate_content_subset_authorized_exposure_cap_thb": "0.820000",
+    "h5_must_catch_no_sdk_retry_preflight_max_reserved_thb": "0.385248",
+    "h5_must_catch_no_sdk_retry_recommended_cap_thb": "0.390000"
   },
   "validation": {
     "m8-real-val-01": {
@@ -132,7 +150,7 @@
     "default_branch_untouched": true,
     "pr_created": false
   },
-  "blocker": "M8 remains not accepted. Hardened H5 cal-01 is strongly positive, while cal-02 remains semantic-inconclusive because neither annotated positive has yet been successfully adjudicated. The authorized stable-v1 Interactions subset attempt stopped after 1/2 calls on HTTP 400 invalid_request because that stable Interactions surface rejects video input; the call is AMBIGUOUS at THB 0.431596 reserved / THB 0 settled, cleanup is deleted, proposal 2 was never sent, and source immutability is intact. Provider-free remediation to stable-v1 models.generate_content is now complete and verified at 37/37 targeted PASS, Ruff PASS, mypy over 76 source files PASS, and 369/369 full pytest PASS. Fresh generateContent subset preflight requires 2 Gemini 3.7 Flash calls / THB 0.816844 maximum reservation with 0 calls/uploads/reservations and a fresh request identity. The prior THB 0.82 authorization is consumed; fresh explicit authorization is required before any generateContent live call. Revealed v13 validation remains forbidden for tuning, assistant labels remain excluded from M8 acceptance, and final acceptance still requires a fresh locked holdout prepared before predictions.",
+  "blocker": "M8 remains not accepted. Hardened H5 cal-01 is strongly positive. In cal-02, stable-v1 generateContent has successfully KEEP/FUNNY-matched WORTH_REVIEW hl-0001 at approximately 399-411s source time, settled at THB 0.108898, but MUST_CATCH hl-0002 at 574-590s is still unresolved because its 574-594s proposal failed HTTP 503 UNAVAILABLE/high demand and remains AMBIGUOUS at THB 0.385248 reserved. Both remote uploads were deleted and source immutability is intact. Audit found google-genai 2.21.0 may internally retry retryable HTTP errors up to 5 attempts by default, so no-automatic-retry hardening now pins SDK retry_options.attempts=1, fail-closes before provider I/O unless sdk_http_attempts=1, and changes request/cost identity. Verification is 39/39 targeted PASS, Ruff PASS, mypy over 76 source files PASS, and 371/371 full pytest PASS in 113.16s under task 611d6a96-4bee-4196-bb5e-e4fc42e2af5a. A provider-free MUST_CATCH-only continuation is ready at 1 Gemini 3.7 Flash call / THB 0.385248 maximum reservation, with 0 calls/uploads/reservations, 0 judge cache hits, syntax-valid helper, and absent fresh ledger/summary. Fresh explicit authorization is required before that paid continuation. Revealed v13 validation remains forbidden for tuning, assistant labels remain excluded from M8 acceptance, and final acceptance still requires a fresh locked holdout prepared before predictions.",
   "post_v13_calibration": {
     "case_id": "external-fps-openarena-01",
     "split": "calibration",
@@ -506,14 +524,74 @@
       "recommended_authorized_exposure_cap_thb": "0.820000"
     },
     "helper_syntax_valid": true,
-    "dedicated_live_ledger_exists": false,
-    "dedicated_live_summary_exists": false,
+    "dedicated_live_ledger_exists": true,
+    "dedicated_live_summary_exists": true,
+    "authorized_live_subset": {
+      "authorized_attempt_cap": 2,
+      "attempts_used": 2,
+      "application_retries": 0,
+      "ledger_states": ["SETTLED", "AMBIGUOUS"],
+      "settled_thb": "0.108898",
+      "ambiguous_reserved_thb": "0.385248",
+      "first_proposal": {
+        "proposal_id": "proposal_ede0b3c7692c8572",
+        "proposal_interval_ms": [386000, 421000],
+        "decision": "KEEP",
+        "category": "FUNNY",
+        "event_source_interval_ms": [399000, 411000],
+        "overlaps_annotation": "hl-0001:401000-417000",
+        "importance": "WORTH_REVIEW",
+        "remote_cleanup": "deleted"
+      },
+      "second_proposal": {
+        "proposal_id": "proposal_cebe7e1d9383a872",
+        "proposal_interval_ms": [574000, 594000],
+        "http_status": 503,
+        "provider_status": "UNAVAILABLE",
+        "failure_reason": "temporary model high demand",
+        "semantic_response": false,
+        "overlaps_annotation": "hl-0002:574000-590000",
+        "importance": "MUST_CATCH",
+        "remote_cleanup": "deleted"
+      },
+      "semantic_quality": "PARTIAL_ONE_POSITIVE_MATCH_MUST_CATCH_UNRESOLVED",
+      "source_matches_manifest": true,
+      "authorization_consumed": true
+    },
     "verification": {
       "targeted": "37/37 PASS",
       "ruff": "PASS",
       "mypy_source": "76 files PASS",
       "full_pytest": "369/369 PASS in 147.38s",
       "full_regression_task": "9ec4d11a-c5cb-45b5-900a-fbe3f53047f7"
+    },
+    "sdk_no_retry_hardening": {
+      "discovered_sdk_default_max_attempts": 5,
+      "affected_retryable_statuses": "408/429/5xx default set",
+      "failed_503_sdk_internal_attempt_count": "UNKNOWN",
+      "required_sdk_http_attempts": 1,
+      "request_identity_includes_sdk_http_attempts": true,
+      "fails_before_provider_io_on_mismatch": true,
+      "targeted": "39/39 PASS",
+      "ruff": "PASS",
+      "mypy_source": "76 files PASS",
+      "full_pytest": "371/371 PASS in 113.16s",
+      "full_regression_task": "611d6a96-4bee-4196-bb5e-e4fc42e2af5a"
+    },
+    "must_catch_no_sdk_retry_preflight": {
+      "proposal_id": "proposal_cebe7e1d9383a872",
+      "proposal_interval_ms": [574000, 594000],
+      "planned_generation_calls": 1,
+      "maximum_reserved_thb": "0.385248",
+      "recommended_authorized_exposure_cap_thb": "0.390000",
+      "provider_calls": 0,
+      "remote_uploads": 0,
+      "ledger_reservations": 0,
+      "judge_cache_hits": 0,
+      "clip_cache_hits": 1,
+      "helper_syntax_valid": true,
+      "dedicated_live_ledger_exists": false,
+      "dedicated_live_summary_exists": false
     },
     "fresh_live_authorization_required": true,
     "m8_acceptance": false

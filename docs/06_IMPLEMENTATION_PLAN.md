@@ -300,8 +300,33 @@ windows overlapping the annotated positives. Fresh generateContent request ident
 judge cache hits and provider-free preflight remains exactly 2 planned calls / THB 0.816844
 maximum reservation with 0 calls / 0 uploads / 0 ledger reservations. The generateContent
 live helper is syntax-valid, still hard-guards attempt cap 2 / THB 0.82 / no automatic retry,
-and its dedicated ledger and summary do not exist. Any generateContent live execution needs
-a new explicit authorization after full regression closes.
+and its dedicated ledger and summary do not exist. The separately authorized generateContent continuation then consumed both bounded application-level
+calls. Proposal `386-421s` completed successfully as KEEP/FUNNY with a relative event at `13-25s`,
+which maps to approximately `399-411s` in source time and overlaps WORTH_REVIEW `hl-0001`
+(`401-417s`). That call is SETTLED at THB 0.108898 and its remote object is deleted. Proposal
+`574-594s`, which covers MUST_CATCH `hl-0002` (`574-590s`), reached the provider but failed with
+HTTP 503 `UNAVAILABLE` / temporary high demand; it remains conservatively AMBIGUOUS at THB
+0.385248 reserved with no semantic response, and its remote object is also deleted. Source
+SHA-256 remains `8d973547b93d432a4deb5f4880ea08fe6cbb7466a6c08a5de0d2e94f0ace2126`.
+Thus cal-02 has one confirmed positive match but is still semantic-inconclusive because the
+MUST_CATCH positive remains unresolved.
+
+Audit of `google-genai 2.21.0` after the 503 found an SDK-level retry policy that defaults to up to
+5 HTTP attempts for retryable statuses such as 408/429/5xx when no retry options are supplied.
+That means the prior workflow's `no automatic retry` guarantee covered application/batch retries
+but did not fully suppress SDK-internal HTTP retries. The exact number of HTTP attempts made inside
+the failed 503 SDK call is not asserted. Provider-free hardening now constructs the Hybrid Judge
+SDK client with `retry_options.attempts=1`, fail-closes before reservation/upload/generation unless
+that invariant is present, and includes `sdk_http_attempts=1` in provider-request/cost identity.
+Targeted verification is 39/39 PASS, Ruff PASS, mypy PASS over 76 source files, and canonical full
+pytest is 371/371 PASS in 113.16 s under durable task `611d6a96-4bee-4196-bb5e-e4fc42e2af5a`.
+
+A provider-free MUST_CATCH-only continuation is prepared under the new no-SDK-retry identity.
+It selects only proposal `574-594s`, reuses its cached clip, has 0 judge cache hits, and quotes
+exactly 1 planned generation call / THB 0.385248 maximum reservation with 0 provider calls / 0
+uploads / 0 ledger reservations during preflight. Its helper is syntax-valid, pins SDK HTTP
+attempts to 1, uses a proposed THB 0.39 exposure cap, and its dedicated ledger/summary do not
+exist. No further paid call is permitted without a fresh explicit authorization.
 
 ### M9 — Optional Reviewer
 

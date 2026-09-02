@@ -253,10 +253,20 @@ class GenAITransport:
         *,
         api_key_env: str = "GEMINI_API_KEY",
         api_version: str | None = None,
+        http_retry_attempts: int | None = None,
     ) -> None:
         key = _resolve_gemini_api_key(api_key_env, os.environ)
         self.api_version = api_version
         self.api_surface = "interactions"
+        self.http_retry_attempts = http_retry_attempts
+        if (
+            http_retry_attempts is not None
+            and (isinstance(http_retry_attempts, bool) or http_retry_attempts < 1)
+        ):
+            raise GeminiConfigurationError(
+                "Gemini HTTP retry attempts must be at least 1.",
+                may_have_dispatched=False,
+            )
         if api_version is not None and api_version not in {"v1", "v1beta"}:
             raise GeminiConfigurationError(
                 f"Unsupported Gemini API version {api_version!r}.",
@@ -270,8 +280,13 @@ class GenAITransport:
                 may_have_dispatched=False,
             ) from exc
         client_kwargs: dict[str, Any] = {"api_key": key}
+        http_options: dict[str, Any] = {}
         if api_version is not None:
-            client_kwargs["http_options"] = {"api_version": api_version}
+            http_options["api_version"] = api_version
+        if http_retry_attempts is not None:
+            http_options["retry_options"] = {"attempts": http_retry_attempts}
+        if http_options:
+            client_kwargs["http_options"] = http_options
         try:
             self._client = genai.Client(**client_kwargs)
         except Exception as exc:  # pragma: no cover - SDK-specific construction errors
@@ -376,7 +391,11 @@ class GenAIGenerateContentTransport(GenAITransport):
         api_key_env: str = "GEMINI_API_KEY",
         api_version: str = "v1",
     ) -> None:
-        super().__init__(api_key_env=api_key_env, api_version=api_version)
+        super().__init__(
+            api_key_env=api_key_env,
+            api_version=api_version,
+            http_retry_attempts=1,
+        )
         self.api_surface = "generate_content"
 
     def create_interaction(
@@ -1011,9 +1030,11 @@ class FakeGeminiTransport:
         delete_error: Exception | None = None,
         api_version: str = "v1",
         api_surface: str = "generate_content",
+        http_retry_attempts: int = 1,
     ) -> None:
         self.api_version = api_version
         self.api_surface = api_surface
+        self.http_retry_attempts = http_retry_attempts
         self.response = response or {
             "status": "completed",
             "id": "fake-interaction-1",
