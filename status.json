@@ -1,7 +1,7 @@
 {
   "task_id": "m8-v13-live-validation-2026-08-21",
-  "current_phase": "v19_semantic_prompt_prepared_full_regression_green",
-  "last_checkpoint": "Experimental gemini-scout-window-v19 semantic guidance is implemented provider-free while v18 behavior and the configured default remain unchanged. v19 makes local-signal hints navigation-only, rejects pure traversal/idle/UI-only activity without visible payoff, requires visible evidence, and preserves visibly real but uncertain interactions at lower score/confidence. Targeted Gemini tests pass 26/26 in 30.21s, Ruff passes src + tests, mypy passes 73 source files, and full regression passes 335/335 in 440.29s. No provider/API call was made; live v19 quality evaluation still requires fresh explicit authorization.",
+  "current_phase": "hybrid_h2_checkpoint_regression_green",
+  "last_checkpoint": "Hybrid local proposer H1/H2 is provider-free and regression-green. Real calibration cal-01 produced 7 proposals covering 26.7938% of the source and overlaps 3/3 currently annotated highlights; cal-02 produced 6 proposals covering 23.4660% and overlaps 2/2. H2 caps proposals at 60s, preserves event-centered context, and uses bounded overlap when nearby clusters must split. Hybrid targeted tests pass 16/16, Ruff passes src + tests, mypy passes 74 source files, and full regression passes 351/351 in 101.98s. provider_calls=0 and semantic_labels_inferred=false; this remains calibration evidence, not M8 acceptance.",
   "tests": {
     "full_pytest": "334 passed in 580.48s after cross-case scope binding",
     "ruff": "passed over src + tests after cross-case scope binding",
@@ -18,7 +18,12 @@
     "v19_prompt_ruff": "passed over src + tests",
     "v19_prompt_mypy": "passed, 73 source files",
     "v19_full_pytest": "335 passed in 440.29s",
-    "v19_full_regression_task": "d018f96b-9560-49f9-a3b0-b17e6901a580"
+    "v19_full_regression_task": "d018f96b-9560-49f9-a3b0-b17e6901a580",
+    "hybrid_targeted": "16 passed in 3.47s",
+    "hybrid_ruff": "passed over src + tests",
+    "hybrid_mypy": "passed, 74 source files",
+    "hybrid_full_pytest": "351 passed in 101.98s",
+    "hybrid_full_regression_task": "50ef2232-95ec-422c-8521-4bce42f4999c"
   },
   "provider_attempts": {
     "cumulative_used": 10,
@@ -76,7 +81,7 @@
     "default_branch_untouched": true,
     "pr_created": false
   },
-  "blocker": "M8 remains not accepted. Existing provider-free audio and exploratory proxy-motion signals do not yield a clean source-agnostic suppression rule without overfitting the 20-window assistant calibration set. Experimental gemini-scout-window-v19 is fully regression-green but intentionally remains non-default and has no live quality evidence yet. Any fresh Gemini generation requires new explicit authorization; revealed v13 validation remains forbidden for tuning, assistant labels remain excluded from M8 acceptance, and future acceptance still requires a fresh locked holdout.",
+  "blocker": "M8 remains not accepted, but the active remediation path is now the hybrid proposer plus bounded semantic judge rather than more prompt-only tuning. H1/H2 currently covers 5/5 annotated calibration highlights while forwarding about one quarter of each calibration source and passes the provider-free 351-test regression. The next engineering gate is H3/H4: optional Valorant-specific proposal evidence and a fake/injected Gemini judge contract over proposal clips only. Any live Gemini generation still requires new explicit authorization; revealed v13 validation remains forbidden for tuning, assistant labels remain excluded from M8 acceptance, and final acceptance still requires a fresh locked holdout.",
   "post_v13_calibration": {
     "case_id": "external-fps-openarena-01",
     "split": "calibration",
@@ -205,6 +210,34 @@
     "full_regression": "335 passed in 440.29s",
     "live_quality_validated": false,
     "fresh_authorization_required": true
+  },
+  "hybrid_proposal": {
+    "strategy_version": "hybrid-proposer-v1",
+    "provider_calls": 0,
+    "semantic_labels_inferred": false,
+    "motion_sample_fps": 4,
+    "default_max_proposal_duration_ms": 60000,
+    "default_split_overlap_ms": 10000,
+    "calibration_only": true,
+    "cal01": {
+      "session_id": "2026-08-15_unknown_7db9940058f7",
+      "anchors": 8,
+      "proposals": 7,
+      "proposal_ratio": 0.26793767869446117,
+      "annotated_highlights_covered": "3/3",
+      "plan_hash": "b4ca6a1ebc0d6b040274f43fd74f0b98999432ab9a5847389b8ca34e9c6f34fc"
+    },
+    "cal02": {
+      "session_id": "2026-08-15_unknown_8d973547b93d",
+      "anchors": 8,
+      "proposals": 6,
+      "proposal_ratio": 0.23465974337211043,
+      "annotated_highlights_covered": "2/2",
+      "plan_hash": "96fbb6452151e0c26a052ab989ccdc6a4d74a4a8bb33f24e7f02df36e7232d27"
+    },
+    "combined_annotated_highlights_covered": "5/5",
+    "revealed_v13_validation_used": false,
+    "m8_acceptance": false
   },
   "offline_readiness": {
     "case_id": "external-fps-openarena-01",

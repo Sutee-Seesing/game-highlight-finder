@@ -304,6 +304,42 @@ def build_signal_command(
     ]
 
 
+def build_motion_signal_command(
+    ffmpeg_path: Path,
+    proxy_path: Path,
+    *,
+    sample_fps: int = 4,
+    width: int = 320,
+) -> list[str]:
+    """Measure lightweight frame-to-frame motion from the committed analysis proxy."""
+
+    if sample_fps <= 0 or sample_fps > 30:
+        raise ValueError("motion sample fps must be in the range 1-30")
+    if width < 64 or width > 1920:
+        raise ValueError("motion analysis width must be in the range 64-1920")
+    filters = (
+        f"fps={sample_fps},scale={width}:-2,signalstats,"
+        "metadata=print:key=lavfi.signalstats.YDIF"
+    )
+    return [
+        str(ffmpeg_path),
+        "-hide_banner",
+        "-loglevel",
+        "info",
+        "-i",
+        str(proxy_path),
+        "-vf",
+        filters,
+        "-an",
+        "-f",
+        "null",
+        "-progress",
+        "pipe:1",
+        "-nostats",
+        "-",
+    ]
+
+
 def _format_ms_seconds(milliseconds: int) -> str:
     """Format integer milliseconds without float rounding or locale effects."""
 
