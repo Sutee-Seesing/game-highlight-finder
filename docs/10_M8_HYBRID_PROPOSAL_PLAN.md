@@ -284,10 +284,13 @@ Exit: fake/injected transport tests green; provider-free aggregate preflight sho
 
 ### H5 — Calibration decision
 
-- [ ] Measure proposer recall independently from Gemini judge quality.
+- [x] Measure proposer recall independently from Gemini judge quality: current calibration proposer coverage is 5/5 annotated highlights while forwarding about one quarter of each source.
+- [x] Complete real proposal-batch provider-free preflight with a fresh explicit FX snapshot before any live call.
 - [ ] Run one bounded, newly authorized live calibration only after provider-free gates pass.
 - [ ] Compare end-to-end recall, false-positive burden, review duration, cost/source-hour, and source immutability.
 - [ ] Do not tune against the revealed v13 validation holdout.
+
+Provider-free H5 preflight on T used the Bank of Thailand 01 Sep 2026 USD/THB reference rate snapshot (`33.2030`) and made **0 provider calls, 0 remote uploads, and 0 ledger reservations**. With `gemini-3.7-flash`, cal-01 contains 7 cached proposal clips with a combined maximum reservation of **THB 2.758416**; cal-02 contains 6 cached proposals with a maximum reservation of **THB 2.374214**; both calibration cases together would cap at **THB 5.132630**. A cost-only comparison with `gemini-3.5-flash-lite` is **THB 1.674566** for cal-01 and **THB 1.439285** for cal-02 (**THB 3.113851** combined). Because the remaining blocker is semantic quality rather than provider cost, the first live experiment should prefer the stronger `gemini-3.7-flash` judge and execute **cal-01 only** before considering cal-02. This is an experiment choice, not a locked V1 model default.
 
 Decision:
 

@@ -221,8 +221,11 @@ local overlap dedupe, aggregate cost preflight, exact upload/hash validation,
 `SETTLED`-only cache reuse, and ambiguous-call no-auto-retry behavior. Current H4
 verification is 29/29 targeted PASS, Ruff PASS, mypy PASS over 76 source files, and
 364/364 full pytest PASS in 111.83 s. No real Gemini generation was made for this
-checkpoint. The next gate is real calibration proposal-batch preflight with a fresh
-explicit FX snapshot, then an authorization stop before any paid semantic judgment.
+checkpoint. The real calibration proposal-batch preflight is now complete on T with a
+fresh Bank of Thailand USD/THB snapshot (33.2030, 01 Sep 2026). `gemini-3.7-flash`
+quotes cal-01 at 7 proposal generations / THB 2.758416 maximum reservation and cal-02
+at 6 / THB 2.374214; provider calls, uploads, and ledger reservations remain zero.
+Execution now stops at the fresh-authorization boundary before any paid semantic judgment.
 
 ### M9 — Optional Reviewer
 

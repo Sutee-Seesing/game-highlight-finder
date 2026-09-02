@@ -1,7 +1,7 @@
 {
   "task_id": "m8-v13-live-validation-2026-08-21",
-  "current_phase": "hybrid_h4_checkpoint_regression_green",
-  "last_checkpoint": "Hybrid H1/H2/H4 is provider-free and regression-green. The local proposer still covers 5/5 currently annotated calibration highlights while forwarding 26.7938% of cal-01 and 23.4660% of cal-02. H4 adds a bounded semantic judge contract over hash-bound proposal clips only: KEEP/REJECT/UNCERTAIN, proposal-relative event bounds, visible evidence, source-time mapping, local overlap dedupe, aggregate cost preflight, exact upload validation, SETTLED-only cache reuse, and no automatic retry after ambiguous dispatch. Hybrid/H4 targeted tests pass 29/29, Ruff passes, mypy passes 76 source files, and full regression passes 364/364 in 111.83s. Real provider generations for this checkpoint are 0; M8 remains not accepted.",
+  "current_phase": "hybrid_h5_preflight_ready_authorization_required",
+  "last_checkpoint": "Hybrid H1/H2/H4 is provider-free and regression-green at 364/364. Real H5 proposal-batch preflight now passes on T with a fresh Bank of Thailand USD/THB snapshot (33.2030, 01 Sep 2026): provider_calls=0, remote_uploads=0, ledger_reservations=0. gemini-3.7-flash quotes cal-01 at 7 proposal calls / max THB 2.758416 and cal-02 at 6 calls / max THB 2.374214 (THB 5.132630 combined). gemini-3.5-flash-lite quotes THB 1.674566 + THB 1.439285 (THB 3.113851 combined). Quality remains the blocker, so the next intended experiment is cal-01 only with gemini-3.7-flash, but no live provider generation is authorized yet and M8 remains not accepted.",
   "tests": {
     "full_pytest": "334 passed in 580.48s after cross-case scope binding",
     "ruff": "passed over src + tests after cross-case scope binding",
@@ -86,7 +86,7 @@
     "default_branch_untouched": true,
     "pr_created": false
   },
-  "blocker": "M8 remains not accepted, but the active remediation path is the hybrid proposer plus bounded semantic judge rather than more prompt-only tuning. H1/H2 covers 5/5 annotated calibration highlights while forwarding about one quarter of each calibration source. H4 is now implemented and provider-free regression-green at 364/364. The next gate is a real calibration proposal-batch preflight on T with a fresh explicit FX snapshot, followed by a stop at the authorization boundary; optional Valorant-specific H3 evidence is only needed if proposer recall/precision proves insufficient. Any live Gemini generation still requires new explicit authorization; revealed v13 validation remains forbidden for tuning, assistant labels remain excluded from M8 acceptance, and final acceptance still requires a fresh locked holdout.",
+  "blocker": "M8 remains not accepted. Hybrid H1/H2 covers 5/5 annotated calibration highlights while forwarding about one quarter of each calibration source, H4 is provider-free regression-green at 364/364, and the real H5 proposal-batch cost preflight now passes with zero calls/uploads/reservations. The next action is intentionally blocked on fresh explicit authorization for a cal-01-only gemini-3.7-flash judge run: at most 7 proposal generations and THB 2.758416 maximum reservation exposure, with no automatic generation retry. Optional Valorant-specific H3 evidence is only needed if the measured hybrid shortlist still shows a proposer problem. Revealed v13 validation remains forbidden for tuning, assistant labels remain excluded from M8 acceptance, and final acceptance still requires a fresh locked holdout.",
   "post_v13_calibration": {
     "case_id": "external-fps-openarena-01",
     "split": "calibration",
@@ -243,6 +243,31 @@
     "combined_annotated_highlights_covered": "5/5",
     "revealed_v13_validation_used": false,
     "m8_acceptance": false
+  },
+  "hybrid_judge_preflight": {
+    "provider_calls": 0,
+    "remote_uploads": 0,
+    "ledger_reservations": 0,
+    "fx_source": "Bank of Thailand FM_FX_001_S3 reference rate",
+    "fx_rate_usd_thb": "33.2030",
+    "fx_captured_at": "2026-09-01T18:00:00+07:00",
+    "preferred_live_experiment_model": "gemini-3.7-flash",
+    "preferred_live_experiment_case": "m8-real-cal-01",
+    "gemini_3_7_flash": {
+      "cal01_planned_calls": 7,
+      "cal01_max_reserved_thb": "2.758416",
+      "cal02_planned_calls": 6,
+      "cal02_max_reserved_thb": "2.374214",
+      "combined_max_reserved_thb": "5.132630"
+    },
+    "gemini_3_5_flash_lite": {
+      "cal01_planned_calls": 7,
+      "cal01_max_reserved_thb": "1.674566",
+      "cal02_planned_calls": 6,
+      "cal02_max_reserved_thb": "1.439285",
+      "combined_max_reserved_thb": "3.113851"
+    },
+    "fresh_authorization_required": true
   },
   "offline_readiness": {
     "case_id": "external-fps-openarena-01",
