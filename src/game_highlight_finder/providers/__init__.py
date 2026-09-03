@@ -1,4 +1,4 @@
-"""Provider-neutral contracts and optional Gemini Scout adapter."""
+"""Provider-neutral contracts plus explicitly bounded provider adapters."""
 
 from game_highlight_finder.providers.base import (
     MAX_USAGE_TOKENS_PER_DIMENSION,
@@ -35,12 +35,38 @@ from game_highlight_finder.providers.gemini_capabilities import (
     GeminiThinkingConfig,
     resolve_gemini_thinking_config,
 )
+from game_highlight_finder.providers.openrouter import (
+    OPENROUTER_API_SURFACE,
+    OPENROUTER_API_URL,
+    OPENROUTER_DEFAULT_API_KEY_ENV,
+    OPENROUTER_DEFAULT_MAX_REQUEST_BYTES,
+    OPENROUTER_GLM_5V_TURBO_MODEL_ID,
+    OPENROUTER_HTTP_ATTEMPTS,
+    OPENROUTER_PROVIDER,
+    OPENROUTER_UPSTREAM_PROVIDER_SLUG,
+    FakeOpenRouterTransport,
+    OpenRouterCompletionEnvelope,
+    OpenRouterConfigurationError,
+    OpenRouterHTTPTransport,
+    OpenRouterProviderError,
+    OpenRouterTransport,
+    openrouter_provider_descriptor,
+)
 
 __all__ = [
     "GEMINI_MODEL_IDS",
     "MAX_USAGE_TOKENS_PER_DIMENSION",
     "MODEL_DEFAULT_MINIMUM_THINKING",
+    "OPENROUTER_API_SURFACE",
+    "OPENROUTER_API_URL",
+    "OPENROUTER_DEFAULT_API_KEY_ENV",
+    "OPENROUTER_DEFAULT_MAX_REQUEST_BYTES",
+    "OPENROUTER_GLM_5V_TURBO_MODEL_ID",
+    "OPENROUTER_HTTP_ATTEMPTS",
+    "OPENROUTER_PROVIDER",
+    "OPENROUTER_UPSTREAM_PROVIDER_SLUG",
     "FakeGeminiTransport",
+    "FakeOpenRouterTransport",
     "GeminiCleanupError",
     "GeminiConfigurationError",
     "GeminiDispatchError",
@@ -54,6 +80,11 @@ __all__ = [
     "GeminiThinkingConfig",
     "GeminiTransport",
     "GenAITransport",
+    "OpenRouterCompletionEnvelope",
+    "OpenRouterConfigurationError",
+    "OpenRouterHTTPTransport",
+    "OpenRouterProviderError",
+    "OpenRouterTransport",
     "ProviderAdapter",
     "ProviderCallResult",
     "ProviderCapabilities",
@@ -65,5 +96,6 @@ __all__ = [
     "ProviderUsageEstimate",
     "diagnose_gemini_exception",
     "gemini_provider_descriptor",
+    "openrouter_provider_descriptor",
     "resolve_gemini_thinking_config",
 ]

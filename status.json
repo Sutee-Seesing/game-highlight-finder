@@ -1,7 +1,7 @@
 {
   "task_id": "m8-v13-live-validation-2026-08-21",
-  "current_phase": "hybrid_h5_cal02_closed_quality_failure_alternate_judge_plan_next",
-  "last_checkpoint": "The separately authorized stable-v1 generateContent MUST_CATCH continuation ran exactly once under Gemini 3.7 Flash with attempt cap 1, THB 0.39 exposure cap, SDK HTTP attempts=1, and no application retry. Proposal 574-594s completed normally at the provider level but returned REJECT with zero events, missing locked MUST_CATCH hl-0002 at 574-590s. The call is SETTLED at THB 0.056977, remote cleanup is deleted, and source SHA-256/size remain immutable. Combining the four earlier settled REJECTs outside annotations, the prior KEEP/FUNNY event around source 399-411s matching WORTH_REVIEW hl-0001, and this final REJECT yields cal-02 TP=1 / FP=0 / FN=1, precision 1.00, recall 0.50, WORTH_REVIEW recall 1.00, MUST_CATCH recall 0.00. The proposer covered both known positives, so cal-02 closes as a Gemini semantic-judge quality failure rather than proposal-recall or infrastructure failure. H5 is closed, M8 remains NOT ACCEPTED, and V1 defaults remain unlocked. The next step is provider-free planning for a bounded same-calibration alternate-judge comparison; no additional paid call is authorized.",
+  "current_phase": "hybrid_h5a_openrouter_glm5v_provider_free_ready_key_and_authorization_required",
+  "last_checkpoint": "H5 is closed with Gemini cal-02 failing MUST_CATCH semantic recall. H5A now has a provider-free, live-capable OpenRouter route to exact model z-ai/glm-5v-turbo while preserving the locked hybrid-judge-v1 semantic contract and excluding revealed v13 validation. Local/private proposal MP4s use the documented OpenRouter base64 video_url data-URL contract; routing is locked to upstream Z.AI with allow_fallbacks=false, require_parameters=true, HTTP attempts=1, and per-token max-price ceilings. Authoritative OpenRouter usage is settled before local semantic parsing, and routing metadata must prove one Z.AI attempt. The full same-calibration preflight remains 13 calls / 302 seconds with cal-01 THB 4.461257 max, cal-02 THB 3.861802 max, combined THB 8.323059 max and 0 provider calls/uploads/reservations/cache hits. A cheaper discriminating cal-02 positive subset is prepared at 2 calls / THB 1.385522 max. Verification is 23/23 targeted PASS, Ruff src+tests PASS, mypy 78 source files PASS, and 384/384 full pytest PASS in 106.24s under task 62037e5f-743c-4ba7-9942-c1d67b5a4872. OPENROUTER_API_KEY is currently absent from the process environment and checked local .env declarations. No paid OpenRouter call is authorized; the next live step requires credential setup plus fresh explicit authorization.",
   "tests": {
     "full_pytest": "334 passed in 580.48s after cross-case scope binding",
     "ruff": "passed over src + tests after cross-case scope binding",
@@ -48,7 +48,12 @@
     "hybrid_h5_sdk_no_retry_ruff": "passed over src + tests",
     "hybrid_h5_sdk_no_retry_mypy": "passed, 76 source files",
     "hybrid_h5_sdk_no_retry_full_pytest": "371 passed in 113.16s",
-    "hybrid_h5_sdk_no_retry_full_regression_task": "611d6a96-4bee-4196-bb5e-e4fc42e2af5a"
+    "hybrid_h5_sdk_no_retry_full_regression_task": "611d6a96-4bee-4196-bb5e-e4fc42e2af5a",
+    "hybrid_h5a_openrouter_targeted": "23 passed in 2.18s",
+    "hybrid_h5a_openrouter_ruff": "passed over src + tests",
+    "hybrid_h5a_openrouter_mypy": "passed, 78 source files",
+    "hybrid_h5a_openrouter_full_pytest": "384 passed in 106.24s",
+    "hybrid_h5a_openrouter_full_regression_task": "62037e5f-743c-4ba7-9942-c1d67b5a4872"
   },
   "provider_attempts": {
     "cumulative_used": 28,
@@ -157,7 +162,7 @@
     "default_branch_untouched": true,
     "pr_created": false
   },
-  "blocker": "M8 remains not accepted. H5 calibration is now closed. Hardened cal-01 was strongly positive, but cal-02 closes as a Gemini semantic-judge quality failure: the proposer covered both locked positives, Gemini KEEP/FUNNY-matched WORTH_REVIEW hl-0001 around source 399-411s, then a fresh stable-v1 generateContent request with SDK HTTP attempts=1 REJECTED proposal 574-594s and therefore missed locked MUST_CATCH hl-0002 at 574-590s. Final cal-02 metrics are TP=1, FP=0, FN=1, precision 1.00, recall 0.50, WORTH_REVIEW recall 1.00, MUST_CATCH recall 0.00. The final call is SETTLED at THB 0.056977, cleanup is deleted, and source immutability is intact. The earlier 503 remains historical AMBIGUOUS billing evidence and is not rewritten. Current Gemini Hybrid Judge therefore does not qualify as the V1 semantic gate. Revealed v13 validation remains forbidden for tuning, assistant labels remain excluded from M8 acceptance, and final acceptance still requires a fresh locked holdout prepared before predictions. Before that holdout, the next sensible step is a bounded provider-free plan for a same-calibration alternate-judge comparison; no additional paid call is authorized.",
+  "blocker": "M8 remains not accepted and V1 defaults remain unlocked. H5 established that proposer recall covered the known cal-02 positives but Gemini missed the locked MUST_CATCH event. H5A now has a provider-free, live-capable OpenRouter -> Z.AI GLM-5V-Turbo comparator over the exact same 13 calibration proposals / 302 seconds, with revealed v13 validation excluded. The full preflight is 13 planned calls / THB 8.323059 maximum reservation with 0 provider calls/uploads/reservations/cache hits; verification is green at 23/23 targeted, Ruff src+tests, mypy 78 source files, and 384/384 full pytest. OpenRouter local MP4 base64 transport, authoritative usage mapping, Z.AI-only routing, no fallback, HTTP attempts=1, price ceilings, and routing-attempt audit are implemented and provider-free tested. The remaining immediate blockers are operational: OPENROUTER_API_KEY is not present and no paid call is authorized. The first recommended paid gate is only the two cal-02 positives at THB 1.385522 maximum exposure; stop if GLM still misses MUST_CATCH, otherwise consider the remaining 11 proposals for precision. Final M8 acceptance still requires a fresh locked holdout prepared before predictions.",
   "post_v13_calibration": {
     "case_id": "external-fps-openarena-01",
     "split": "calibration",
@@ -635,6 +640,90 @@
       "verdict": "FAIL_MUST_CATCH_SEMANTIC_JUDGE"
     },
     "fresh_live_authorization_required": false,
+    "m8_acceptance": false
+  },
+  "hybrid_h5a_openrouter_glm5v_comparator": {
+    "provider": "openrouter",
+    "upstream_provider": "z-ai",
+    "model": "z-ai/glm-5v-turbo",
+    "selection_reason": "quality-first Z.AI vision comparator with documented OpenRouter local-video transport",
+    "model_capabilities": {
+      "input_modalities": ["video", "image", "text", "file"],
+      "context_tokens": 202752,
+      "thinking_mode": "enabled"
+    },
+    "pricing": {
+      "currency": "USD",
+      "input_per_million": "1.20",
+      "cached_input_per_million": "0.24",
+      "output_per_million": "4.00",
+      "verified_at": "2026-09-03T02:50:00Z",
+      "source": "https://openrouter.ai/api/v1/models/z-ai/glm-5v-turbo/endpoints"
+    },
+    "semantic_contract": "hybrid-judge-v1 unchanged",
+    "revealed_v13_validation_used": false,
+    "calibration_scope": {
+      "session_count": 2,
+      "proposal_count": 13,
+      "proposal_duration_ms": 302000,
+      "cal01_proposals": 7,
+      "cal01_duration_ms": 161000,
+      "cal02_proposals": 6,
+      "cal02_duration_ms": 141000
+    },
+    "reservation_estimator": {
+      "version": "zai-video-estimate-v1",
+      "video_tokens_per_second": 256,
+      "max_output_tokens": 1024,
+      "reserved_thinking_tokens": 1024,
+      "provider_tokenizer_claim": false
+    },
+    "provider_free_preflight": {
+      "planned_generation_calls": 13,
+      "cal01_max_reserved_thb": "4.461257",
+      "cal02_max_reserved_thb": "3.861802",
+      "combined_max_reserved_thb": "8.323059",
+      "provider_calls": 0,
+      "remote_uploads": 0,
+      "ledger_reservations": 0,
+      "judge_cache_hits": 0,
+      "live_media_transport_verified": true
+    },
+    "positive_subset_preflight": {
+      "session_id": "2026-08-15_unknown_8d973547b93d",
+      "proposal_ids": ["proposal_ede0b3c7692c8572", "proposal_cebe7e1d9383a872"],
+      "planned_generation_calls": 2,
+      "maximum_reserved_thb": "1.385522",
+      "provider_calls": 0,
+      "remote_uploads": 0,
+      "ledger_reservations": 0,
+      "judge_cache_hits": 0
+    },
+    "live_boundary": {
+      "api_surface": "chat_completions",
+      "media_transport_contract": "openrouter-base64-video-v1",
+      "http_attempts": 1,
+      "http_client_implemented": true,
+      "api_key_env": "OPENROUTER_API_KEY",
+      "api_key_present": false,
+      "local_video_transport_verified": true,
+      "authoritative_usage_mapping_verified": true,
+      "upstream_only": "z-ai",
+      "allow_fallbacks": false,
+      "require_parameters": true,
+      "routing_attempt_must_equal": 1,
+      "encoded_request_guard_bytes": 16777216
+    },
+    "verification": {
+      "targeted": "23/23 PASS in 2.18s",
+      "ruff": "PASS over src + tests",
+      "mypy_source": "78 files PASS",
+      "full_pytest": "384/384 PASS in 106.24s",
+      "full_regression_task": "62037e5f-743c-4ba7-9942-c1d67b5a4872"
+    },
+    "live_authorization_requested": false,
+    "fresh_live_authorization_required": true,
+    "recommended_first_live_gate": "cal-02 two-positive subset only; stop if MUST_CATCH is missed",
     "m8_acceptance": false
   },
   "offline_readiness": {

@@ -340,6 +340,46 @@ defaults remain unlocked. Before any fresh locked holdout, the next sensible pro
 is to define a bounded same-calibration alternate-judge comparison rather than tune against the
 revealed validation holdout.
 
+Provider-free H5A now implements a live-capable **OpenRouter -> Z.AI GLM-5V-Turbo comparator**
+without making any paid call. The exact model identity is `z-ai/glm-5v-turbo`; OpenRouter's
+current endpoint catalog exposes one endpoint, Z.AI, with 202,752-token context and exact USD
+pricing of 1.20/M prompt tokens, 0.24/M cache-read tokens, and 4.00/M completion tokens. The
+comparator reuses the provider-neutral `hybrid-judge-v1` semantic prompt/schema/parser/candidate
+mapping. OpenRouter officially supports local/private MP4 as a base64 `video_url` data URL, so the
+transport can send the committed proposal clip without public hosting. JSON-object mode is used
+only as provider formatting assistance; the exact schema is appended as a formatting contract and
+strict local Pydantic validation remains authoritative.
+
+The transport performs exactly one stdlib HTTP POST with no client retry, reads the API key only
+from `OPENROUTER_API_KEY`, applies a 16 MiB encoded-request guard, requests authoritative usage,
+enables reasoning while excluding reasoning text, and pins routing to Z.AI with
+`only=[z-ai]`, `allow_fallbacks=false`, and `require_parameters=true`. The max-price guard uses
+OpenRouter's per-token units (`0.0000012` prompt / `0.000004` completion). Request/cost identity
+records the OpenRouter provider, Z.AI upstream lock, attempts=1, no-fallback policy, and
+`openrouter-base64-video-v1`. Completed responses settle authoritative usage first; routing
+metadata must then prove exactly one upstream attempt and selected provider `Z.AI` before semantic
+output can be reused. A post-settlement routing-policy mismatch therefore preserves billing
+evidence but fails closed locally. Current proposal MP4s are approximately 4.6-11.0 MB; the
+largest estimated base64 representation is about 14.7 MB and remains inside the local guard.
+
+The apples-to-apples comparison scope remains the two existing calibration sessions only:
+**13 proposal clips / 302 seconds** total (cal-01 7 / 161 s; cal-02 6 / 141 s), with revealed v13
+validation excluded. The versioned conservative reservation heuristic still reserves 256 video
+tokens/s plus prompt/schema text and 1,024 output + 1,024 thinking tokens per request; it is a
+safety estimate, not a tokenizer claim. Using the existing 2026-09-01 USD/THB snapshot, the final
+OpenRouter provider-free preflight is cal-01 max THB 4.461257, cal-02 max THB 3.861802, and
+**THB 8.323059 combined** across 13 planned calls, with 0 provider calls / 0 uploads / 0 ledger
+reservations / 0 cache hits and `live_media_transport_verified=true`. A first-stage positive-only
+gate is also prepared over cal-02 proposals `386-421s` and `574-594s`: **2 calls / THB 1.385522
+maximum reservation**, again with 0 provider calls / 0 uploads / 0 reservations / 0 cache hits.
+This cheaply tests whether GLM fixes Gemini's MUST_CATCH miss before spending on the other 11
+proposals needed for precision. Current targeted verification is 23/23 PASS, Ruff PASS over
+`src + tests`, mypy PASS over 78 source files, and canonical full regression is **384/384 PASS in
+106.24 s** under durable task `62037e5f-743c-4ba7-9942-c1d67b5a4872`. `OPENROUTER_API_KEY` is
+currently absent from both the process environment and checked local `.env` declarations. No paid
+OpenRouter/Z.AI call is authorized by this work; the next bounded live gate therefore requires
+credential setup plus fresh explicit authorization for the two-proposal THB 1.385522 experiment.
+
 ### M9 — Optional Reviewer
 
 - Batch only extracted candidates; enforce independent reservations and cache keys.

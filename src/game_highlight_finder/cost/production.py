@@ -1,9 +1,8 @@
-"""Versioned production pricing snapshots verified from Google's official page.
+"""Versioned production pricing snapshots for explicitly selected paid models.
 
-The catalog is intentionally small: M5 uses the exact 3.5 Standard model and
-M8B2 uses the exact 2.5 Standard model.  Neither path silently falls back to
-another model or billing tier.  FX remains an explicit user-supplied snapshot
-in accordance with the M4 policy.
+Each entry is exact-model and exact-billing-mode only. FX remains an explicit
+local snapshot in accordance with the M4 policy; there is no silent model,
+provider, billing-tier, or currency fallback.
 """
 
 from __future__ import annotations
@@ -22,12 +21,19 @@ GEMINI_MODEL_SOURCE = "https://ai.google.dev/gemini-api/docs/models/gemini-3.5-f
 GEMINI_25_MODEL_SOURCE = "https://ai.google.dev/gemini-api/docs/models/gemini-2.5-flash-lite"
 GEMINI_37_MODEL_SOURCE = "https://ai.google.dev/gemini-api/docs/models/gemini-3.7-flash"
 # The checkout's validation clock is 2026-08-13 Asia/Bangkok (2026-08-12
-# afternoon UTC).  Keep the snapshot behind that clock so freshness checks do
-# not accidentally treat a just-verified entry as future-dated.
+# afternoon UTC). Keep the older snapshots behind that clock so freshness
+# checks do not accidentally treat them as future-dated.
 GEMINI_PRICING_VERIFIED_AT = datetime(2026, 8, 12, 12, 0, tzinfo=UTC)
 GEMINI_CATALOG_VERSION = "google-gemini-2026-08-13-v1"
 GEMINI_37_CATALOG_VERSION = "google-gemini-2026-08-23-v3"
 GEMINI_37_PRICING_VERIFIED_AT = datetime(2026, 8, 23, 12, 0, tzinfo=UTC)
+
+OPENROUTER_GLM_5V_TURBO_MODEL_ID = "z-ai/glm-5v-turbo"
+OPENROUTER_GLM_5V_TURBO_SOURCE = (
+    "https://openrouter.ai/api/v1/models/z-ai/glm-5v-turbo/endpoints"
+)
+OPENROUTER_GLM_5V_TURBO_PRICING_VERIFIED_AT = datetime(2026, 9, 3, 2, 50, tzinfo=UTC)
+OPENROUTER_GLM_5V_TURBO_CATALOG_VERSION = "openrouter-zai-vision-2026-09-03-v1"
 
 
 GEMINI_STANDARD_PRICING = PricingEntry(
@@ -100,12 +106,43 @@ GEMINI_37_STANDARD_PRICING = PricingEntry(
     ),
 )
 
+OPENROUTER_GLM_5V_TURBO_STANDARD_PRICING = PricingEntry(
+    provider="openrouter",
+    model=OPENROUTER_GLM_5V_TURBO_MODEL_ID,
+    billing_mode="standard",
+    currency="USD",
+    input_rates_by_modality={
+        "text": Decimal("1.20"),
+        "image": Decimal("1.20"),
+        "video": Decimal("1.20"),
+        "audio": Decimal("1.20"),
+    },
+    cached_input_rate=Decimal("0.24"),
+    output_rate=Decimal("4.00"),
+    effective_from=datetime(2026, 4, 1, tzinfo=UTC),
+    verified_at=OPENROUTER_GLM_5V_TURBO_PRICING_VERIFIED_AT,
+    source=OPENROUTER_GLM_5V_TURBO_SOURCE,
+    catalog_version=OPENROUTER_GLM_5V_TURBO_CATALOG_VERSION,
+    notes=(
+        "OpenRouter exact endpoint snapshot for z-ai/glm-5v-turbo, whose only current "
+        "endpoint is Z.AI. Prompt $1.20/M, cache-read $0.24/M, completion $4.00/M. "
+        "All uncached input dimensions are conservatively priced at the same published "
+        "prompt-token rate; OpenRouter aggregate usage can therefore settle safely even "
+        "without a provider-reported text/video token split."
+    ),
+)
+
 
 def production_pricing_catalog() -> PricingCatalog:
-    """Return exact production pricing entries for explicitly selectable Gemini models."""
+    """Return exact production pricing entries for explicitly selectable paid models."""
 
     return PricingCatalog(
-        [GEMINI_25_STANDARD_PRICING, GEMINI_STANDARD_PRICING, GEMINI_37_STANDARD_PRICING]
+        [
+            GEMINI_25_STANDARD_PRICING,
+            GEMINI_STANDARD_PRICING,
+            GEMINI_37_STANDARD_PRICING,
+            OPENROUTER_GLM_5V_TURBO_STANDARD_PRICING,
+        ]
     )
 
 
@@ -123,5 +160,10 @@ __all__ = [
     "GEMINI_PRICING_SOURCE",
     "GEMINI_PRICING_VERIFIED_AT",
     "GEMINI_STANDARD_PRICING",
+    "OPENROUTER_GLM_5V_TURBO_CATALOG_VERSION",
+    "OPENROUTER_GLM_5V_TURBO_MODEL_ID",
+    "OPENROUTER_GLM_5V_TURBO_PRICING_VERIFIED_AT",
+    "OPENROUTER_GLM_5V_TURBO_SOURCE",
+    "OPENROUTER_GLM_5V_TURBO_STANDARD_PRICING",
     "production_pricing_catalog",
 ]
