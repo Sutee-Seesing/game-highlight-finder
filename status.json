@@ -1,7 +1,7 @@
 {
   "task_id": "m8-v13-live-validation-2026-08-21",
-  "current_phase": "hybrid_h5a_openrouter_glm5v_provider_free_ready_key_and_authorization_required",
-  "last_checkpoint": "H5 is closed with Gemini cal-02 failing MUST_CATCH semantic recall. H5A now has a provider-free, live-capable OpenRouter route to exact model z-ai/glm-5v-turbo while preserving the locked hybrid-judge-v1 semantic contract and excluding revealed v13 validation. Local/private proposal MP4s use the documented OpenRouter base64 video_url data-URL contract; routing is locked to upstream Z.AI with allow_fallbacks=false, require_parameters=true, HTTP attempts=1, and per-token max-price ceilings. Authoritative OpenRouter usage is settled before local semantic parsing, and routing metadata must prove one Z.AI attempt. The full same-calibration preflight remains 13 calls / 302 seconds with cal-01 THB 4.461257 max, cal-02 THB 3.861802 max, combined THB 8.323059 max and 0 provider calls/uploads/reservations/cache hits. A cheaper discriminating cal-02 positive subset is prepared at 2 calls / THB 1.385522 max. Verification is 23/23 targeted PASS, Ruff src+tests PASS, mypy 78 source files PASS, and 384/384 full pytest PASS in 106.24s under task 62037e5f-743c-4ba7-9942-c1d67b5a4872. OPENROUTER_API_KEY is currently absent from the process environment and checked local .env declarations. No paid OpenRouter call is authorized; the next live step requires credential setup plus fresh explicit authorization.",
+  "current_phase": "hybrid_h5a_openrouter_round_a_ready_key_and_authorization_required",
+  "last_checkpoint": "H5 is closed with Gemini cal-02 failing MUST_CATCH semantic recall. H5A has been generalized from a GLM-5V-only comparator into a provider-free OpenRouter Round A bake-off over seven locked model/upstream profiles while preserving the exact hybrid-judge-v1 semantic contract and excluding revealed v13 validation. Round A uses only the two locked cal-02 positives: 386-421s WORTH_REVIEW and 574-594s MUST_CATCH, for 14 logical calls total. Model-specific request fingerprints, call IDs, artifacts, and cache paths prevent cross-model collisions. Routing is pinned per profile with allow_fallbacks=false, require_parameters=true, HTTP attempts=1, profile-specific per-token max-price ceilings, context guards, and Seed >=128K pricing-tier fail-closed guards. Provider-free preflight reserves Qwen3.8 Flash THB 0.168295, GLM-5.3-Flash THB 0.173191, MiMo-V2.5 THB 0.131181, Seed-2.0-Mini THB 0.126341, Seed-2.0-Lite THB 0.479051, GLM-5V-Turbo THB 1.385522, and Qwen3.8 Max THB 2.200404, total THB 4.663985, with 0 provider calls/uploads/ledger reservations/cache hits. Verification is 32/32 targeted PASS, Ruff src+tests PASS, mypy 79 source files PASS, and canonical full pytest 393/393 PASS in 114.72s under task 9f673f76-ef08-4b8b-b6b3-4f5f5c740c4b. The prepared local live runner hard-caps exposure at THB 4.67, permits at most 14 logical calls, uses one HTTP attempt per call and no automatic retry, runs MUST_CATCH first per model, and skips that model's WORTH_REVIEW call after a MUST_CATCH miss or call failure. The runner compiles/imports provider-free and its dedicated live ledger/preflight-ledger/summary were all absent at the final readiness check. OPENROUTER_API_KEY was absent at the last credential-presence check. No paid Round A call is authorized; the next live step requires credential setup plus fresh explicit authorization for at most 14 logical calls / THB 4.67 hard exposure cap / one HTTP attempt each / no automatic retry.",
   "tests": {
     "full_pytest": "334 passed in 580.48s after cross-case scope binding",
     "ruff": "passed over src + tests after cross-case scope binding",
@@ -53,7 +53,12 @@
     "hybrid_h5a_openrouter_ruff": "passed over src + tests",
     "hybrid_h5a_openrouter_mypy": "passed, 78 source files",
     "hybrid_h5a_openrouter_full_pytest": "384 passed in 106.24s",
-    "hybrid_h5a_openrouter_full_regression_task": "62037e5f-743c-4ba7-9942-c1d67b5a4872"
+    "hybrid_h5a_openrouter_full_regression_task": "62037e5f-743c-4ba7-9942-c1d67b5a4872",
+    "hybrid_h5a_round_a_targeted": "32 passed in 2.26s",
+    "hybrid_h5a_round_a_ruff": "passed over src + tests",
+    "hybrid_h5a_round_a_mypy": "passed, 79 source files",
+    "hybrid_h5a_round_a_full_pytest": "393 passed in 114.72s",
+    "hybrid_h5a_round_a_full_regression_task": "9f673f76-ef08-4b8b-b6b3-4f5f5c740c4b"
   },
   "provider_attempts": {
     "cumulative_used": 28,
@@ -162,7 +167,7 @@
     "default_branch_untouched": true,
     "pr_created": false
   },
-  "blocker": "M8 remains not accepted and V1 defaults remain unlocked. H5 established that proposer recall covered the known cal-02 positives but Gemini missed the locked MUST_CATCH event. H5A now has a provider-free, live-capable OpenRouter -> Z.AI GLM-5V-Turbo comparator over the exact same 13 calibration proposals / 302 seconds, with revealed v13 validation excluded. The full preflight is 13 planned calls / THB 8.323059 maximum reservation with 0 provider calls/uploads/reservations/cache hits; verification is green at 23/23 targeted, Ruff src+tests, mypy 78 source files, and 384/384 full pytest. OpenRouter local MP4 base64 transport, authoritative usage mapping, Z.AI-only routing, no fallback, HTTP attempts=1, price ceilings, and routing-attempt audit are implemented and provider-free tested. The remaining immediate blockers are operational: OPENROUTER_API_KEY is not present and no paid call is authorized. The first recommended paid gate is only the two cal-02 positives at THB 1.385522 maximum exposure; stop if GLM still misses MUST_CATCH, otherwise consider the remaining 11 proposals for precision. Final M8 acceptance still requires a fresh locked holdout prepared before predictions.",
+  "blocker": "M8 remains not accepted and V1 defaults remain unlocked. H5 established that proposer recall covered both known cal-02 positives but Gemini missed the locked MUST_CATCH event. H5A is now a provider-free OpenRouter Round A tournament over seven locked model/upstream profiles and the exact two cal-02 positives only; revealed v13 validation remains excluded. Round A preflight is 14 planned logical calls / THB 4.663985 maximum reservation with 0 provider calls/uploads/ledger reservations/cache hits. Routing, no-fallback, HTTP attempts=1, per-profile price ceilings, authoritative usage settlement, routing-attempt audit, model-specific artifacts/cache identity, and Seed pricing-tier guards are implemented and provider-free tested. Verification is green at 32/32 targeted, Ruff src+tests, mypy 79 source files, and canonical full pytest 393/393 in 114.72s under task 9f673f76-ef08-4b8b-b6b3-4f5f5c740c4b. The prepared live runner uses dedicated fresh ledger/preflight-ledger/summary paths, THB 4.67 hard exposure cap, attempt cap 14, one HTTP attempt per call, zero automatic retry, and MUST_CATCH-first early stopping per model; its dedicated live artifacts are absent before execution. OPENROUTER_API_KEY was absent at the last credential-presence check and no paid Round A call is authorized. The next operational boundary is credential setup plus fresh explicit authorization for at most 14 logical calls / THB 4.67 hard exposure cap / one HTTP attempt each / no automatic retry. Only models that catch MUST_CATCH while preserving WORTH_REVIEW should advance to the 13-proposal precision/value round. Final M8 acceptance still requires a fresh locked holdout prepared before predictions.",
   "post_v13_calibration": {
     "case_id": "external-fps-openarena-01",
     "split": "calibration",
@@ -723,7 +728,64 @@
     },
     "live_authorization_requested": false,
     "fresh_live_authorization_required": true,
-    "recommended_first_live_gate": "cal-02 two-positive subset only; stop if MUST_CATCH is missed",
+    "recommended_first_live_gate": "historical GLM-only gate; superseded by the seven-model Round A bake-off",
+    "m8_acceptance": false
+  },
+  "hybrid_h5a_openrouter_round_a_bakeoff": {
+    "provider": "openrouter",
+    "semantic_contract": "hybrid-judge-v1 unchanged",
+    "revealed_v13_validation_used": false,
+    "session_id": "2026-08-15_unknown_8d973547b93d",
+    "positive_proposals": [
+      "proposal_ede0b3c7692c8572",
+      "proposal_cebe7e1d9383a872"
+    ],
+    "round_a_model_count": 7,
+    "round_a_logical_calls": 14,
+    "models": [
+      {"model": "qwen/qwen3.8-flash", "upstream": "Alibaba", "input_per_million_usd": "0.15", "output_per_million_usd": "0.47", "response_format": "json_schema", "max_reserved_thb": "0.168295"},
+      {"model": "z-ai/glm-5.3-flash", "upstream": "Z.AI", "input_per_million_usd": "0.15", "output_per_million_usd": "0.50", "response_format": "json_object", "max_reserved_thb": "0.173191", "reservation_uses_undiscounted_list_price": true},
+      {"model": "xiaomi/mimo-v2.5", "upstream": "Xiaomi", "input_per_million_usd": "0.14", "output_per_million_usd": "0.28", "response_format": "json_object", "max_reserved_thb": "0.131181"},
+      {"model": "bytedance-seed/seed-2.0-mini", "upstream": "Seed", "input_per_million_usd": "0.10", "output_per_million_usd": "0.40", "response_format": "json_schema", "max_reserved_thb": "0.126341", "higher_price_tier_guard_prompt_tokens": 128000},
+      {"model": "bytedance-seed/seed-2.0-lite", "upstream": "Seed", "input_per_million_usd": "0.25", "output_per_million_usd": "2.00", "response_format": "json_schema", "max_reserved_thb": "0.479051", "higher_price_tier_guard_prompt_tokens": 128000},
+      {"model": "z-ai/glm-5v-turbo", "upstream": "Z.AI", "input_per_million_usd": "1.20", "output_per_million_usd": "4.00", "response_format": "json_object", "max_reserved_thb": "1.385522"},
+      {"model": "qwen/qwen3.8-max", "upstream": "Alibaba", "input_per_million_usd": "2.00", "output_per_million_usd": "6.00", "response_format": "json_schema", "max_reserved_thb": "2.200404"}
+    ],
+    "provider_free_preflight": {
+      "aggregate_max_reserved_thb": "4.663985",
+      "provider_calls": 0,
+      "remote_uploads": 0,
+      "ledger_reservations": 0,
+      "cache_hits": 0
+    },
+    "live_boundary": {
+      "api_key_env": "OPENROUTER_API_KEY",
+      "api_key_present_at_last_check": false,
+      "http_attempts_per_call": 1,
+      "automatic_retry": false,
+      "allow_fallbacks": false,
+      "require_parameters": true,
+      "model_specific_artifacts_and_cache": true,
+      "media_transport_contract": "openrouter-base64-video-v1",
+      "attempt_cap": 14,
+      "hard_exposure_cap_thb": "4.670000",
+      "exact_preflight_max_thb": "4.663985",
+      "runner": ".t/run_h5_round_a_openrouter_7model_positive_bakeoff.py",
+      "must_catch_first_early_stop": true,
+      "runner_compile_import_check": true,
+      "fresh_live_ledger_exists": false,
+      "fresh_preflight_ledger_exists": false,
+      "fresh_live_summary_exists": false
+    },
+    "verification": {
+      "targeted": "32/32 PASS in 2.26s",
+      "ruff": "PASS over src + tests",
+      "mypy_source": "79 files PASS",
+      "full_pytest": "393/393 PASS in 114.72s",
+      "full_regression_task": "9f673f76-ef08-4b8b-b6b3-4f5f5c740c4b"
+    },
+    "fresh_live_authorization_required": true,
+    "recommended_live_gate": "at most 14 logical calls / THB 4.67 hard cap / HTTP attempt 1 each / no automatic retry; MUST_CATCH first per model with WORTH_REVIEW skipped after MUST miss/failure; run only after credential setup and fresh explicit authorization",
     "m8_acceptance": false
   },
   "offline_readiness": {

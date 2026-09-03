@@ -312,7 +312,7 @@ The single unresolved MUST_CATCH proposal `574-594s` was then run under a fresh 
 
 Final cal-02 semantics now combine the four earlier settled REJECTs outside the annotations, the KEEP/FUNNY event around source `399-411s` matching WORTH_REVIEW `hl-0001`, and the final MUST_CATCH REJECT: **1 prediction / 2 GT / TP=1 / FP=0 / FN=1 / precision=1.00 / recall=0.50 / WORTH_REVIEW recall=1.00 / MUST_CATCH recall=0.00**. The proposer itself covered **2/2** known positives, so cal-02 isolates the remaining quality gap to the Gemini semantic judge. H5 cal-02 is therefore **closed as a quality failure**. H5 does not qualify the current Gemini judge as the V1 semantic gate, M8 remains **NOT ACCEPTED**, and V1 defaults remain unlocked. Do not tune against revealed v13 validation; the next step should be a bounded provider-free plan for an alternate-judge same-calibration comparison before any new paid experiment or fresh locked holdout.
 
-### H5A — Provider-free Z.AI alternate-judge comparator
+### H5A — Provider-free OpenRouter alternate-judge bake-off
 
 The alternate-judge slice now selects **Z.AI `glm-5v-turbo`** as the quality-first comparator. This supersedes the earlier provisional GLM-4.6V choice because the current Z.AI catalog lists GLM-5V-Turbo as the newer top vision model, with Video/Image/Text/File input, 200K context, and USD list pricing of **$1.20/M input, $0.24/M cached input, and $4.00/M output**. The pricing snapshot is verified on 2026-09-03 from `https://docs.z.ai/guides/overview/pricing`; capability provenance is `https://docs.z.ai/guides/vlm/glm-5v-turbo`.
 
@@ -323,6 +323,33 @@ The same-calibration A/B scope is locked to the existing **13 proposals / 302 se
 The OpenRouter transport is deliberately auditable: one stdlib HTTP POST with **no client retry**, local MP4 base64 encoding, a 16 MiB encoded-request guard, `usage.include=true`, reasoning enabled with reasoning text excluded, and exact routing controls `only=[z-ai]`, `allow_fallbacks=false`, `require_parameters=true`. The router price ceiling uses the documented **per-token** values (`0.0000012` prompt / `0.000004` completion), not per-million display values. Request identity records the OpenRouter provider, Z.AI upstream lock, no-fallback policy, HTTP attempts=1, and `openrouter-base64-video-v1`. Successful responses are settled from authoritative OpenRouter usage before local semantic parsing; routing metadata must then prove `attempt=1` and selected provider `Z.AI`, otherwise the billing record stays SETTLED but no semantic response is reusable. Existing proposal clips are 4.6-11.0 MB, with the largest estimated base64 payload about 14.7 MB, inside the local 16 MiB request guard.
 
 The local reservation heuristic remains intentionally conservative and versioned (`zai-video-estimate-v1`): 256 video tokens/s plus bounded prompt/schema text, 1,024 visible output tokens, and 1,024 reserved thinking tokens per request when thinking is enabled. This is a safety quote, **not** a tokenizer claim. Using the existing 2026-09-01 USD/THB FX snapshot, provider-free preflight still quotes cal-01 at **THB 4.461257**, cal-02 at **THB 3.861802**, and the full 13-call comparison at **THB 8.323059 maximum reservation**, with **0 provider calls / 0 remote uploads / 0 ledger reservations / 0 cache hits** and `live_media_transport_verified=true`. A cheaper discriminating first gate is prepared on only the two locked positive cal-02 proposals (`386-421s` WORTH_REVIEW and `574-594s` MUST_CATCH): **2 planned calls / THB 1.385522 maximum reservation / 0 calls / 0 uploads / 0 reservations / 0 cache hits**. If GLM-5V-Turbo still misses MUST_CATCH, stop without paying for the remaining 11 proposals; if it catches both positives, the remaining 11 can be run later to measure precision. Current OpenRouter/Gemini targeted verification is **23/23 PASS**, Ruff PASS over `src + tests`, mypy PASS over **78 source files**, and canonical full pytest is **384/384 PASS in 106.24 s** under durable task `62037e5f-743c-4ba7-9942-c1d67b5a4872`. No paid OpenRouter call is authorized by this provider-free work, and `OPENROUTER_API_KEY` is not currently present in either the process environment or the checked local `.env` declarations. A live experiment therefore requires both credential setup and fresh explicit paid-call authorization.
+
+Round A now supersedes the GLM-5V-Turbo-only first gate above. The locked tournament profiles are
+Qwen3.8 Flash -> Alibaba, GLM-5.3-Flash -> Z.AI, MiMo-V2.5 -> Xiaomi direct, Seed-2.0-Mini ->
+Seed, Seed-2.0-Lite -> Seed, GLM-5V-Turbo -> Z.AI, and Qwen3.8 Max -> Alibaba. Each profile pins
+one upstream provider with no fallback, one HTTP attempt, exact per-token price ceilings, context
+and pricing-tier guards, and a response-format contract. Qwen/Seed endpoints use JSON Schema;
+GLM/MiMo use JSON-object formatting plus strict local validation. Artifacts/cache identity now
+include the model slug so evidence cannot collide across challengers.
+
+Round A uses only the two locked cal-02 positives: `386-421s` WORTH_REVIEW that Gemini caught and
+`574-594s` MUST_CATCH that Gemini missed. Provider-free preflight therefore plans **14 logical
+calls** and reserves a conservative maximum of **THB 4.663985 total**: Qwen3.8 Flash 0.168295,
+GLM-5.3-Flash 0.173191, MiMo-V2.5 0.131181, Seed-2.0-Mini 0.126341, Seed-2.0-Lite 0.479051,
+GLM-5V-Turbo 1.385522, and Qwen3.8 Max 2.200404. It made 0 provider calls / 0 uploads / 0 ledger
+reservations / 0 cache hits. GLM-5.3-Flash uses the undiscounted list price for reservation despite
+the temporary promotion. Seed models fail closed before their >=128K higher-price tier. Only
+models that preserve the WORTH_REVIEW positive and catch the MUST_CATCH miss should advance to the
+13-proposal / 302-second precision/value round. Current provider-free verification is 32/32
+targeted PASS, Ruff PASS, mypy 79 source files PASS, and canonical full pytest **393/393 PASS in
+114.72s** under task `9f673f76-ef08-4b8b-b6b3-4f5f5c740c4b`. The prepared local live runner uses
+dedicated fresh ledger/preflight-ledger/summary artifacts, an explicit THB 4.67 hard ceiling,
+logical attempt cap 14, HTTP attempts=1, and no automatic retry. For each model it runs MUST_CATCH
+first; a MUST_CATCH semantic miss or call failure skips that model's WORTH_REVIEW call, so the
+14-call / THB 4.663985 preflight is a worst-case ceiling rather than a required spend. The runner
+compiles/imports provider-free and the dedicated live artifacts are absent before execution. No
+paid Round A call is authorized yet; the next boundary is OpenRouter credential setup plus fresh
+explicit authorization for at most 14 logical calls / THB 4.67 hard cap.
 
 Decision:
 

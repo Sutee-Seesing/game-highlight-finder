@@ -12,6 +12,7 @@ from decimal import Decimal
 
 from game_highlight_finder.cost.models import PricingEntry
 from game_highlight_finder.cost.pricing import PricingCatalog
+from game_highlight_finder.openrouter_models import GLM_5V_TURBO, OPENROUTER_ROUND_A_PROFILES
 
 GEMINI_MODEL_ID = "gemini-3.5-flash-lite"
 GEMINI_25_MODEL_ID = "gemini-2.5-flash-lite"
@@ -28,12 +29,12 @@ GEMINI_CATALOG_VERSION = "google-gemini-2026-08-13-v1"
 GEMINI_37_CATALOG_VERSION = "google-gemini-2026-08-23-v3"
 GEMINI_37_PRICING_VERIFIED_AT = datetime(2026, 8, 23, 12, 0, tzinfo=UTC)
 
-OPENROUTER_GLM_5V_TURBO_MODEL_ID = "z-ai/glm-5v-turbo"
-OPENROUTER_GLM_5V_TURBO_SOURCE = (
-    "https://openrouter.ai/api/v1/models/z-ai/glm-5v-turbo/endpoints"
-)
-OPENROUTER_GLM_5V_TURBO_PRICING_VERIFIED_AT = datetime(2026, 9, 3, 2, 50, tzinfo=UTC)
-OPENROUTER_GLM_5V_TURBO_CATALOG_VERSION = "openrouter-zai-vision-2026-09-03-v1"
+OPENROUTER_BAKEOFF_CATALOG_VERSION = "openrouter-multimodal-bakeoff-2026-09-03-v2"
+# Backward-compatible names for the original GLM-5V-Turbo-only comparator.
+OPENROUTER_GLM_5V_TURBO_MODEL_ID = GLM_5V_TURBO.model_id
+OPENROUTER_GLM_5V_TURBO_SOURCE = GLM_5V_TURBO.pricing_source
+OPENROUTER_GLM_5V_TURBO_PRICING_VERIFIED_AT = GLM_5V_TURBO.pricing_verified_at
+OPENROUTER_GLM_5V_TURBO_CATALOG_VERSION = OPENROUTER_BAKEOFF_CATALOG_VERSION
 
 
 GEMINI_STANDARD_PRICING = PricingEntry(
@@ -106,30 +107,36 @@ GEMINI_37_STANDARD_PRICING = PricingEntry(
     ),
 )
 
-OPENROUTER_GLM_5V_TURBO_STANDARD_PRICING = PricingEntry(
-    provider="openrouter",
-    model=OPENROUTER_GLM_5V_TURBO_MODEL_ID,
-    billing_mode="standard",
-    currency="USD",
-    input_rates_by_modality={
-        "text": Decimal("1.20"),
-        "image": Decimal("1.20"),
-        "video": Decimal("1.20"),
-        "audio": Decimal("1.20"),
-    },
-    cached_input_rate=Decimal("0.24"),
-    output_rate=Decimal("4.00"),
-    effective_from=datetime(2026, 4, 1, tzinfo=UTC),
-    verified_at=OPENROUTER_GLM_5V_TURBO_PRICING_VERIFIED_AT,
-    source=OPENROUTER_GLM_5V_TURBO_SOURCE,
-    catalog_version=OPENROUTER_GLM_5V_TURBO_CATALOG_VERSION,
-    notes=(
-        "OpenRouter exact endpoint snapshot for z-ai/glm-5v-turbo, whose only current "
-        "endpoint is Z.AI. Prompt $1.20/M, cache-read $0.24/M, completion $4.00/M. "
-        "All uncached input dimensions are conservatively priced at the same published "
-        "prompt-token rate; OpenRouter aggregate usage can therefore settle safely even "
-        "without a provider-reported text/video token split."
-    ),
+OPENROUTER_BAKEOFF_STANDARD_PRICING = tuple(
+    PricingEntry(
+        provider="openrouter",
+        model=profile.model_id,
+        billing_mode="standard",
+        currency="USD",
+        input_rates_by_modality={
+            "text": profile.input_per_million_usd,
+            "image": profile.input_per_million_usd,
+            "video": profile.input_per_million_usd,
+            "audio": profile.input_per_million_usd,
+        },
+        cached_input_rate=profile.cached_input_per_million_usd,
+        output_rate=profile.output_per_million_usd,
+        effective_from=profile.effective_from,
+        verified_at=profile.pricing_verified_at,
+        source=profile.pricing_source,
+        catalog_version=OPENROUTER_BAKEOFF_CATALOG_VERSION,
+        notes=(
+            f"OpenRouter bake-off profile pinned to upstream {profile.selected_provider_name}. "
+            "All uncached input dimensions use the same conservative prompt-token rate. "
+            + profile.notes
+        ).strip(),
+    )
+    for profile in OPENROUTER_ROUND_A_PROFILES
+)
+OPENROUTER_GLM_5V_TURBO_STANDARD_PRICING = next(
+    entry
+    for entry in OPENROUTER_BAKEOFF_STANDARD_PRICING
+    if entry.model == OPENROUTER_GLM_5V_TURBO_MODEL_ID
 )
 
 
@@ -141,7 +148,7 @@ def production_pricing_catalog() -> PricingCatalog:
             GEMINI_25_STANDARD_PRICING,
             GEMINI_STANDARD_PRICING,
             GEMINI_37_STANDARD_PRICING,
-            OPENROUTER_GLM_5V_TURBO_STANDARD_PRICING,
+            *OPENROUTER_BAKEOFF_STANDARD_PRICING,
         ]
     )
 
@@ -160,6 +167,8 @@ __all__ = [
     "GEMINI_PRICING_SOURCE",
     "GEMINI_PRICING_VERIFIED_AT",
     "GEMINI_STANDARD_PRICING",
+    "OPENROUTER_BAKEOFF_CATALOG_VERSION",
+    "OPENROUTER_BAKEOFF_STANDARD_PRICING",
     "OPENROUTER_GLM_5V_TURBO_CATALOG_VERSION",
     "OPENROUTER_GLM_5V_TURBO_MODEL_ID",
     "OPENROUTER_GLM_5V_TURBO_PRICING_VERIFIED_AT",

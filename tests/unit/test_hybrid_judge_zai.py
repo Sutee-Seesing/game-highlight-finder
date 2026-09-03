@@ -11,15 +11,25 @@ import pytest
 from game_highlight_finder.config import AppConfig, CostConfig, StorageConfig
 from game_highlight_finder.cost.fx import FxSnapshot
 from game_highlight_finder.cost.production import (
+    OPENROUTER_BAKEOFF_STANDARD_PRICING,
     OPENROUTER_GLM_5V_TURBO_MODEL_ID,
     OPENROUTER_GLM_5V_TURBO_STANDARD_PRICING,
     production_pricing_catalog,
 )
 from game_highlight_finder.cost.service import CostService
 from game_highlight_finder.errors import ValidationError
+from game_highlight_finder.openrouter_models import (
+    GLM_5V_TURBO,
+    GLM_53_FLASH,
+    OPENROUTER_ROUND_A_PROFILES,
+    SEED_20_LITE,
+    SEED_20_MINI,
+    OpenRouterModelProfile,
+)
 from game_highlight_finder.pipeline.hybrid_judge_zai import (
     ZAIHybridJudgeSettings,
     build_zai_registry,
+    estimate_zai_hybrid_usage,
     preflight_zai_hybrid_judge_batch,
     run_zai_hybrid_judge_with_transport,
 )
@@ -136,8 +146,22 @@ def _service(config: AppConfig) -> CostService:
     )
 
 
-def _settings(*, allow_remote_media: bool = True) -> ZAIHybridJudgeSettings:
-    return ZAIHybridJudgeSettings(allow_remote_media=allow_remote_media)
+def _settings(
+    *,
+    model: str = GLM_5V_TURBO.model_id,
+    allow_remote_media: bool = True,
+) -> ZAIHybridJudgeSettings:
+    return ZAIHybridJudgeSettings(model=model, allow_remote_media=allow_remote_media)
+
+
+def _artifact_path(item_dir: Path, kind: str, model: str = GLM_5V_TURBO.model_id) -> Path:
+    tag = model.replace("/", "__").replace(".", "_")
+    return item_dir / f"{kind}.judge.openrouter.{tag}.json"
+
+
+def _raw_response_path(item_dir: Path, model: str = GLM_5V_TURBO.model_id) -> Path:
+    tag = model.replace("/", "__").replace(".", "_")
+    return item_dir / f"response.judge.openrouter.{tag}.raw.json"
 
 
 def _keep_response() -> dict[str, object]:
@@ -158,25 +182,46 @@ def _keep_response() -> dict[str, object]:
     }
 
 
-def test_zai_descriptor_and_pricing_are_exact_and_quality_first() -> None:
+def test_openrouter_descriptor_and_pricing_cover_locked_round_a_profiles() -> None:
     descriptor = openrouter_provider_descriptor()
-    model = descriptor.models[0]
+    model_map = {model.model_id: model for model in descriptor.models}
+    pricing_map = {entry.model: entry for entry in OPENROUTER_BAKEOFF_STANDARD_PRICING}
 
     assert descriptor.provider == "openrouter"
-    assert (
-        model.model_id
-        == OPENROUTER_GLM_5V_TURBO_MODEL_ID
-        == "z-ai/glm-5v-turbo"
+    assert tuple(model.model_id for model in descriptor.models) == tuple(
+        profile.model_id for profile in OPENROUTER_ROUND_A_PROFILES
     )
-    assert model.capabilities.video_input is True
-    assert model.capabilities.file_upload is False
-    assert model.capabilities.structured_output is False
-    assert OPENROUTER_GLM_5V_TURBO_STANDARD_PRICING.currency == "USD"
-    assert OPENROUTER_GLM_5V_TURBO_STANDARD_PRICING.input_rates_by_modality["video"] == Decimal(
-        "1.20"
-    )
-    assert OPENROUTER_GLM_5V_TURBO_STANDARD_PRICING.cached_input_rate == Decimal("0.24")
-    assert OPENROUTER_GLM_5V_TURBO_STANDARD_PRICING.output_rate == Decimal("4.00")
+    assert set(pricing_map) == set(model_map)
+    for profile in OPENROUTER_ROUND_A_PROFILES:
+        model = model_map[profile.model_id]
+        pricing = pricing_map[profile.model_id]
+        assert model.capabilities.video_input is True
+        assert model.capabilities.file_upload is False
+        assert model.capabilities.structured_output is (
+            profile.response_format_mode == "json_schema"
+        )
+        assert pricing.currency == "USD"
+        assert pricing.input_rates_by_modality["video"] == profile.input_per_million_usd
+        assert pricing.cached_input_rate == profile.cached_input_per_million_usd
+        assert pricing.output_rate == profile.output_per_million_usd
+        assert pricing.source == profile.pricing_source
+
+    assert GLM_5V_TURBO.model_id == OPENROUTER_GLM_5V_TURBO_MODEL_ID
+    assert OPENROUTER_GLM_5V_TURBO_STANDARD_PRICING.model == GLM_5V_TURBO.model_id
+    # Promotional GLM-5.3 pricing must not reduce the hard-budget reservation rate.
+    assert pricing_map[GLM_53_FLASH.model_id].input_rates_by_modality["video"] == Decimal("0.15")
+    assert pricing_map[GLM_53_FLASH.model_id].output_rate == Decimal("0.50")
+
+
+@pytest.mark.parametrize("model", [SEED_20_MINI.model_id, SEED_20_LITE.model_id])
+def test_seed_profiles_fail_closed_before_base_price_tier_override(model: str) -> None:
+    with pytest.raises(ValidationError, match="price-tier override"):
+        estimate_zai_hybrid_usage(
+            duration_ms=500_000,
+            prompt="benchmark",
+            response_schema={"type": "object"},
+            settings=_settings(model=model, allow_remote_media=False),
+        )
 
 
 def test_zai_preflight_quotes_batch_without_provider_or_ledger_writes(tmp_path: Path) -> None:
@@ -230,8 +275,8 @@ def test_unverified_openrouter_media_transport_fails_before_reservation(tmp_path
 
     assert service.calls() == ()
     assert transport.generation_count == 0
-    assert not (
-        preparation.prepared[0].proxy_path.parent / "request.judge.openrouter.json"
+    assert not _artifact_path(
+        preparation.prepared[0].proxy_path.parent, "request"
     ).exists()
 
 
@@ -361,9 +406,9 @@ def test_zai_completed_invalid_semantic_response_stays_settled(tmp_path: Path) -
     assert transport.generation_count == 1
     assert service.calls()[0].status.value == "SETTLED"
     item_dir = preparation.prepared[0].proxy_path.parent
-    assert read_json(item_dir / "cost.judge.openrouter.json")["state"] == "SETTLED"
-    assert (item_dir / "response.judge.openrouter.raw.json").exists()
-    assert not (item_dir / "response.judge.openrouter.json").exists()
+    assert read_json(_artifact_path(item_dir, "cost"))["state"] == "SETTLED"
+    assert _raw_response_path(item_dir).exists()
+    assert not _artifact_path(item_dir, "response").exists()
 
     with pytest.raises(ValidationError, match="settled"):
         run_zai_hybrid_judge_with_transport(
@@ -403,7 +448,7 @@ def test_zai_ambiguous_generation_is_persisted_without_retry(tmp_path: Path) -> 
 
     assert transport.generation_count == 1
     assert service.calls()[0].status.value == "AMBIGUOUS"
-    assert read_json(preparation.prepared[0].proxy_path.parent / "cost.judge.openrouter.json")[
+    assert read_json(_artifact_path(preparation.prepared[0].proxy_path.parent, "cost"))[
         "state"
     ] == "AMBIGUOUS"
 
@@ -544,6 +589,92 @@ def test_openrouter_http_transport_encodes_local_mp4_and_locks_routing(
     assert envelope.reported_cost_usd == 0.008
 
 
+@pytest.mark.parametrize(
+    "profile",
+    OPENROUTER_ROUND_A_PROFILES,
+    ids=lambda profile: profile.model_id,
+)
+def test_openrouter_round_a_profiles_lock_routing_price_and_response_contract(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    profile: OpenRouterModelProfile,
+) -> None:
+    model_profile = profile
+    media = tmp_path / "proposal.mp4"
+    media.write_bytes(b"profile-video")
+    captured: dict[str, object] = {}
+
+    def fake_post(
+        url: str,
+        headers: dict[str, str],
+        body: bytes,
+        timeout_seconds: float,
+    ) -> tuple[int, dict[str, str], bytes]:
+        del url, headers, timeout_seconds
+        captured["payload"] = json.loads(body.decode())
+        response = {
+            "id": "gen-profile",
+            "model": model_profile.model_id,
+            "choices": [
+                {
+                    "finish_reason": "stop",
+                    "message": {
+                        "content": json.dumps(
+                            {"decision": "REJECT", "summary": "x", "events": []}
+                        )
+                    },
+                }
+            ],
+            "usage": {"prompt_tokens": 100, "completion_tokens": 20},
+            "openrouter_metadata": {
+                "attempt": 1,
+                "endpoints": {
+                    "available": [
+                        {"provider": model_profile.selected_provider_name, "selected": True}
+                    ]
+                },
+            },
+        }
+        return 200, {"X-Generation-Id": "gen-profile"}, json.dumps(response).encode()
+
+    monkeypatch.setenv("OPENROUTER_API_KEY", "unit-test-key")
+    envelope = OpenRouterHTTPTransport(http_post=fake_post).generate(
+        media_path=media,
+        prompt="same semantic prompt",
+        response_schema={"type": "object", "properties": {"decision": {"type": "string"}}},
+        model=model_profile.model_id,
+        max_output_tokens=1_024,
+        thinking_mode="enabled",
+    )
+
+    payload = captured["payload"]
+    assert isinstance(payload, dict)
+    assert payload["provider"] == {
+        "only": [model_profile.upstream_provider_slug],
+        "allow_fallbacks": False,
+        "require_parameters": True,
+        "max_price": {
+            "prompt": float(model_profile.max_prompt_price_per_token_usd),
+            "completion": float(model_profile.max_completion_price_per_token_usd),
+        },
+    }
+    if model_profile.response_format_mode == "json_schema":
+        assert payload["response_format"] == {
+            "type": "json_schema",
+            "json_schema": {
+                "name": "hybrid_judge",
+                "strict": True,
+                "schema": {"type": "object", "properties": {"decision": {"type": "string"}}},
+            },
+        }
+        assert payload["messages"][0]["content"][0]["text"] == "same semantic prompt"
+    else:
+        assert payload["response_format"] == {"type": "json_object"}
+        assert "Provider formatting contract" in payload["messages"][0]["content"][0]["text"]
+    assert envelope.model == model_profile.model_id
+    assert envelope.selected_provider == model_profile.selected_provider_name
+
+
 def test_openrouter_payload_guard_blocks_before_http_dispatch(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -638,6 +769,6 @@ def test_router_retry_metadata_is_settled_then_rejected_locally(tmp_path: Path) 
     assert transport.generation_count == 1
     assert service.calls()[0].status.value == "SETTLED"
     item_dir = preparation.prepared[0].proxy_path.parent
-    assert read_json(item_dir / "cost.judge.openrouter.json")["state"] == "SETTLED"
-    assert (item_dir / "response.judge.openrouter.raw.json").exists()
-    assert not (item_dir / "response.judge.openrouter.json").exists()
+    assert read_json(_artifact_path(item_dir, "cost"))["state"] == "SETTLED"
+    assert _raw_response_path(item_dir).exists()
+    assert not _artifact_path(item_dir, "response").exists()

@@ -1,9 +1,9 @@
-"""OpenRouter-routed Z.AI vision comparator for bounded hybrid proposals.
+"""OpenRouter multimodal bake-off comparator for bounded hybrid proposals.
 
 The comparator reuses the provider-neutral HybridJudge semantics used by Gemini.
-OpenRouter carries local/private MP4 clips as base64 ``video_url`` data URLs and
-is pinned to the sole Z.AI GLM-5V-Turbo endpoint with provider fallbacks disabled.
-Aggregate preflight remains provider-free and performs zero ledger reservation.
+Each locked model profile pins an exact OpenRouter upstream, pricing boundary,
+and response-format contract. Aggregate preflight remains provider-free and
+performs zero ledger reservation.
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ from contextlib import suppress
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from game_highlight_finder.config import AppConfig
 from game_highlight_finder.cost.fx import FxSnapshot
@@ -24,6 +24,11 @@ from game_highlight_finder.errors import (
     CostGateError,
     CostSafetyHoldError,
     ValidationError,
+)
+from game_highlight_finder.openrouter_models import (
+    GLM_5V_TURBO,
+    OPENROUTER_ROUND_A_MODEL_IDS,
+    get_openrouter_model_profile,
 )
 from game_highlight_finder.pipeline.hybrid_judge import (
     HYBRID_JUDGE_VERSION,
@@ -48,7 +53,6 @@ from game_highlight_finder.providers.openrouter import (
     OPENROUTER_API_SURFACE,
     OPENROUTER_HTTP_ATTEMPTS,
     OPENROUTER_PROVIDER,
-    OPENROUTER_UPSTREAM_PROVIDER_SLUG,
     OpenRouterCompletionEnvelope,
     OpenRouterProviderError,
     OpenRouterTransport,
@@ -57,8 +61,8 @@ from game_highlight_finder.providers.openrouter import (
 from game_highlight_finder.storage.atomic import atomic_write_json, read_json
 from game_highlight_finder.storage.hashing import hash_file
 
-ZAI_HYBRID_JUDGE_VERSION = "hybrid-judge-zai-v1"
-ZAI_HYBRID_JUDGE_ESTIMATOR_VERSION = "zai-video-estimate-v1"
+ZAI_HYBRID_JUDGE_VERSION = "hybrid-judge-openrouter-v2"
+ZAI_HYBRID_JUDGE_ESTIMATOR_VERSION = "openrouter-video-estimate-v1"
 ZAI_HYBRID_JUDGE_VIDEO_TOKENS_PER_SECOND = 256
 ZAI_HYBRID_JUDGE_MAX_OUTPUT_TOKENS = 1_024
 ZAI_HYBRID_JUDGE_RESERVED_THINKING_TOKENS = 1_024
@@ -68,7 +72,7 @@ ZAI_HYBRID_JUDGE_MEDIA_TRANSPORT_CONTRACT = "openrouter-base64-video-v1"
 class ZAIHybridJudgeSettings(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    model: Literal["z-ai/glm-5v-turbo"] = "z-ai/glm-5v-turbo"
+    model: str = GLM_5V_TURBO.model_id
     billing_mode: Literal["standard"] = "standard"
     thinking_mode: Literal["enabled", "disabled"] = "enabled"
     max_output_tokens: int = Field(default=ZAI_HYBRID_JUDGE_MAX_OUTPUT_TOKENS, ge=1, le=32_768)
@@ -78,6 +82,13 @@ class ZAIHybridJudgeSettings(BaseModel):
         le=MAX_USAGE_TOKENS_PER_DIMENSION,
     )
     allow_remote_media: bool = False
+
+    @field_validator("model")
+    @classmethod
+    def supported_bakeoff_model(cls, value: str) -> str:
+        if value not in OPENROUTER_ROUND_A_MODEL_IDS:
+            raise ValueError(f"unsupported OpenRouter bake-off model: {value}")
+        return value
 
 
 class ZAIHybridJudgeItemPreflight(BaseModel):
@@ -96,7 +107,7 @@ class ZAIHybridJudgeItemPreflight(BaseModel):
 class ZAIHybridJudgeBatchPreflight(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    version: Literal["hybrid-judge-zai-v1"] = "hybrid-judge-zai-v1"
+    version: Literal["hybrid-judge-openrouter-v2"] = "hybrid-judge-openrouter-v2"
     provider: Literal["openrouter"] = "openrouter"
     model: str
     billing_mode: str
@@ -155,7 +166,7 @@ def estimate_zai_hybrid_usage(
     """Conservative local quote heuristic; not a claim about provider tokenization."""
 
     if duration_ms <= 0:
-        raise ValidationError("Z.AI hybrid-judge proposal duration must be positive")
+        raise ValidationError("OpenRouter hybrid-judge proposal duration must be positive")
     seconds = (duration_ms + 999) // 1000
     schema_bytes = len(
         __import__("json").dumps(
@@ -164,7 +175,7 @@ def estimate_zai_hybrid_usage(
     )
     text_tokens = max(1, (len(prompt.encode("utf-8")) + 3) // 4)
     text_tokens += max(1, (schema_bytes + 3) // 4) + 128
-    return ProviderUsageEstimate(
+    estimate = ProviderUsageEstimate(
         input_text_tokens=min(MAX_USAGE_TOKENS_PER_DIMENSION, text_tokens),
         input_video_tokens=min(
             MAX_USAGE_TOKENS_PER_DIMENSION,
@@ -175,6 +186,34 @@ def estimate_zai_hybrid_usage(
             settings.reserved_thinking_tokens if settings.thinking_mode == "enabled" else 0
         ),
     )
+    _validate_profile_estimate(settings, estimate)
+    return estimate
+
+
+def _validate_profile_estimate(
+    settings: ZAIHybridJudgeSettings,
+    estimate: ProviderUsageEstimate,
+) -> None:
+    profile = get_openrouter_model_profile(settings.model)
+    total_input = (
+        estimate.input_text_tokens
+        + estimate.input_image_tokens
+        + estimate.input_video_tokens
+        + estimate.input_audio_tokens
+        + estimate.cached_input_tokens
+    )
+    if (
+        profile.base_price_prompt_token_limit is not None
+        and total_input >= profile.base_price_prompt_token_limit
+    ):
+        raise ValidationError(
+            f"OpenRouter model {profile.model_id} estimate reaches the provider price-tier "
+            "override; update the exact pricing profile before dispatch."
+        )
+    if total_input + estimate.output_tokens + estimate.thinking_tokens > profile.context_tokens:
+        raise ValidationError(
+            f"OpenRouter model {profile.model_id} estimate exceeds its locked context ceiling."
+        )
 
 
 def preflight_zai_hybrid_judge_batch(
@@ -192,7 +231,7 @@ def preflight_zai_hybrid_judge_batch(
     summary = service.summary()
     if summary.safety_hold_active:
         raise CostSafetyHoldError(
-            "Cost safety hold is active; Z.AI hybrid-judge preflight is blocked.",
+            "Cost safety hold is active; OpenRouter hybrid-judge preflight is blocked.",
             hint=summary.safety_hold_reason,
         )
 
@@ -232,7 +271,7 @@ def preflight_zai_hybrid_judge_batch(
     if aggregate > summary.available_micro_thb:
         raise BudgetExceededError(
             hint=(
-                f"Z.AI hybrid judge requires {aggregate} micro-THB of new reservation "
+                f"OpenRouter hybrid judge requires {aggregate} micro-THB of new reservation "
                 f"exposure, but only {summary.available_micro_thb} is available."
             )
         )
@@ -263,30 +302,24 @@ def run_zai_hybrid_judge_with_transport(
     """Run one comparator request through an explicitly injected verified transport."""
 
     resolved = settings or ZAIHybridJudgeSettings()
+    profile = get_openrouter_model_profile(resolved.model)
     if not resolved.allow_remote_media:
-        raise ValidationError("OpenRouter GLM judge requires explicit remote-media opt-in.")
+        raise ValidationError("OpenRouter judge requires explicit remote-media opt-in.")
     if getattr(transport, "api_surface", None) != OPENROUTER_API_SURFACE:
-        raise ValidationError("OpenRouter GLM judge requires the chat_completions API surface.")
+        raise ValidationError("OpenRouter judge requires the chat_completions API surface.")
     if getattr(transport, "http_retry_attempts", None) != OPENROUTER_HTTP_ATTEMPTS:
         raise ValidationError(
-            "OpenRouter GLM judge requires HTTP attempts=1 (no client automatic retry)."
+            "OpenRouter judge requires HTTP attempts=1 (no client automatic retry)."
         )
     if getattr(transport, "media_transport_verified", False) is not True:
         raise ValidationError("OpenRouter local-video media transport is not verified.")
-    if (
-        getattr(transport, "upstream_provider_slug", None)
-        != OPENROUTER_UPSTREAM_PROVIDER_SLUG
-    ):
-        raise ValidationError("OpenRouter GLM judge requires the Z.AI upstream provider lock.")
 
     request, cost_request = _request_parts(preparation, prepared, resolved)
     service = cost_service or build_zai_hybrid_judge_cost_service(config)
     call_id = cost_request.call_id
-    item_dir = prepared.proxy_path.parent
-    request_meta_path = item_dir / "request.judge.openrouter.json"
-    response_path = item_dir / "response.judge.openrouter.json"
-    raw_response_path = item_dir / "response.judge.openrouter.raw.json"
-    cost_path = item_dir / "cost.judge.openrouter.json"
+    request_meta_path, response_path, raw_response_path, cost_path = _artifact_paths(
+        prepared, resolved.model
+    )
 
     if not force:
         cached = _load_cached_response(
@@ -313,11 +346,13 @@ def run_zai_hybrid_judge_with_transport(
     if existing is not None:
         state = existing.status.value
         if state in {"RESERVED", "IN_FLIGHT", "AMBIGUOUS"}:
-            raise ValidationError("A previous Z.AI hybrid-judge call has an unresolved state.")
+            raise ValidationError(
+                "A previous OpenRouter hybrid-judge call has an unresolved state."
+            )
         if state == "SETTLED":
-            raise ValidationError("A settled Z.AI call has no reusable response artifact.")
+            raise ValidationError("A settled OpenRouter call has no reusable response artifact.")
         if state == "RELEASED":
-            raise ValidationError("A released Z.AI call requires changed request identity.")
+            raise ValidationError("A released OpenRouter call requires changed request identity.")
 
     _validate_media(prepared.proxy_path, prepared)
     atomic_write_json(
@@ -326,7 +361,9 @@ def run_zai_hybrid_judge_with_transport(
             "version": ZAI_HYBRID_JUDGE_VERSION,
             "execution_mode": "injected_transport",
             "provider": OPENROUTER_PROVIDER,
-            "upstream_provider": OPENROUTER_UPSTREAM_PROVIDER_SLUG,
+            "upstream_provider": profile.upstream_provider_slug,
+            "selected_provider_name": profile.selected_provider_name,
+            "response_format_mode": profile.response_format_mode,
             "model": resolved.model,
             "api_surface": OPENROUTER_API_SURFACE,
             "http_attempts": OPENROUTER_HTTP_ATTEMPTS,
@@ -379,7 +416,7 @@ def run_zai_hybrid_judge_with_transport(
             {
                 "version": ZAI_HYBRID_JUDGE_VERSION,
                 "backend": OPENROUTER_PROVIDER,
-                "upstream_provider": OPENROUTER_UPSTREAM_PROVIDER_SLUG,
+                "upstream_provider": profile.upstream_provider_slug,
                 "execution_mode": "injected_transport",
                 "session_id": preparation.plan.session_id,
                 "proposal_id": request.proposal_id,
@@ -392,9 +429,9 @@ def run_zai_hybrid_judge_with_transport(
             raise ValidationError(
                 "OpenRouter routing metadata must prove exactly one upstream provider attempt."
             )
-        if envelope.selected_provider != "Z.AI":
+        if envelope.selected_provider != profile.selected_provider_name:
             raise ValidationError(
-                "OpenRouter routing metadata did not confirm the locked Z.AI endpoint."
+                "OpenRouter routing metadata did not confirm the locked upstream endpoint."
             )
         response = parse_hybrid_judge_response(
             envelope.output_text,
@@ -405,7 +442,7 @@ def run_zai_hybrid_judge_with_transport(
             {
                 "version": ZAI_HYBRID_JUDGE_VERSION,
                 "backend": OPENROUTER_PROVIDER,
-                "upstream_provider": OPENROUTER_UPSTREAM_PROVIDER_SLUG,
+                "upstream_provider": profile.upstream_provider_slug,
                 "execution_mode": "injected_transport",
                 "session_id": preparation.plan.session_id,
                 "proposal_id": request.proposal_id,
@@ -437,7 +474,7 @@ def run_zai_hybrid_judge_with_transport(
         with suppress(Exception):
             _write_cost_artifact(service, call_id, cost_path)
         raise ValidationError(
-            str(exc), hint="No automatic OpenRouter GLM generation retry was attempted."
+            str(exc), hint="No automatic OpenRouter generation retry was attempted."
         ) from exc
     except BaseException:
         if not settled:
@@ -510,6 +547,7 @@ def _request_parts(
     settings: ZAIHybridJudgeSettings,
 ) -> tuple[HybridJudgeRequestArtifact, CostRequest]:
     request = build_hybrid_judge_request(preparation, prepared)
+    profile = get_openrouter_model_profile(settings.model)
     estimate = estimate_zai_hybrid_usage(
         duration_ms=request.proposal_duration_ms,
         prompt=request.prompt,
@@ -526,7 +564,10 @@ def _request_parts(
         "response_schema_sha256": canonical_payload_sha256(request.response_schema),
         "prompt_sha256": canonical_payload_sha256(request.prompt),
         "provider": OPENROUTER_PROVIDER,
-        "upstream_provider": OPENROUTER_UPSTREAM_PROVIDER_SLUG,
+        "upstream_provider": profile.upstream_provider_slug,
+        "selected_provider_name": profile.selected_provider_name,
+        "response_format_mode": profile.response_format_mode,
+        "pricing_source": profile.pricing_source,
         "api_surface": OPENROUTER_API_SURFACE,
         "http_attempts": OPENROUTER_HTTP_ATTEMPTS,
         "provider_fallbacks": False,
@@ -538,7 +579,7 @@ def _request_parts(
         "reserved_thinking_tokens": settings.reserved_thinking_tokens,
     }
     seed = CostRequest(
-        call_id="openrouter-glm-hybrid-judge-fingerprint",
+        call_id="openrouter-hybrid-judge-fingerprint",
         provider=OPENROUTER_PROVIDER,
         model=settings.model,
         billing_mode=settings.billing_mode,
@@ -547,7 +588,7 @@ def _request_parts(
         usage_estimate=estimate,
         request_payload=semantic_payload,
     )
-    call_id = f"openrouter-glm-hjudge-{seed.request_fingerprint[:44]}"
+    call_id = f"openrouter-hjudge-{seed.request_fingerprint[:48]}"
     return request, seed.model_copy(update={"call_id": call_id})
 
 
@@ -556,19 +597,24 @@ def _validate_media(path: Path, prepared: PreparedHybridProposal) -> None:
         resolved = path.resolve()
         expected = prepared.proxy_path.resolve()
     except OSError as exc:
-        raise ValidationError("Cannot resolve Z.AI hybrid-judge proposal media") from exc
+        raise ValidationError("Cannot resolve OpenRouter hybrid-judge proposal media") from exc
     if resolved != expected or resolved.name != "analysis_proposal.mp4" or not resolved.is_file():
-        raise ValidationError("Z.AI hybrid judge may send only the prepared proposal clip")
+        raise ValidationError("OpenRouter hybrid judge may send only the prepared proposal clip")
     if hash_file(resolved) != prepared.proxy_sha256:
-        raise ValidationError("Z.AI hybrid-judge media hash does not match provenance")
+        raise ValidationError("OpenRouter hybrid-judge media hash does not match provenance")
 
 
-def _artifact_paths(prepared: PreparedHybridProposal) -> tuple[Path, Path, Path]:
+def _artifact_paths(
+    prepared: PreparedHybridProposal,
+    model: str,
+) -> tuple[Path, Path, Path, Path]:
     item_dir = prepared.proxy_path.parent
+    tag = model.replace("/", "__").replace(".", "_")
     return (
-        item_dir / "request.judge.openrouter.json",
-        item_dir / "response.judge.openrouter.json",
-        item_dir / "cost.judge.openrouter.json",
+        item_dir / f"request.judge.openrouter.{tag}.json",
+        item_dir / f"response.judge.openrouter.{tag}.json",
+        item_dir / f"response.judge.openrouter.{tag}.raw.json",
+        item_dir / f"cost.judge.openrouter.{tag}.json",
     )
 
 
@@ -579,12 +625,13 @@ def _load_cached_response(
     cost_request: CostRequest,
     judge_request: HybridJudgeRequestArtifact,
 ) -> HybridJudgeResponse | None:
-    request_meta_path, response_path, _ = _artifact_paths(prepared)
+    request_meta_path, response_path, _, _ = _artifact_paths(prepared, cost_request.model)
     if not request_meta_path.is_file() or not response_path.is_file():
         return None
     record = _existing_call(service, cost_request.call_id)
     if record is None or record.status.value != "SETTLED":
         return None
+    profile = get_openrouter_model_profile(cost_request.model)
     try:
         meta = read_json(request_meta_path)
         raw = read_json(response_path)
@@ -601,7 +648,11 @@ def _load_cached_response(
         if raw.get("judge_request_fingerprint") != judge_request.request_fingerprint:
             return None
         envelope = OpenRouterCompletionEnvelope.model_validate(raw.get("envelope"))
-        if envelope.router_attempt_count != 1 or envelope.selected_provider != "Z.AI":
+        if (
+            envelope.router_attempt_count != 1
+            or envelope.selected_provider != profile.selected_provider_name
+            or envelope.model != profile.model_id
+        ):
             return None
         response = parse_hybrid_judge_response(
             raw.get("response"),

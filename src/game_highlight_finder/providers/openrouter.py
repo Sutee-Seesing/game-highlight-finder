@@ -1,10 +1,9 @@
-"""OpenRouter transport for the bounded Z.AI GLM-5V-Turbo comparator.
+"""OpenRouter transport for the bounded multimodal gameplay bake-off.
 
 The transport deliberately uses one stdlib HTTP POST with no client-side retry.
-Local/private MP4 clips are encoded as ``data:video/mp4;base64,...`` in the
-OpenRouter ``video_url`` content item. Provider routing is pinned to Z.AI with
-fallbacks disabled. The pipeline still owns cost reservation, settlement, and
-semantic validation.
+Local/private MP4 clips are encoded as ``data:video/mp4;base64,...`` and each
+model profile pins its exact upstream provider, price ceiling, and response
+format. The pipeline owns cost reservation, settlement, and semantic validation.
 """
 
 from __future__ import annotations
@@ -20,6 +19,11 @@ from typing import Any, Literal, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from game_highlight_finder.openrouter_models import (
+    GLM_5V_TURBO,
+    OPENROUTER_ROUND_A_PROFILES,
+    get_openrouter_model_profile,
+)
 from game_highlight_finder.providers.base import (
     ProviderCapabilities,
     ProviderDescriptor,
@@ -28,8 +32,9 @@ from game_highlight_finder.providers.base import (
 )
 
 OPENROUTER_PROVIDER = "openrouter"
-OPENROUTER_GLM_5V_TURBO_MODEL_ID = "z-ai/glm-5v-turbo"
-OPENROUTER_UPSTREAM_PROVIDER_SLUG = "z-ai"
+# Backward-compatible aliases for the first comparator profile.
+OPENROUTER_GLM_5V_TURBO_MODEL_ID = GLM_5V_TURBO.model_id
+OPENROUTER_UPSTREAM_PROVIDER_SLUG = GLM_5V_TURBO.upstream_provider_slug
 OPENROUTER_API_SURFACE = "chat_completions"
 OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
 OPENROUTER_HTTP_ATTEMPTS = 1
@@ -75,7 +80,6 @@ class OpenRouterTransport(Protocol):
     api_surface: str
     http_retry_attempts: int
     media_transport_verified: bool
-    upstream_provider_slug: str
 
     def generate(
         self,
@@ -101,7 +105,6 @@ class OpenRouterHTTPTransport:
     api_surface = OPENROUTER_API_SURFACE
     http_retry_attempts = OPENROUTER_HTTP_ATTEMPTS
     media_transport_verified = True
-    upstream_provider_slug = OPENROUTER_UPSTREAM_PROVIDER_SLUG
 
     def __init__(
         self,
@@ -133,10 +136,10 @@ class OpenRouterHTTPTransport:
         thinking_mode: str,
         before_generation: Callable[[], None] | None = None,
     ) -> OpenRouterCompletionEnvelope:
-        if model != OPENROUTER_GLM_5V_TURBO_MODEL_ID:
-            raise OpenRouterConfigurationError(
-                f"OpenRouter comparator requires exact model {OPENROUTER_GLM_5V_TURBO_MODEL_ID}."
-            )
+        try:
+            profile = get_openrouter_model_profile(model)
+        except ValueError as exc:
+            raise OpenRouterConfigurationError(str(exc)) from exc
         if not media_path.is_file() or media_path.suffix.lower() != ".mp4":
             raise OpenRouterConfigurationError("OpenRouter comparator requires a local MP4 clip.")
         api_key = os.getenv(self.api_key_env, "").strip()
@@ -148,42 +151,60 @@ class OpenRouterHTTPTransport:
             raise OpenRouterConfigurationError("OpenRouter max output tokens must be positive.")
         if thinking_mode not in {"enabled", "disabled"}:
             raise OpenRouterConfigurationError("Unsupported OpenRouter reasoning mode.")
+        if thinking_mode == "enabled" and not profile.supports_reasoning:
+            raise OpenRouterConfigurationError(
+                f"OpenRouter model {model} does not support the locked reasoning contract."
+            )
 
         try:
             media_bytes = media_path.read_bytes()
         except OSError as exc:
             raise OpenRouterConfigurationError("Cannot read OpenRouter proposal media.") from exc
         media_data_url = "data:video/mp4;base64," + base64.b64encode(media_bytes).decode("ascii")
-        schema_json = json.dumps(
-            response_schema,
-            sort_keys=True,
-            separators=(",", ":"),
-            ensure_ascii=False,
-        )
-        formatting_suffix = (
-            "\nProvider formatting contract: output one JSON object only. "
-            "The required JSON Schema is: "
-            + schema_json
-        )
+        request_prompt = prompt
+        if profile.response_format_mode == "json_schema":
+            response_format: dict[str, object] = {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "hybrid_judge",
+                    "strict": True,
+                    "schema": dict(response_schema),
+                },
+            }
+        else:
+            schema_json = json.dumps(
+                response_schema,
+                sort_keys=True,
+                separators=(",", ":"),
+                ensure_ascii=False,
+            )
+            request_prompt += (
+                "\nProvider formatting contract: output one JSON object only. "
+                "The required JSON Schema is: " + schema_json
+            )
+            response_format = {"type": "json_object"}
         payload = {
             "model": model,
             "messages": [
                 {
                     "role": "user",
                     "content": [
-                        {"type": "text", "text": prompt + formatting_suffix},
+                        {"type": "text", "text": request_prompt},
                         {"type": "video_url", "video_url": {"url": media_data_url}},
                     ],
                 }
             ],
             "max_tokens": max_output_tokens,
             "reasoning": {"enabled": thinking_mode == "enabled", "exclude": True},
-            "response_format": {"type": "json_object"},
+            "response_format": response_format,
             "provider": {
-                "only": [OPENROUTER_UPSTREAM_PROVIDER_SLUG],
+                "only": [profile.upstream_provider_slug],
                 "allow_fallbacks": False,
                 "require_parameters": True,
-                "max_price": {"prompt": 0.0000012, "completion": 0.000004},
+                "max_price": {
+                    "prompt": float(profile.max_prompt_price_per_token_usd),
+                    "completion": float(profile.max_completion_price_per_token_usd),
+                },
             },
             "usage": {"include": True},
             "stream": False,
@@ -230,7 +251,7 @@ class OpenRouterHTTPTransport:
                 may_have_dispatched=True,
                 provider_request_id=generation_id,
             ) from exc
-        return _parse_completion(raw, generation_id=generation_id)
+        return _parse_completion(raw, generation_id=generation_id, expected_model=model)
 
 
 class FakeOpenRouterTransport:
@@ -239,7 +260,6 @@ class FakeOpenRouterTransport:
     api_surface = OPENROUTER_API_SURFACE
     http_retry_attempts = OPENROUTER_HTTP_ATTEMPTS
     media_transport_verified = True
-    upstream_provider_slug = OPENROUTER_UPSTREAM_PROVIDER_SLUG
 
     def __init__(
         self,
@@ -250,14 +270,12 @@ class FakeOpenRouterTransport:
         api_surface: str = OPENROUTER_API_SURFACE,
         http_retry_attempts: int = OPENROUTER_HTTP_ATTEMPTS,
         media_transport_verified: bool = True,
-        upstream_provider_slug: str = OPENROUTER_UPSTREAM_PROVIDER_SLUG,
         router_attempt_count: int | None = 1,
-        selected_provider: str | None = "Z.AI",
+        selected_provider: str | None = None,
     ) -> None:
         self.api_surface = api_surface
         self.http_retry_attempts = http_retry_attempts
         self.media_transport_verified = media_transport_verified
-        self.upstream_provider_slug = upstream_provider_slug
         if response is None:
             response = {
                 "decision": "REJECT",
@@ -296,6 +314,7 @@ class FakeOpenRouterTransport:
         if self.generation_error is not None:
             raise self.generation_error
         output_text = self.response if isinstance(self.response, str) else json.dumps(self.response)
+        profile = get_openrouter_model_profile(model)
         return OpenRouterCompletionEnvelope(
             id=self.usage.provider_request_id or "fake-openrouter-1",
             model=model,
@@ -303,35 +322,48 @@ class FakeOpenRouterTransport:
             finish_reason="stop",
             usage=self.usage,
             router_attempt_count=self.router_attempt_count,
-            selected_provider=self.selected_provider,
+            selected_provider=self.selected_provider or profile.selected_provider_name,
         )
 
 
 def openrouter_provider_descriptor() -> ProviderDescriptor:
-    """Return the exact OpenRouter-routed Z.AI GLM-5V-Turbo comparator."""
+    """Return the locked seven-model OpenRouter gameplay bake-off catalog."""
 
-    capabilities = ProviderCapabilities(
+    provider_capabilities = ProviderCapabilities(
         video_input=True,
         audio_input=False,
-        structured_output=False,
+        structured_output=True,
         file_upload=False,
         usage_metadata=True,
         remote_file_deletion=False,
         batch_execution=False,
         async_execution=False,
     )
-    return ProviderDescriptor(
-        provider=OPENROUTER_PROVIDER,
-        display_name="OpenRouter -> Z.AI GLM-5V-Turbo",
-        capabilities=capabilities,
-        models=(
+    models: list[ProviderModel] = []
+    for profile in OPENROUTER_ROUND_A_PROFILES:
+        capabilities = ProviderCapabilities(
+            video_input=True,
+            audio_input=profile.model_id == "xiaomi/mimo-v2.5",
+            structured_output=profile.response_format_mode == "json_schema",
+            file_upload=False,
+            usage_metadata=True,
+            remote_file_deletion=False,
+            batch_execution=False,
+            async_execution=False,
+        )
+        models.append(
             ProviderModel(
                 provider=OPENROUTER_PROVIDER,
-                model_id=OPENROUTER_GLM_5V_TURBO_MODEL_ID,
+                model_id=profile.model_id,
                 billing_modes=("standard",),
                 capabilities=capabilities,
-            ),
-        ),
+            )
+        )
+    return ProviderDescriptor(
+        provider=OPENROUTER_PROVIDER,
+        display_name="OpenRouter multimodal gameplay bake-off",
+        capabilities=provider_capabilities,
+        models=tuple(models),
     )
 
 
@@ -366,6 +398,7 @@ def _parse_completion(
     raw: object,
     *,
     generation_id: str | None,
+    expected_model: str,
 ) -> OpenRouterCompletionEnvelope:
     if not isinstance(raw, dict):
         raise OpenRouterProviderError(
@@ -384,7 +417,7 @@ def _parse_completion(
             "OpenRouter completed response is missing a generation id.",
             may_have_dispatched=True,
         )
-    if model != OPENROUTER_GLM_5V_TURBO_MODEL_ID:
+    if model != expected_model:
         raise OpenRouterProviderError(
             "OpenRouter completed response used an unexpected model.",
             may_have_dispatched=True,

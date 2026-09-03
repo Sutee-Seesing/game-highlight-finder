@@ -340,8 +340,8 @@ defaults remain unlocked. Before any fresh locked holdout, the next sensible pro
 is to define a bounded same-calibration alternate-judge comparison rather than tune against the
 revealed validation holdout.
 
-Provider-free H5A now implements a live-capable **OpenRouter -> Z.AI GLM-5V-Turbo comparator**
-without making any paid call. The exact model identity is `z-ai/glm-5v-turbo`; OpenRouter's
+Provider-free H5A now implements a live-capable **OpenRouter multimodal judge bake-off**
+without making any paid call. The initial single-model slice used `z-ai/glm-5v-turbo`; OpenRouter's
 current endpoint catalog exposes one endpoint, Z.AI, with 202,752-token context and exact USD
 pricing of 1.20/M prompt tokens, 0.24/M cache-read tokens, and 4.00/M completion tokens. The
 comparator reuses the provider-neutral `hybrid-judge-v1` semantic prompt/schema/parser/candidate
@@ -379,6 +379,36 @@ proposals needed for precision. Current targeted verification is 23/23 PASS, Ruf
 currently absent from both the process environment and checked local `.env` declarations. No paid
 OpenRouter/Z.AI call is authorized by this work; the next bounded live gate therefore requires
 credential setup plus fresh explicit authorization for the two-proposal THB 1.385522 experiment.
+
+Round A supersedes the earlier GLM-5V-Turbo-only first gate above. The current provider-free
+bake-off locks seven OpenRouter profiles over the same two cal-02 positives: Qwen3.8 Flash ->
+Alibaba, GLM-5.3-Flash -> Z.AI, MiMo-V2.5 -> Xiaomi direct, Seed-2.0-Mini -> Seed,
+Seed-2.0-Lite -> Seed, GLM-5V-Turbo -> Z.AI, and Qwen3.8 Max -> Alibaba. Every profile pins its
+exact upstream provider with fallback disabled, uses HTTP attempt=1, applies its own per-token
+max-price ceiling, and keeps the same `hybrid-judge-v1` semantic contract. Qwen/Seed profiles use
+provider-enforced JSON Schema where the locked endpoint supports it; GLM/MiMo use JSON-object
+formatting plus authoritative local schema validation. Request fingerprints, call IDs, artifacts,
+and cache paths are model-specific so results from different models cannot overwrite or reuse each
+other's evidence.
+
+Provider-free Round A preflight is **7 models x 2 locked positive clips = 14 logical calls**. Using
+the existing 2026-09-01 USD/THB snapshot, conservative maximum reservations are Qwen3.8 Flash
+THB 0.168295, GLM-5.3-Flash THB 0.173191, MiMo-V2.5 THB 0.131181, Seed-2.0-Mini THB 0.126341,
+Seed-2.0-Lite THB 0.479051, GLM-5V-Turbo THB 1.385522, and Qwen3.8 Max THB 2.200404, totaling
+**THB 4.663985**. The preflight made 0 provider calls / 0 uploads / 0 ledger reservations / 0 cache
+hits. GLM-5.3-Flash reservation deliberately uses its undiscounted list price so the budget gate
+will not under-reserve after the temporary promotion ends; Seed Mini/Lite fail closed before
+reaching their >=128K alternate price tier. Current verification is 32/32 targeted PASS, Ruff PASS
+over `src + tests`, mypy PASS over 79 source files, and canonical full pytest **393/393 PASS in
+114.72s** under durable task `9f673f76-ef08-4b8b-b6b3-4f5f5c740c4b`. The local `.t/` live runner
+uses fresh dedicated ledger/preflight-ledger/summary paths, hard-caps exposure at THB 4.67, permits
+at most 14 logical calls, fixes HTTP attempts at 1, and disables automatic retry. It evaluates
+MUST_CATCH first per model and skips that model's WORTH_REVIEW call after a MUST_CATCH miss or call
+failure, so THB 4.663985 is a conservative preflight maximum rather than a spend target. The runner
+compiles/imports provider-free and its three dedicated live artifacts are absent before execution.
+No Round A paid call is authorized. The next operational boundary is one OpenRouter credential plus
+a fresh explicit authorization for at most 14 logical calls / THB 4.67 hard exposure cap / one
+HTTP attempt per call / no automatic retry.
 
 ### M9 — Optional Reviewer
 
