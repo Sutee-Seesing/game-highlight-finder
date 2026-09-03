@@ -61,12 +61,13 @@ from game_highlight_finder.providers.openrouter import (
 from game_highlight_finder.storage.atomic import atomic_write_json, read_json
 from game_highlight_finder.storage.hashing import hash_file
 
-ZAI_HYBRID_JUDGE_VERSION = "hybrid-judge-openrouter-v2"
+ZAI_HYBRID_JUDGE_VERSION = "hybrid-judge-openrouter-v3"
 ZAI_HYBRID_JUDGE_ESTIMATOR_VERSION = "openrouter-video-estimate-v1"
 ZAI_HYBRID_JUDGE_VIDEO_TOKENS_PER_SECOND = 256
 ZAI_HYBRID_JUDGE_MAX_OUTPUT_TOKENS = 1_024
 ZAI_HYBRID_JUDGE_RESERVED_THINKING_TOKENS = 1_024
 ZAI_HYBRID_JUDGE_MEDIA_TRANSPORT_CONTRACT = "openrouter-base64-video-v1"
+ZAI_HYBRID_JUDGE_ROUTING_PRICE_UNIT = "usd_per_million_tokens"
 
 
 class ZAIHybridJudgeSettings(BaseModel):
@@ -107,7 +108,7 @@ class ZAIHybridJudgeItemPreflight(BaseModel):
 class ZAIHybridJudgeBatchPreflight(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    version: Literal["hybrid-judge-openrouter-v2"] = "hybrid-judge-openrouter-v2"
+    version: Literal["hybrid-judge-openrouter-v3"] = "hybrid-judge-openrouter-v3"
     provider: Literal["openrouter"] = "openrouter"
     model: str
     billing_mode: str
@@ -115,6 +116,7 @@ class ZAIHybridJudgeBatchPreflight(BaseModel):
     thinking_mode: str
     estimator_version: str = ZAI_HYBRID_JUDGE_ESTIMATOR_VERSION
     media_transport_contract: str = ZAI_HYBRID_JUDGE_MEDIA_TRANSPORT_CONTRACT
+    routing_price_unit: str = ZAI_HYBRID_JUDGE_ROUTING_PRICE_UNIT
     items: tuple[ZAIHybridJudgeItemPreflight, ...]
     planned_generation_calls: int = Field(ge=0)
     cache_hit_count: int = Field(ge=0)
@@ -368,6 +370,7 @@ def run_zai_hybrid_judge_with_transport(
             "api_surface": OPENROUTER_API_SURFACE,
             "http_attempts": OPENROUTER_HTTP_ATTEMPTS,
             "media_transport_contract": ZAI_HYBRID_JUDGE_MEDIA_TRANSPORT_CONTRACT,
+            "routing_price_unit": ZAI_HYBRID_JUDGE_ROUTING_PRICE_UNIT,
             "estimator_version": ZAI_HYBRID_JUDGE_ESTIMATOR_VERSION,
             "thinking_mode": resolved.thinking_mode,
             "billing_mode": resolved.billing_mode,
@@ -577,6 +580,7 @@ def _request_parts(
         "provider_fallbacks": False,
         "provider_require_parameters": True,
         "media_transport_contract": ZAI_HYBRID_JUDGE_MEDIA_TRANSPORT_CONTRACT,
+        "routing_price_unit": ZAI_HYBRID_JUDGE_ROUTING_PRICE_UNIT,
         "estimator_version": ZAI_HYBRID_JUDGE_ESTIMATOR_VERSION,
         "thinking_mode": settings.thinking_mode,
         "max_output_tokens": settings.max_output_tokens,
@@ -714,6 +718,7 @@ __all__ = [
     "ZAI_HYBRID_JUDGE_MAX_OUTPUT_TOKENS",
     "ZAI_HYBRID_JUDGE_MEDIA_TRANSPORT_CONTRACT",
     "ZAI_HYBRID_JUDGE_RESERVED_THINKING_TOKENS",
+    "ZAI_HYBRID_JUDGE_ROUTING_PRICE_UNIT",
     "ZAI_HYBRID_JUDGE_VERSION",
     "ZAI_HYBRID_JUDGE_VIDEO_TOKENS_PER_SECOND",
     "ZAIHybridJudgeBatchPreflight",

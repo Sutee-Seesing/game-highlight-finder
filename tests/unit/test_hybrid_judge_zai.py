@@ -242,8 +242,10 @@ def test_zai_preflight_quotes_batch_without_provider_or_ledger_writes(tmp_path: 
         cost_service=service,
     )
 
+    assert result.version == "hybrid-judge-openrouter-v3"
     assert result.provider == "openrouter"
     assert result.model == "z-ai/glm-5v-turbo"
+    assert result.routing_price_unit == "usd_per_million_tokens"
     assert result.planned_generation_calls == 2
     assert result.cache_hit_count == 0
     assert result.aggregate_maximum_reserved_micro_thb > 0
@@ -307,8 +309,10 @@ def test_fake_zai_settles_maps_event_and_cache_reuses(tmp_path: Path) -> None:
     assert request_meta["provider"] == "openrouter"
     assert request_meta["upstream_provider"] == "z-ai"
     assert request_meta["api_surface"] == "chat_completions"
+    assert request_meta["version"] == "hybrid-judge-openrouter-v3"
     assert request_meta["http_attempts"] == 1
     assert request_meta["media_transport_contract"] == "openrouter-base64-video-v1"
+    assert request_meta["routing_price_unit"] == "usd_per_million_tokens"
     assert read_json(first.cost_path)["state"] == "SETTLED"
 
     second = run_zai_hybrid_judge_with_transport(
