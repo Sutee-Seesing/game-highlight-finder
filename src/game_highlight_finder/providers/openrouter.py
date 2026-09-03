@@ -68,7 +68,7 @@ class OpenRouterCompletionEnvelope(BaseModel):
     status: Literal["completed"] = "completed"
     id: str = Field(min_length=1, max_length=256)
     model: str = Field(min_length=1, max_length=256)
-    output_text: str = Field(min_length=1, max_length=1_048_576)
+    output_text: str = Field(max_length=1_048_576)
     finish_reason: str | None = Field(default=None, max_length=64)
     usage: ProviderUsageActual
     router_attempt_count: int | None = Field(default=None, ge=0, le=64)
@@ -89,6 +89,7 @@ class OpenRouterTransport(Protocol):
         response_schema: Mapping[str, Any],
         model: str,
         max_output_tokens: int,
+        reasoning_max_tokens: int,
         thinking_mode: str,
         before_generation: Callable[[], None] | None = None,
     ) -> OpenRouterCompletionEnvelope: ...
@@ -133,6 +134,7 @@ class OpenRouterHTTPTransport:
         response_schema: Mapping[str, Any],
         model: str,
         max_output_tokens: int,
+        reasoning_max_tokens: int,
         thinking_mode: str,
         before_generation: Callable[[], None] | None = None,
     ) -> OpenRouterCompletionEnvelope:
@@ -149,6 +151,14 @@ class OpenRouterHTTPTransport:
             )
         if max_output_tokens <= 0:
             raise OpenRouterConfigurationError("OpenRouter max output tokens must be positive.")
+        if reasoning_max_tokens < 0:
+            raise OpenRouterConfigurationError(
+                "OpenRouter reasoning max tokens cannot be negative."
+            )
+        if thinking_mode == "enabled" and reasoning_max_tokens <= 0:
+            raise OpenRouterConfigurationError(
+                "OpenRouter enabled reasoning requires a positive reasoning token budget."
+            )
         if thinking_mode not in {"enabled", "disabled"}:
             raise OpenRouterConfigurationError("Unsupported OpenRouter reasoning mode.")
         if thinking_mode == "enabled" and not profile.supports_reasoning:
@@ -194,8 +204,19 @@ class OpenRouterHTTPTransport:
                     ],
                 }
             ],
-            "max_tokens": max_output_tokens,
-            "reasoning": {"enabled": thinking_mode == "enabled", "exclude": True},
+            # OpenRouter counts reasoning tokens inside the completion ceiling. Keep the
+            # final-answer allowance additive with the separately reserved thinking budget.
+            "max_tokens": max_output_tokens
+            + (reasoning_max_tokens if thinking_mode == "enabled" else 0),
+            "reasoning": {
+                "enabled": thinking_mode == "enabled",
+                "exclude": True,
+                **(
+                    {"max_tokens": reasoning_max_tokens}
+                    if thinking_mode == "enabled"
+                    else {}
+                ),
+            },
             "response_format": response_format,
             "provider": {
                 "only": [profile.upstream_provider_slug],
@@ -279,6 +300,7 @@ class FakeOpenRouterTransport:
         media_transport_verified: bool = True,
         router_attempt_count: int | None = 1,
         selected_provider: str | None = None,
+        finish_reason: str | None = "stop",
     ) -> None:
         self.api_surface = api_surface
         self.http_retry_attempts = http_retry_attempts
@@ -299,6 +321,7 @@ class FakeOpenRouterTransport:
         self.generation_error = generation_error
         self.router_attempt_count = router_attempt_count
         self.selected_provider = selected_provider
+        self.finish_reason = finish_reason
         self.generation_count = 0
         self.generated_media: list[Path] = []
 
@@ -310,10 +333,11 @@ class FakeOpenRouterTransport:
         response_schema: Mapping[str, Any],
         model: str,
         max_output_tokens: int,
+        reasoning_max_tokens: int,
         thinking_mode: str,
         before_generation: Callable[[], None] | None = None,
     ) -> OpenRouterCompletionEnvelope:
-        del prompt, response_schema, max_output_tokens, thinking_mode
+        del prompt, response_schema, max_output_tokens, reasoning_max_tokens, thinking_mode
         self.generation_count += 1
         self.generated_media.append(media_path)
         if before_generation is not None:
@@ -326,7 +350,7 @@ class FakeOpenRouterTransport:
             id=self.usage.provider_request_id or "fake-openrouter-1",
             model=model,
             output_text=output_text,
-            finish_reason="stop",
+            finish_reason=self.finish_reason,
             usage=self.usage,
             router_attempt_count=self.router_attempt_count,
             selected_provider=self.selected_provider or profile.selected_provider_name,
@@ -437,12 +461,9 @@ def _parse_completion(
             provider_request_id=response_id,
         )
     message = choices[0].get("message")
-    if not isinstance(message, dict) or not isinstance(message.get("content"), str):
-        raise OpenRouterProviderError(
-            "OpenRouter completed response is missing text content.",
-            may_have_dispatched=True,
-            provider_request_id=response_id,
-        )
+    output_text = ""
+    if isinstance(message, dict) and isinstance(message.get("content"), str):
+        output_text = message["content"]
     actual_usage, reported_cost = _parse_usage(usage, provider_request_id=response_id)
     metadata = raw.get("openrouter_metadata")
     attempt_count: int | None = None
@@ -465,7 +486,7 @@ def _parse_completion(
     return OpenRouterCompletionEnvelope(
         id=response_id,
         model=model,
-        output_text=message["content"],
+        output_text=output_text,
         finish_reason=(
             choices[0].get("finish_reason")
             if isinstance(choices[0].get("finish_reason"), str)

@@ -61,12 +61,12 @@ from game_highlight_finder.providers.openrouter import (
 from game_highlight_finder.storage.atomic import atomic_write_json, read_json
 from game_highlight_finder.storage.hashing import hash_file
 
-ZAI_HYBRID_JUDGE_VERSION = "hybrid-judge-openrouter-v3"
+ZAI_HYBRID_JUDGE_VERSION = "hybrid-judge-openrouter-v4"
 ZAI_HYBRID_JUDGE_ESTIMATOR_VERSION = "openrouter-video-estimate-v1"
 ZAI_HYBRID_JUDGE_VIDEO_TOKENS_PER_SECOND = 256
 ZAI_HYBRID_JUDGE_MAX_OUTPUT_TOKENS = 1_024
 ZAI_HYBRID_JUDGE_RESERVED_THINKING_TOKENS = 1_024
-ZAI_HYBRID_JUDGE_MEDIA_TRANSPORT_CONTRACT = "openrouter-base64-video-v1"
+ZAI_HYBRID_JUDGE_MEDIA_TRANSPORT_CONTRACT = "openrouter-base64-video-v2"
 ZAI_HYBRID_JUDGE_ROUTING_PRICE_UNIT = "usd_per_million_tokens"
 
 
@@ -108,7 +108,7 @@ class ZAIHybridJudgeItemPreflight(BaseModel):
 class ZAIHybridJudgeBatchPreflight(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    version: Literal["hybrid-judge-openrouter-v3"] = "hybrid-judge-openrouter-v3"
+    version: Literal["hybrid-judge-openrouter-v4"] = "hybrid-judge-openrouter-v4"
     provider: Literal["openrouter"] = "openrouter"
     model: str
     billing_mode: str
@@ -402,6 +402,7 @@ def run_zai_hybrid_judge_with_transport(
             response_schema=request.response_schema,
             model=resolved.model,
             max_output_tokens=resolved.max_output_tokens,
+            reasoning_max_tokens=resolved.reserved_thinking_tokens,
             thinking_mode=resolved.thinking_mode,
             before_generation=mark_in_flight,
         )
@@ -436,6 +437,12 @@ def run_zai_hybrid_judge_with_transport(
             raise ValidationError(
                 "OpenRouter routing metadata did not confirm the locked upstream endpoint."
             )
+        if envelope.finish_reason == "length":
+            raise ValidationError(
+                "OpenRouter completion exhausted its combined reasoning/final-output token budget."
+            )
+        if not envelope.output_text.strip():
+            raise ValidationError("OpenRouter completed response is missing text content.")
         response = parse_hybrid_judge_response(
             envelope.output_text,
             proposal_duration_ms=request.proposal_duration_ms,

@@ -242,7 +242,7 @@ def test_zai_preflight_quotes_batch_without_provider_or_ledger_writes(tmp_path: 
         cost_service=service,
     )
 
-    assert result.version == "hybrid-judge-openrouter-v3"
+    assert result.version == "hybrid-judge-openrouter-v4"
     assert result.provider == "openrouter"
     assert result.model == "z-ai/glm-5v-turbo"
     assert result.routing_price_unit == "usd_per_million_tokens"
@@ -309,9 +309,9 @@ def test_fake_zai_settles_maps_event_and_cache_reuses(tmp_path: Path) -> None:
     assert request_meta["provider"] == "openrouter"
     assert request_meta["upstream_provider"] == "z-ai"
     assert request_meta["api_surface"] == "chat_completions"
-    assert request_meta["version"] == "hybrid-judge-openrouter-v3"
+    assert request_meta["version"] == "hybrid-judge-openrouter-v4"
     assert request_meta["http_attempts"] == 1
-    assert request_meta["media_transport_contract"] == "openrouter-base64-video-v1"
+    assert request_meta["media_transport_contract"] == "openrouter-base64-video-v2"
     assert request_meta["routing_price_unit"] == "usd_per_million_tokens"
     assert read_json(first.cost_path)["state"] == "SETTLED"
 
@@ -595,6 +595,7 @@ def test_openrouter_http_transport_encodes_local_mp4_and_locks_routing(
         response_schema={"type": "object"},
         model="z-ai/glm-5v-turbo",
         max_output_tokens=1_024,
+        reasoning_max_tokens=1_024,
         thinking_mode="enabled",
     )
 
@@ -610,8 +611,13 @@ def test_openrouter_http_transport_encodes_local_mp4_and_locks_routing(
         "max_price": {"prompt": 1.2, "completion": 4.0},
     }
     assert payload["usage"] == {"include": True}
+    assert payload["max_tokens"] == 2_048
     assert payload["response_format"] == {"type": "json_object"}
-    assert payload["reasoning"] == {"enabled": True, "exclude": True}
+    assert payload["reasoning"] == {
+        "enabled": True,
+        "exclude": True,
+        "max_tokens": 1_024,
+    }
     video_url = payload["messages"][0]["content"][1]["video_url"]["url"]
     assert video_url.startswith("data:video/mp4;base64,")
     assert base64.b64decode(video_url.split(",", 1)[1]) == media_bytes
@@ -679,11 +685,18 @@ def test_openrouter_round_a_profiles_lock_routing_price_and_response_contract(
         response_schema={"type": "object", "properties": {"decision": {"type": "string"}}},
         model=model_profile.model_id,
         max_output_tokens=1_024,
+        reasoning_max_tokens=1_024,
         thinking_mode="enabled",
     )
 
     payload = captured["payload"]
     assert isinstance(payload, dict)
+    assert payload["max_tokens"] == 2_048
+    assert payload["reasoning"] == {
+        "enabled": True,
+        "exclude": True,
+        "max_tokens": 1_024,
+    }
     assert payload["provider"] == {
         "only": [model_profile.upstream_provider_slug],
         "allow_fallbacks": False,
@@ -738,6 +751,7 @@ def test_openrouter_payload_guard_blocks_before_http_dispatch(
             response_schema={"type": "object"},
             model="z-ai/glm-5v-turbo",
             max_output_tokens=1_024,
+            reasoning_max_tokens=1_024,
             thinking_mode="enabled",
         )
     assert calls == 0
@@ -771,6 +785,7 @@ def test_openrouter_http_error_has_exactly_one_client_attempt(
             response_schema={"type": "object"},
             model="z-ai/glm-5v-turbo",
             max_output_tokens=1_024,
+            reasoning_max_tokens=1_024,
             thinking_mode="enabled",
         )
     assert calls == 1
@@ -824,11 +839,106 @@ def test_openrouter_router_rejection_attempt_zero_is_pre_dispatch(
             response_schema={"type": "object"},
             model="z-ai/glm-5v-turbo",
             max_output_tokens=1_024,
+            reasoning_max_tokens=1_024,
             thinking_mode="enabled",
         )
     assert calls == 1
     assert exc_info.value.may_have_dispatched is False
     assert exc_info.value.provider_request_id is None
+
+
+def test_openrouter_length_response_without_content_preserves_usage(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    media = tmp_path / "proposal.mp4"
+    media.write_bytes(b"small-video")
+
+    def fake_post(
+        url: str,
+        headers: dict[str, str],
+        body: bytes,
+        timeout_seconds: float,
+    ) -> tuple[int, dict[str, str], bytes]:
+        del url, headers, body, timeout_seconds
+        response = {
+            "id": "gen-length",
+            "model": "qwen/qwen3.8-flash",
+            "choices": [
+                {
+                    "finish_reason": "length",
+                    "message": {"content": None, "reasoning": "hidden by request"},
+                }
+            ],
+            "usage": {
+                "prompt_tokens": 5_000,
+                "completion_tokens": 1_024,
+                "completion_tokens_details": {"reasoning_tokens": 1_024},
+                "cost": 0.001,
+            },
+            "openrouter_metadata": {
+                "attempt": 1,
+                "endpoints": {
+                    "available": [{"provider": "Alibaba", "selected": True}]
+                },
+            },
+        }
+        return 200, {"X-Generation-Id": "gen-length"}, json.dumps(response).encode()
+
+    monkeypatch.setenv("OPENROUTER_API_KEY", "unit-test-key")
+    envelope = OpenRouterHTTPTransport(http_post=fake_post).generate(
+        media_path=media,
+        prompt="judge",
+        response_schema={"type": "object"},
+        model="qwen/qwen3.8-flash",
+        max_output_tokens=1_024,
+        reasoning_max_tokens=1_024,
+        thinking_mode="enabled",
+    )
+
+    assert envelope.output_text == ""
+    assert envelope.finish_reason == "length"
+    assert envelope.usage.output_tokens == 0
+    assert envelope.usage.thinking_tokens == 1_024
+    assert envelope.router_attempt_count == 1
+    assert envelope.selected_provider == "Alibaba"
+
+
+def test_length_exhaustion_is_settled_and_raw_is_preserved(tmp_path: Path) -> None:
+    preparation = _preparation(
+        tmp_path,
+        [_proposal("proposal_cdcdcdcdcdcdcdcd", 0, 20_000)],
+    )
+    config = _config(tmp_path)
+    service = _service(config)
+    transport = FakeOpenRouterTransport(
+        response='{\"decision\":\"KEEP\",\"summary\":\"',
+        usage=ProviderUsageActual(
+            input_text_tokens=5_427,
+            output_tokens=8,
+            thinking_tokens=1_016,
+            provider_request_id="gen-length-seed",
+        ),
+        selected_provider="Z.AI",
+        finish_reason="length",
+    )
+
+    with pytest.raises(ValidationError, match="exhausted its combined reasoning/final-output"):
+        run_zai_hybrid_judge_with_transport(
+            preparation,
+            preparation.prepared[0],
+            config,
+            transport=transport,
+            settings=_settings(model=GLM_5V_TURBO.model_id),
+            cost_service=service,
+        )
+
+    assert transport.generation_count == 1
+    assert service.calls()[0].status.value == "SETTLED"
+    item_dir = preparation.prepared[0].proxy_path.parent
+    assert read_json(_artifact_path(item_dir, "cost"))["state"] == "SETTLED"
+    assert _raw_response_path(item_dir).exists()
+    assert not _artifact_path(item_dir, "response").exists()
 
 
 def test_router_retry_metadata_is_settled_then_rejected_locally(tmp_path: Path) -> None:
