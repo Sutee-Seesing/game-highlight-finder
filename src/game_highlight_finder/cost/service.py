@@ -208,8 +208,10 @@ class CostService:
     ) -> LedgerRecord:
         return self.ledger.settle(call_id, actual_usage, provider_request_id=provider_request_id)
 
-    def release(self, call_id: str) -> LedgerRecord:
-        return self.ledger.release(call_id)
+    def release(
+        self, call_id: str, *, confirmed_no_dispatch: bool = False
+    ) -> LedgerRecord:
+        return self.ledger.release(call_id, confirmed_no_dispatch=confirmed_no_dispatch)
 
     def mark_ambiguous(self, call_id: str, reason: str) -> LedgerRecord:
         return self.ledger.mark_ambiguous(call_id, reason)

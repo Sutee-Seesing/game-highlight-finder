@@ -465,9 +465,13 @@ def run_zai_hybrid_judge_with_transport(
             candidates=response_to_candidates(request, response),
         )
     except OpenRouterProviderError as exc:
-        if exc.may_have_dispatched or in_flight:
+        if exc.may_have_dispatched:
+            if in_flight:
+                with suppress(Exception):
+                    service.mark_ambiguous(call_id, str(exc))
+        elif in_flight:
             with suppress(Exception):
-                service.mark_ambiguous(call_id, str(exc))
+                service.release(call_id, confirmed_no_dispatch=True)
         elif reserved:
             with suppress(Exception):
                 service.release(call_id)

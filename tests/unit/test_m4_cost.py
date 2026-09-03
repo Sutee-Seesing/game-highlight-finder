@@ -289,6 +289,14 @@ def test_lifecycle_release_settle_and_idempotency(tmp_path: Path) -> None:
     service.release(release_request.call_id)
     assert service.ledger.get(release_request.call_id).status is LifecycleStatus.RELEASED
 
+    pre_dispatch_request = _request("call-pre-dispatch-release")
+    service.reserve(pre_dispatch_request, now=NOW)
+    service.mark_in_flight(pre_dispatch_request.call_id)
+    service.release(pre_dispatch_request.call_id, confirmed_no_dispatch=True)
+    assert (
+        service.ledger.get(pre_dispatch_request.call_id).status is LifecycleStatus.RELEASED
+    )
+
 
 def test_budget_gate_exact_limit_and_release(tmp_path: Path) -> None:
     service = _service(tmp_path, budget="0.432")

@@ -202,8 +202,10 @@ class OpenRouterHTTPTransport:
                 "allow_fallbacks": False,
                 "require_parameters": True,
                 "max_price": {
-                    "prompt": float(profile.max_prompt_price_per_token_usd),
-                    "completion": float(profile.max_completion_price_per_token_usd),
+                    # OpenRouter's routing max_price contract is USD per million tokens,
+                    # even though endpoint catalog pricing is exposed per token elsewhere.
+                    "prompt": float(profile.input_per_million_usd),
+                    "completion": float(profile.output_per_million_usd),
                 },
             },
             "usage": {"include": True},
@@ -238,9 +240,14 @@ class OpenRouterHTTPTransport:
         generation_id = _header(response_headers, "x-generation-id")
         if status != 200:
             detail = _safe_error_message(response_body)
+            router_attempt_count = _safe_error_router_attempt_count(response_body)
             raise OpenRouterProviderError(
                 f"OpenRouter HTTP {status}: {detail}",
-                may_have_dispatched=True,
+                # OpenRouter router metadata attempt=0 proves the request was
+                # rejected before any upstream provider dispatch (for example,
+                # because max_price filtered every endpoint). Missing metadata
+                # remains conservative and therefore ambiguous.
+                may_have_dispatched=router_attempt_count != 0,
                 provider_request_id=generation_id,
             )
         try:
@@ -540,6 +547,22 @@ def _strict_nonnegative_int(value: object, field: str) -> int:
             may_have_dispatched=True,
         )
     return value
+
+
+def _safe_error_router_attempt_count(body: bytes) -> int | None:
+    try:
+        payload = json.loads(body.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    if not isinstance(payload, dict):
+        return None
+    metadata = payload.get("openrouter_metadata")
+    if not isinstance(metadata, dict):
+        return None
+    attempt = metadata.get("attempt")
+    if isinstance(attempt, int) and not isinstance(attempt, bool) and attempt >= 0:
+        return attempt
+    return None
 
 
 def _safe_error_message(body: bytes) -> str:

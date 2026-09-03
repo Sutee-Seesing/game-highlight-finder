@@ -445,7 +445,7 @@ class CostLedger:
             )
         allowed = {LifecycleStatus.RESERVED}
         if confirmed_no_dispatch:
-            allowed.add(LifecycleStatus.AMBIGUOUS)
+            allowed.update({LifecycleStatus.IN_FLIGHT, LifecycleStatus.AMBIGUOUS})
         return self._transition(
             call_id,
             expected=allowed,

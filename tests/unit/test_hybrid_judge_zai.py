@@ -464,6 +464,37 @@ def test_zai_ambiguous_generation_is_persisted_without_retry(tmp_path: Path) -> 
     assert transport.generation_count == 1
 
 
+def test_zai_pre_dispatch_router_rejection_releases_reservation(tmp_path: Path) -> None:
+    preparation = _preparation(
+        tmp_path,
+        [_proposal("proposal_8989898989898989", 0, 20_000)],
+    )
+    config = _config(tmp_path)
+    service = _service(config)
+    transport = FakeOpenRouterTransport(
+        generation_error=OpenRouterProviderError(
+            "router rejected before upstream dispatch",
+            may_have_dispatched=False,
+        )
+    )
+
+    with pytest.raises(ValidationError, match="router rejected"):
+        run_zai_hybrid_judge_with_transport(
+            preparation,
+            preparation.prepared[0],
+            config,
+            transport=transport,
+            settings=_settings(),
+            cost_service=service,
+        )
+
+    assert transport.generation_count == 1
+    assert service.calls()[0].status.value == "RELEASED"
+    assert read_json(_artifact_path(preparation.prepared[0].proxy_path.parent, "cost"))[
+        "state"
+    ] == "RELEASED"
+
+
 def test_zai_actual_usage_can_settle_below_conservative_reservation(tmp_path: Path) -> None:
     preparation = _preparation(
         tmp_path,
@@ -572,7 +603,7 @@ def test_openrouter_http_transport_encodes_local_mp4_and_locks_routing(
         "only": ["z-ai"],
         "allow_fallbacks": False,
         "require_parameters": True,
-        "max_price": {"prompt": 0.0000012, "completion": 0.000004},
+        "max_price": {"prompt": 1.2, "completion": 4.0},
     }
     assert payload["usage"] == {"include": True}
     assert payload["response_format"] == {"type": "json_object"}
@@ -654,8 +685,8 @@ def test_openrouter_round_a_profiles_lock_routing_price_and_response_contract(
         "allow_fallbacks": False,
         "require_parameters": True,
         "max_price": {
-            "prompt": float(model_profile.max_prompt_price_per_token_usd),
-            "completion": float(model_profile.max_completion_price_per_token_usd),
+            "prompt": float(model_profile.input_per_million_usd),
+            "completion": float(model_profile.output_per_million_usd),
         },
     }
     if model_profile.response_format_mode == "json_schema":
@@ -741,6 +772,59 @@ def test_openrouter_http_error_has_exactly_one_client_attempt(
     assert calls == 1
     assert exc_info.value.may_have_dispatched is True
     assert exc_info.value.provider_request_id == "gen-failed"
+
+
+def test_openrouter_router_rejection_attempt_zero_is_pre_dispatch(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    media = tmp_path / "proposal.mp4"
+    media.write_bytes(b"small-video")
+    calls = 0
+
+    def fake_post(
+        url: str,
+        headers: dict[str, str],
+        body: bytes,
+        timeout_seconds: float,
+    ) -> tuple[int, dict[str, str], bytes]:
+        nonlocal calls
+        del url, headers, body, timeout_seconds
+        calls += 1
+        response = {
+            "error": {
+                "code": 404,
+                "message": "No endpoints found that satisfy the max price for this request",
+            },
+            "openrouter_metadata": {
+                "attempt": 0,
+                "endpoints": {
+                    "available": [
+                        {
+                            "provider": "Z.AI",
+                            "model": "z-ai/glm-5v-turbo",
+                            "selected": False,
+                        }
+                    ]
+                },
+            },
+        }
+        return 404, {}, json.dumps(response).encode()
+
+    monkeypatch.setenv("OPENROUTER_API_KEY", "unit-test-key")
+    transport = OpenRouterHTTPTransport(http_post=fake_post)
+    with pytest.raises(OpenRouterProviderError, match="HTTP 404") as exc_info:
+        transport.generate(
+            media_path=media,
+            prompt="judge",
+            response_schema={"type": "object"},
+            model="z-ai/glm-5v-turbo",
+            max_output_tokens=1_024,
+            thinking_mode="enabled",
+        )
+    assert calls == 1
+    assert exc_info.value.may_have_dispatched is False
+    assert exc_info.value.provider_request_id is None
 
 
 def test_router_retry_metadata_is_settled_then_rejected_locally(tmp_path: Path) -> None:

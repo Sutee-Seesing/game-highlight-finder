@@ -354,7 +354,8 @@ The transport performs exactly one stdlib HTTP POST with no client retry, reads 
 from `OPENROUTER_API_KEY`, applies a 16 MiB encoded-request guard, requests authoritative usage,
 enables reasoning while excluding reasoning text, and pins routing to Z.AI with
 `only=[z-ai]`, `allow_fallbacks=false`, and `require_parameters=true`. The max-price guard uses
-OpenRouter's per-token units (`0.0000012` prompt / `0.000004` completion). Request/cost identity
+OpenRouter's routing units in USD per million tokens (`1.2` prompt / `4.0` completion), while the
+local reservation catalog continues to normalize list price to per-token units. Request/cost identity
 records the OpenRouter provider, Z.AI upstream lock, attempts=1, no-fallback policy, and
 `openrouter-base64-video-v1`. Completed responses settle authoritative usage first; routing
 metadata must then prove exactly one upstream attempt and selected provider `Z.AI` before semantic
@@ -384,8 +385,8 @@ Round A supersedes the earlier GLM-5V-Turbo-only first gate above. The current p
 bake-off locks seven OpenRouter profiles over the same two cal-02 positives: Qwen3.8 Flash ->
 Alibaba, GLM-5.3-Flash -> Z.AI, MiMo-V2.5 -> Xiaomi direct, Seed-2.0-Mini -> Seed,
 Seed-2.0-Lite -> Seed, GLM-5V-Turbo -> Z.AI, and Qwen3.8 Max -> Alibaba. Every profile pins its
-exact upstream provider with fallback disabled, uses HTTP attempt=1, applies its own per-token
-max-price ceiling, and keeps the same `hybrid-judge-v1` semantic contract. Qwen/Seed profiles use
+exact upstream provider with fallback disabled, uses HTTP attempt=1, applies its own USD-per-million
+routing max-price ceiling, and keeps the same `hybrid-judge-v1` semantic contract. Qwen/Seed profiles use
 provider-enforced JSON Schema where the locked endpoint supports it; GLM/MiMo use JSON-object
 formatting plus authoritative local schema validation. Request fingerprints, call IDs, artifacts,
 and cache paths are model-specific so results from different models cannot overwrite or reuse each
@@ -409,6 +410,8 @@ compiles/imports provider-free and its three dedicated live artifacts are absent
 No Round A paid call is authorized. The next operational boundary is one OpenRouter credential plus
 a fresh explicit authorization for at most 14 logical calls / THB 4.67 hard exposure cap / one
 HTTP attempt per call / no automatic retry.
+
+The first authorized live Round A dispatch on 2026-09-03 stopped after the seven MUST_CATCH-first router requests: every model received HTTP 404 `No endpoints found that satisfy the max price for this request`, so all seven WORTH_REVIEW requests were correctly skipped. This produced **zero semantic responses and THB 0 settled**, so it is a routing/configuration incident rather than a model-quality result. The transport had supplied `provider.max_price` in USD per token while OpenRouter routing expects USD per million tokens, filtering every endpoint with a ceiling 1,000,000x too low. The original ledger remains conservative at **7 AMBIGUOUS / THB 2.025090 unresolved reservation** because exact error routing metadata was not persisted. Provider-free remediation now sends USD-per-million routing ceilings and treats explicit router `attempt=0` evidence as confirmed no-upstream-dispatch for release while preserving ambiguity when metadata is absent. Regression after the fix is **49/49 targeted PASS**, Ruff PASS over `src + tests`, mypy PASS over **79 source files**, and canonical full pytest **395/395 PASS in 122.03s**. No automatic retry was made; a replacement live Round A requires fresh explicit attempt/exposure authorization and fresh request/ledger identity.
 
 ### M9 — Optional Reviewer
 
