@@ -101,6 +101,54 @@ def test_window_prompt_v18_is_detection_first_and_keeps_safe_compact_output() ->
     assert "590000" not in prompt
 
 
+def test_window_prompt_v20_creator_treats_visual_silence_and_social_as_first_class() -> None:
+    source_id = "src_" + "a" * 16
+    window = plan_scout_windows(20_000, session_id="session", source_id=source_id).windows[0]
+    prompt = build_window_prompt(
+        source_duration_ms=20_000,
+        window=window,
+        local_signal_summary={"silence_intervals": [{"start_ms": 0, "end_ms": 8_000}]},
+        prompt_version="gemini-scout-window-v20-creator",
+    )
+    assert "No family is automatically more important than another" in prompt
+    assert "silence is not dead air" in prompt
+    assert "no speech does not mean boring" in prompt
+    assert "audio activity is not required for a highlight" in prompt
+    assert "may be valid without a gameplay payoff" in prompt
+    assert "moment_summary must state what actually happened" in prompt
+    assert "creator_reason must separately" in prompt
+    assert "score is creator/editorial short-form potential" in prompt
+    assert "only a navigation hint" in prompt
+    assert "Only after concrete gameplay anchors are covered" not in prompt
+
+
+def test_window_canonicalization_preserves_creator_fields_and_discovery_category() -> None:
+    payload = _window_response(
+        duration_ms=20_000,
+        start_ms=0,
+        end_ms=20_000,
+        event_start=12_000,
+        event_end=13_000,
+    )
+    candidate = payload["candidates"][0]  # type: ignore[index]
+    candidate["category"] = "DISCOVERY"  # type: ignore[index]
+    candidate["moment_summary"] = "Player silently discovers a hidden area."  # type: ignore[index]
+    candidate["creator_reason"] = "The visual reveal is understandable without dialogue."  # type: ignore[index]
+    session_map = canonicalize_scout_response(
+        payload,
+        session_id="session",
+        source_id="src_" + "a" * 16,
+        source_duration_ms=20_000,
+        source_window_id="scout_window_" + "b" * 16,
+        source_window_start_ms=0,
+        source_window_end_ms=20_000,
+    )
+    result = session_map.candidates[0]
+    assert result.category == "DISCOVERY"
+    assert result.moment_summary == "Player silently discovers a hidden area."
+    assert result.creator_reason == "The visual reveal is understandable without dialogue."
+
+
 def test_window_canonicalization_derives_match_ordinal_from_array_order() -> None:
     payload = _window_response(
         duration_ms=20_000,

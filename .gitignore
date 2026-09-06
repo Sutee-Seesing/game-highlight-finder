@@ -31,3 +31,4 @@ benchmarks/experiments/
 benchmarks/comparisons/
 *.log
 .test-tmp/
+.t/

@@ -160,6 +160,18 @@ Ruff and mypy clean; real Gemini API calls during maintenance: zero.
   copies with H.264 NVENC/AAC by default. The helper validates audio, aspect/FPS/scale
   constraints, and a strict 250 ms duration tolerance; proxies are convenience files,
   not benchmark sources, and never alter production encoder defaults.
+- M8 ground-truth integrity repair: **IN PROGRESS (provider-free)**. Direct visual
+  adjudication of eight previously unlabelled candidates found 1 useful highlight and
+  7 boring candidates, but that queue is evidence rather than exhaustive truth. More
+  importantly, the calibration annotation provenance was not based on a complete
+  full-video review, and a genuine cal-01 kill around 439-459 s was found outside the
+  old annotation set. Before any further Scout/ranking/threshold tuning, both
+  calibration videos must receive exhaustive full-timeline visual review and a new
+  private annotation revision must be created without overwriting the old revision.
+  Existing experiment outputs should then be re-evaluated offline against the repaired
+  truth before spending on new inference. Only after that re-score should errors be
+  attributed to Scout detection/localization, reconcile/boundary logic, or
+  ranking/filtering. The revealed validation holdout remains excluded from tuning.
 - V1 defaults are **NOT LOCKED**. The provider-free 63.48-minute structural long-run
   is complete through report with Fake Scout and zero real Gemini calls: five windows,
   five candidates, best-of 3, resume/report exit 0 in 1329.587s, and a warm-cache
@@ -196,6 +208,41 @@ human ground truth.
 - Exit: measured improvement in shortlist precision justifies incremental cost; otherwise leave disabled.
 
 The original milestone order is adjusted so schemas/fake AI and budget controls precede real API integration. Cache/resume is foundational from M1 rather than added late, preventing paid-stage rework. M6, M7, M8A, and M8B1 preparation are complete. v13 completed the bounded validation but did not meet the quality gate; future validation requires a fresh locked holdout, and M9 remains separately authorized work.
+
+### Creator roadmap realignment — ship the audience-building loop
+
+The project North Star is now explicitly multi-game creator growth, not benchmark perfection or FPS-event detection. The next product sequence is:
+
+#### C1 — Creator Candidate Pack Beta (next product milestone)
+
+- Lock a provisional Scout configuration only as far as needed to make the product usable; benchmark work must not become an endless blocker.
+- Validate candidate usefulness on multiple gameplay archetypes, not only Valorant/FPS cases.
+- Present a ranked creator pack containing funny, fail, reaction, friend/social, WTF/unexpected, tension/payoff, discovery, skill/clutch, and personality-driven moments.
+- Keep detection confidence separate from short-form/creator worthiness.
+- Preserve enough setup -> event -> payoff for later editing.
+- Exit: the owner can feed a real long VOD from different game styles and reviewing the generated pack is materially easier than scrubbing the original source.
+
+#### C2 — AI Rough Editor
+
+- Operates only on owner-selected candidate clips, not the full VOD by default.
+- Produces non-destructive draft variants while preserving the untouched extracted candidate.
+- First automations: dead-air tightening, hook suggestion, 9:16 safe reframing, subtitle draft, loudness cleanup, restrained punch-ins/zooms, and caption/on-screen-hook suggestions.
+- Prefer deterministic FFmpeg/local transforms driven by model edit decisions before fully generative video rewriting.
+- Exit: a useful candidate can become a publish-ready draft substantially faster while the owner retains final approval.
+
+#### C3 — Publish Feedback / Creator Learning
+
+- Record candidate selected/rejected, draft chosen, final duration/edit pattern, and post-performance data when available.
+- Keep creator-performance labels separate from event ground truth.
+- Use real posted results to improve creator-specific ranking and editing style instead of pretending the initial `short_form_score` predicts virality.
+- Exit: the system can explain which content families/edit styles appear to work for this creator and prioritize future candidates accordingly.
+
+#### C4 — Higher Automation (later)
+
+- Batch draft generation, learned creator templates, optional export-ready packaging, and only then optional publishing integrations.
+- Automatic publishing is later than automatic draft generation and remains separately authorized.
+
+Canonical strategy details live in `docs/10_CREATOR_GROWTH_AND_AI_EDITING_PLAN.md`.
 
 ## 3. Test strategy
 

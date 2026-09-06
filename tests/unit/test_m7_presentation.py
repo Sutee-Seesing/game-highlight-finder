@@ -67,8 +67,9 @@ def test_ranking_is_stable_and_keeps_all_candidates() -> None:
     assert cache_payload["ranking_version"] == RANKING_VERSION
     assert cache_payload["ranking_basis"] == RANKING_BASIS
     first_entry = artifact.entries[0]
-    assert first_entry.score == first_entry.short_form_score == 8
+    assert first_entry.score == first_entry.short_form_score == first_entry.creator_score == 8
     assert first_entry.confidence == first_entry.detection_confidence == 0.9
+    assert "creator_score=8.000000" in first_entry.ranking_key
     assert "short_form_score=8.000000" in first_entry.ranking_key
     assert "detection_confidence=0.900000" in first_entry.ranking_key
     assert session_map.model_dump(mode="json") == before
@@ -86,6 +87,7 @@ def test_stale_v1_ranking_is_recreated_safely(tmp_path: Path) -> None:
     legacy["cache_key"] = "0" * 64
     for entry in legacy["entries"]:
         entry.pop("short_form_score")
+        entry.pop("creator_score")
         entry.pop("detection_confidence")
     atomic_write_json(paths.ranking_path, legacy)
 
@@ -94,7 +96,7 @@ def test_stale_v1_ranking_is_recreated_safely(tmp_path: Path) -> None:
     assert cache_hit is False
     assert recreated.ranking_version == RANKING_VERSION
     assert recreated.ranking_basis == RANKING_BASIS
-    assert persisted["schema_version"] == 2
+    assert persisted["schema_version"] == 3
     assert persisted["ranking_version"] == RANKING_VERSION
     assert persisted["ranking_basis"] == RANKING_BASIS
 

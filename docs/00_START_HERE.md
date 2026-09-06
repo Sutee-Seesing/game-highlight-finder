@@ -1,8 +1,12 @@
 # Game Highlight Finder — Start Here
 
-Status: M8 v13 validation completed but quality failed; 63.48-minute structural long-run complete through report; M8 NOT ACCEPTED / V1 NOT LOCKED
+Status: creator roadmap realigned to multi-game audience growth; Creator Candidate Pack Beta (C1) is the next product milestone; v21 targeted diagnostics complete; V1 defaults still provisional
 Plan date: 2026-08-11  
 Working project path: `C:\Data\Works\Personal_Projects\Active_Products\game-highlight-finder`
+
+## Conversation-resume checkpoint
+
+For current operational state, do **not** reconstruct the project from a long ChatGPT transcript. Read `.agent/handoff.json`, `docs/CURRENT_STATE.md`, and `docs/NEXT_ACTION.md`, then inspect live git/task state. The handoff protocol is documented in `docs/09_CHAT_HANDOFF_PROTOCOL.md`. A new conversation in the ChatGPT `vdo` project should be able to resume from the user command `ต่อ VDO`.
 
 ## Repository reference
 
@@ -10,9 +14,9 @@ The requested upstream reference is [github.com/Sutee-Seesing/game-highlight-fin
 
 ## What we are building
 
-Game Highlight Finder is a local-first CLI that turns a long gameplay recording into a permanent, match-aware library of reviewable highlight clips. The original recording stays local and unchanged. Local tools create metadata, signals, and a lightweight proxy; a low-cost multimodal model scouts that proxy; FFmpeg then extracts high-quality candidate clips from the original.
+Game Highlight Finder is a local-first, multi-game creator assistant that turns a long gameplay recording into a ranked library of reviewable short-form content candidates. Its creator goal is to help build an audience on TikTok from zero and eventually support the path into livestreaming. The original recording stays local and unchanged. Local tools create metadata, signals, and a lightweight proxy; a low-cost multimodal model scouts that proxy; FFmpeg then extracts high-quality candidate clips from the original.
 
-The product optimizes for reliability, cost control, resumability, and reducing human review time. It does not automatically publish or make the final editorial decision.
+The product must surface creator-relevant moments across games—not only kills or mechanically important events—including humor, failure, reactions, social moments, surprises, tension/payoff, discoveries, skill, and personality-driven clips. It optimizes for reliability, cost control, resumability, and reducing human review time. Candidate clips are raw material for final editing. AI rough-edit drafts are on the roadmap, while the human remains the final editorial and publishing authority.
 
 ## Environment audit
 
@@ -97,6 +101,7 @@ M3 adds bounded Pydantic Scout contracts, canonical `Session -> Match -> Candida
 - [04_DATA_MODELS.md](04_DATA_MODELS.md): canonical models, identifiers, timestamps, and validation rules.
 - [05_COST_STRATEGY.md](05_COST_STRATEGY.md): estimation, ledger, reservations, exchange rate, and hard-budget algorithm.
 - [06_IMPLEMENTATION_PLAN.md](06_IMPLEMENTATION_PLAN.md): milestones, tests, validation experiments, risks, and decisions.
+- [10_CREATOR_GROWTH_AND_AI_EDITING_PLAN.md](10_CREATOR_GROWTH_AND_AI_EDITING_PLAN.md): multi-game creator North Star, Candidate Pack Beta, AI rough-edit roadmap, and publish-feedback loop.
 
 ## Implemented M4 cost boundary
 

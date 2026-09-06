@@ -114,6 +114,7 @@ def _merge_candidate(left: Candidate, right: Candidate) -> Candidate:
     payoff_values = [
         value for value in (left.payoff_end_ms, right.payoff_end_ms) if value is not None
     ]
+    preferred = left if (left.confidence, left.score) >= (right.confidence, right.score) else right
     return left.model_copy(
         update={
             "candidate_id": left.candidate_id,
@@ -123,9 +124,9 @@ def _merge_candidate(left: Candidate, right: Candidate) -> Candidate:
             "payoff_end_ms": max(payoff_values) if payoff_values else None,
             "score": max(left.score, right.score),
             "confidence": max(left.confidence, right.confidence),
-            "reason": left.reason
-            if (left.confidence, left.score) >= (right.confidence, right.score)
-            else right.reason,
+            "reason": preferred.reason,
+            "moment_summary": preferred.moment_summary or left.moment_summary or right.moment_summary,
+            "creator_reason": preferred.creator_reason or left.creator_reason or right.creator_reason,
             "evidence": _merge_evidence([*left.evidence, *right.evidence], limit=16),
             "source_window_ids": list(
                 dict.fromkeys([*left.source_window_ids, *right.source_window_ids])

@@ -266,6 +266,7 @@ class CandidateCategory(StrEnum):
     WTF_UNEXPECTED = "WTF_UNEXPECTED"
     TENSION_PAYOFF = "TENSION_PAYOFF"
     SKILL = "SKILL"
+    DISCOVERY = "DISCOVERY"
     OTHER = "OTHER"
     CAMOUFLAGE = "CAMOUFLAGE"
     BOSS_KILL = "BOSS_KILL"
@@ -423,6 +424,8 @@ class Candidate(PersistedModel):
     score: float = Field(ge=0, le=10)
     confidence: float = Field(ge=0, le=1)
     reason: str = Field(min_length=1, max_length=500)
+    moment_summary: str | None = Field(default=None, min_length=1, max_length=500)
+    creator_reason: str | None = Field(default=None, min_length=1, max_length=500)
     evidence: list[Evidence] = Field(default_factory=list, max_length=16)
     source_window_ids: list[str] = Field(default_factory=list, max_length=32)
     related_candidate_ids: list[str] = Field(default_factory=list, max_length=32)
@@ -528,6 +531,8 @@ class ScoutCandidateFragment(PersistedModel):
     score: float
     confidence: float
     reason: str = Field(min_length=1, max_length=500)
+    moment_summary: str | None = Field(default=None, min_length=1, max_length=500)
+    creator_reason: str | None = Field(default=None, min_length=1, max_length=500)
     evidence: list[ScoutEvidence] = Field(default_factory=list, max_length=16)
     match_id: str | None = Field(default=None, max_length=128)
     match_index: int | None = Field(default=None, ge=0)

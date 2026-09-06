@@ -49,6 +49,8 @@ def gemini_scout_schema() -> dict[str, Any]:
             "score": {"type": "number"},
             "confidence": {"type": "number"},
             "reason": {"type": "string"},
+            "moment_summary": {"type": "string"},
+            "creator_reason": {"type": "string"},
             "setup_start_ms": {"type": "integer"},
             "payoff_end_ms": {"type": "integer"},
             "evidence": {"type": "array", "items": evidence},

@@ -1,0 +1,170 @@
+{
+  "schema_version": 1,
+  "project": "vdo/game-highlight-finder",
+  "updated_at": "2026-09-07T02:48:00+07:00",
+  "resume_phrase": "ต่อ VDO",
+  "canonical_repo": {
+    "path": "C:\\Data\\Works\\Personal_Projects\\Active_Products\\game-highlight-finder",
+    "dirty_work_warning": true,
+    "do_not_reset_clean_stash_blindly": true,
+    "branch_note": "Re-read live git state before source writes; historical branch fields in older handoffs are not authoritative."
+  },
+  "companion_repos": [
+    {
+      "role": "private media/review worktree",
+      "path": "C:\\Data\\Works\\Personal_Projects\\Active_Products\\game-highlight-finder-media",
+      "dirty_work_warning": true,
+      "preserve_paths": [".t/"]
+    }
+  ],
+  "north_star": "Multi-game creator assistant: turn long gameplay VODs into ranked short-form content opportunities for TikTok audience growth, then use that audience as a path toward livestreaming.",
+  "current_goal": "Ship Creator Candidate Pack Beta (C1) across multiple gameplay archetypes before building AI rough editing (C2).",
+  "product_definition": {
+    "not_an_fps_kill_detector": true,
+    "candidate_pack_is_raw_material_for_editing": true,
+    "creator_moment_families": [
+      "FUNNY",
+      "FAIL",
+      "REACTION",
+      "FRIEND_MOMENT/social",
+      "WTF_UNEXPECTED",
+      "TENSION_PAYOFF",
+      "discovery/emergent gameplay",
+      "personality-driven",
+      "SKILL",
+      "CLUTCH",
+      "OTHER"
+    ],
+    "human_final_editor_and_publisher": true
+  },
+  "creator_roadmap": {
+    "C1": "Creator Candidate Pack Beta: multi-game VOD -> ranked creator-worthy candidates with setup/event/payoff and extracted source clips.",
+    "C2": "AI Rough Editor on owner-selected candidates: tighten dead air, suggest hook, safe 9:16 reframe, draft subtitles, loudness cleanup, restrained punch-ins, hook/caption suggestions; preserve untouched candidate.",
+    "C3": "Creator feedback loop: selected/rejected, draft chosen, final edit, and real post-performance signals improve creator-specific ranking/editing while remaining separate from event GT.",
+    "C4": "Higher automation later: learned creator templates, batch drafts, export-ready packaging, optional publishing integration."
+  },
+  "completed_engineering_evidence": {
+    "gt_v2_visual_exhaustive": "complete and preserved",
+    "v19_300s": "missed both cal-01 MUST_CATCH kills; aggregate quality improved over v15 but remained weak",
+    "v20_120s_targeted": {
+      "calls": 2,
+      "settled_cost_thb": 0.453404,
+      "result": "recovered 348-350s kill; 447-448s still missed under locked ruler; false positives remained"
+    },
+    "v21_90s_targeted": {
+      "task_id": "594aaa87-d83f-4038-b54c-ae357cc74889",
+      "calls": 2,
+      "settled_cost_thb": 0.423648,
+      "result": "346-353s surfaced first kill; 445-465s semantically surfaced second kill but boundary was too broad for locked IoU",
+      "automatic_generation_retries": 0,
+      "remaining_exposure": 0
+    },
+    "decision": "Stop window-duration micro-optimization as the primary workstream; use benchmarks as regression evidence and pivot product work to multi-game creator usefulness."
+  },
+  "c1_provider_free_progress": {
+    "status": "provider_free_c1_gate_green_vc1a_local_windows_ready_bc_source_selection_pending",
+    "implemented": [
+      "generic DISCOVERY category",
+      "backward-compatible moment_summary and creator_reason",
+      "creator-balanced gemini-scout-window-v20-creator default prompt",
+      "silence != dead air and no speech != boring prompt/editorial rules",
+      "creator_score kept separate from detection confidence",
+      "Creator Candidate Pack report labels and technical-detail demotion",
+      "config.example.yaml synchronized to creator prompt default",
+      "offline archetype fixtures for quiet visual discovery, social/co-op payoff, tension/fail story, boring zero-candidate, and legacy fallback",
+      "provider-free end-to-end C1 integration smoke from window payloads through report",
+      "five-family synthetic Creator Candidate Pack with playable local clips/thumbnails",
+      "real-media creator validation protocol with separate creator labels from GT truth"
+    ],
+    "tests": {
+      "unit_suite_before_archetype_fixture": "242 passed in 52.50s",
+      "archetype_plus_integration_focused": "4 passed in 0.56s",
+      "previous_full_suite": "277 passed in 265.84s",
+      "latest_full_suite_task": "9d34102e-75e6-4b17-a751-02b343a33ed6",
+      "latest_full_suite_result": "278 passed in 222.38s (0:03:42)",
+      "latest_full_suite_state_at_checkpoint": "COMPLETED_GREEN"
+    },
+    "offline_demo": {
+      "path": ".t/c1-creator-pack-demo/output/data/sessions/2026-09-07_unknown_c1c1c1c1c1c1/reports/index.html",
+      "families": ["DISCOVERY", "FUNNY", "FAIL", "REACTION", "SKILL"],
+      "provider_calls": 0
+    },
+    "real_media_preflight": {
+      "plan": "docs/13_C1_REAL_MEDIA_VALIDATION_PLAN.md",
+      "V-C1-A": {
+        "source": "cal-01 calibration source; fast-action archetype only",
+        "prompt": "gemini-scout-window-v20-creator",
+        "window_duration_seconds": 300,
+        "window_overlap_seconds": 30,
+        "window_count": 3,
+        "aggregate_estimated_reserve_thb": 2.514798,
+        "local_analysis_windows_ready": true,
+        "local_analysis_window_root": "data/sessions/2026-08-15_unknown_7db9940058f7/scout/windows",
+        "local_analysis_window_ids": [
+          "scout_window_87ac84ad01cdabbf",
+          "scout_window_ef57ca109a4e9708",
+          "scout_window_919f91ad02042c1c"
+        ],
+        "provider_calls": 0,
+        "uploads": 0,
+        "live_authorized": false
+      },
+      "V-C1-B": "source not yet selected; pixel-based OBS source scouting started",
+      "V-C1-C": "source not yet selected; pixel-based OBS source scouting started",
+      "creator_review_templates": {
+        "candidate": ".t/c1-real-media-validation/CREATOR_REVIEW_TEMPLATE.csv",
+        "miss": ".t/c1-real-media-validation/CREATOR_MISS_TEMPLATE.csv",
+        "local_only": true
+      }
+    },
+    "provider_calls": 0
+  },
+  "next_action": [
+    "C1 provider-free implementation/test gate is green at 278 passed; preserve the checkpoint and do not retune source/ranking from FPS-only evidence.",
+    "Keep V-C1-A ready. Its three local analysis-window proxies exist under ignored data/; after migration copy/recreate local media artifacts and recompute A reserve from actual proxy files before any live authorization.",
+    "Creator-review and obvious-miss templates are ready under ignored .t/ and remain separate from GT v2.",
+    "Continue pixel-based OBS source scouting, select V-C1-B sandbox/exploration and V-C1-C social/co-op/personality-heavy, then run provider-free local ingest/proxy/window/cost preflight for B and C.",
+    "Only then present exact per-source call counts and proposed hard caps; any provider call requires fresh explicit authorization and should run one source at a time."
+  ],
+  "ai_editing_decision": {
+    "include_in_roadmap": true,
+    "initial_role": "non-destructive AI rough editor after C1 is usable",
+    "not_initial_role": "autonomous final TikTok editor or auto-publisher",
+    "hard_editorial_rules": [
+      "silence != dead air",
+      "no speech != boring",
+      "quiet gameplay may carry skill, danger, discovery, suspense, comedy, anticipation, or necessary setup",
+      "trim quiet intervals only after inspecting visual + audio + story context; uncertainty defaults to keeping context"
+    ],
+    "preferred_implementation": "model-generated explicit KEEP/TRIM/protected-range edit plans plus deterministic/local FFmpeg transforms before fully generative video rewriting"
+  },
+  "provider_state": {
+    "new_paid_call_authorized": false,
+    "automatic_generation_retry_allowed": false,
+    "raw_source_upload_allowed": false,
+    "analysis_proxy_upload_requires_fresh_explicit_authorization": true
+  },
+  "do_not_repeat": [
+    "Do not treat FPS kill benchmarks as the product definition.",
+    "Do not use revealed validation holdout as tuning data.",
+    "Do not overwrite/delete GT history.",
+    "Do not infer semantic truth from signals alone.",
+    "Do not clean/reset/stash/drop unrelated dirty work.",
+    "Do not make a new provider call without fresh explicit authorization and cap."
+  ],
+  "authoritative_files": [
+    ".agent/handoff.json",
+    "docs/CURRENT_STATE.md",
+    "docs/NEXT_ACTION.md",
+    "docs/10_CREATOR_GROWTH_AND_AI_EDITING_PLAN.md",
+    "docs/13_C1_REAL_MEDIA_VALIDATION_PLAN.md",
+    "docs/DECISIONS.md",
+    "docs/09_CHAT_HANDOFF_PROTOCOL.md"
+  ],
+  "checkpoint_git_state": {
+    "committed": true,
+    "branch": "checkpoint/vdo-c1-provider-free-20260907",
+    "purpose": "Migration-safe checkpoint of reviewed source/docs/tests/handoff only; local media, data/, and .t/ artifacts are intentionally excluded.",
+    "upstream_reconciliation_deferred": true
+  }
+}

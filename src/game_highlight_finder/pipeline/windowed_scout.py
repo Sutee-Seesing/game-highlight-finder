@@ -380,6 +380,74 @@ def build_window_prompt(
     summary = json.dumps(
         dict(local_signal_summary), ensure_ascii=False, sort_keys=True, separators=(",", ":")
     )
+    if prompt_version == "gemini-scout-window-v20-creator":
+        return "\n".join(
+            [
+                f"Game Highlight Finder Creator Scout {prompt_version}.",
+                "Return only JSON matching the supplied schema; do not emit hidden reasoning.",
+                "Set schema_version to exactly 1.",
+                "Inspect the entire supplied video AND audio window before deciding there are no creator-worthy moments.",
+                (
+                    "Discover short-form creator moments across gameplay, personality, social interaction, reaction, "
+                    "humor, failure, surprise, tension/payoff, discovery, skill, clutch, and unusual emergent play. "
+                    "No family is automatically more important than another."
+                ),
+                (
+                    "Judge the actual media. Visible gameplay is first-class evidence even with no speech; "
+                    "silence is not dead air and no speech does not mean boring. Quiet skill, danger, suspense, "
+                    "discovery, anticipation, visual comedy, or necessary setup can be highly creator-worthy."
+                ),
+                (
+                    "Voice chat, laughter, shouting, surprise, and other audio are also first-class evidence when present, "
+                    "but audio activity is not required for a highlight."
+                ),
+                (
+                    "A social or personality moment may be valid without a gameplay payoff when it has a self-contained "
+                    "audience payoff such as a complete joke, surprising line and reaction, escalating friend exchange, "
+                    "panic/recovery, or understandable short story."
+                ),
+                (
+                    "The local signal summary is only a navigation hint. Never use silence, loudness, laughter, scene activity, "
+                    "or lack of speech as an inclusion/exclusion gate without inspecting the actual video and audio."
+                ),
+                (
+                    "For every candidate, moment_summary must state what actually happened. creator_reason must separately "
+                    "state why the moment may be worth reviewing for TikTok/short-form. reason may remain a concise provider rationale."
+                ),
+                (
+                    "score is creator/editorial short-form potential from 0 to 10; confidence is certainty from 0 to 1 that "
+                    "the described event, timestamps, and evidence are correct. Do not conflate them and never invent events."
+                ),
+                (
+                    "Perform a chronological sweep through beginning, middle, and end, then rescan. Return all distinct worthwhile "
+                    "moments; there is no fixed candidate quota, and a boring window may legitimately return zero candidates."
+                ),
+                (
+                    "Preserve the useful story arc. Candidate start_ms/end_ms should include the first useful setup through the "
+                    "immediate payoff/reaction needed to understand why the moment works; do not fragment one story into setup-only "
+                    "and payoff-only candidates."
+                ),
+                (
+                    "Do not emit setup_start_ms or payoff_end_ms in window Scout responses; local clip derivation adds bounded context."
+                ),
+                "Candidate categories must use only values allowed by the supplied schema.",
+                (
+                    "Put every Candidate Moment only in the top-level candidates array and keep every matches[].candidates array empty; "
+                    "use matches only for actual match/round boundaries."
+                ),
+                (
+                    "All match, candidate, and evidence timestamps are window-relative integer milliseconds in the inclusive range "
+                    f"0-{window.duration_ms}."
+                ),
+                (
+                    f"Set window_start_ms={window.source_start_ms} and window_end_ms={window.source_end_ms}; those bounds are absolute source times."
+                ),
+                "The full source timeline is authoritative; overlapping windows are reconciled locally.",
+                f"Full source duration_ms: {source_duration_ms}",
+                f"Window absolute bounds_ms: {window.source_start_ms}-{window.source_end_ms}",
+                f"Bounded local signals (hints only, not ground truth): {summary}",
+            ]
+        )
     return "\n".join(
         [
             f"Game Highlight Finder window Scout {prompt_version}.",

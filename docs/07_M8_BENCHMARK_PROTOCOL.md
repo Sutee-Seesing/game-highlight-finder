@@ -106,6 +106,20 @@ the human ground truth is intentionally revised. A highlight may reference an
 annotated match, but match annotation is optional when the session is difficult to
 segment.
 
+### Exhaustive-ground-truth gate
+
+A calibration annotation set may be used for tuning only when its claimed coverage is
+truthful. Reviewing only model proposals, sparse contact sheets, or selected activity
+windows is not sufficient to call the annotation exhaustive. Before an annotation
+revision is marked `exhaustive`, a human/visual reviewer must cover the full source
+timeline from actual pixels (audio may support but not replace visual evidence), drill
+into suspicious intervals at adequate temporal density, and preserve evidence for both
+accepted highlights and important false suspicions. If a later full-video audit finds
+an omitted real highlight, create a new annotation revision and re-evaluate affected
+experiments; do not silently rewrite historical ground truth or tune evaluator
+thresholds to make old predictions fit. Candidate-adjudication queues remain useful
+quality evidence but are not substitutes for exhaustive source-level truth.
+
 ### Highlight importance
 
 - `MUST_CATCH`: a moment that must appear in a useful shortlist.

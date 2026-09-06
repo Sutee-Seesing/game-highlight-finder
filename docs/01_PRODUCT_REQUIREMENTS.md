@@ -2,7 +2,11 @@
 
 ## 1. Product statement
 
-Game Highlight Finder reduces a 1–4+ hour gameplay recording to a small, ranked set of useful clips without discarding other worthwhile moments. It is a personal, local-first review assistant. The human remains the editor and final publishing authority.
+Game Highlight Finder is a multi-game creator assistant for turning 1–4+ hour gameplay recordings into a small, ranked set of short-form content opportunities. The immediate creator goal is to build an audience on TikTok from zero and reduce the cost of finding publishable moments; the longer-term goal is to help grow an audience that can follow the creator into livestreaming.
+
+It is a personal, local-first VOD watcher and candidate finder first. It must look beyond pure gameplay importance and surface creator-relevant moments such as funny failures, reactions, friend banter, unexpected events, tension/payoff stories, discoveries, skill, clutch plays, and personality-driven moments across different games. A kill is only one possible highlight type.
+
+The human remains the final editorial and publishing authority. AI-assisted editing may prepare draft short-form versions later, but the untouched candidate and a human approval step remain first-class.
 
 ## 2. Primary user journey
 
@@ -13,9 +17,11 @@ Game Highlight Finder reduces a 1–4+ hour gameplay recording to a small, ranke
 5. A cheap Scout analyzes overlapping windows and returns match/round and moment evidence.
 6. The tool validates, clamps, merges, deduplicates, and stores the session map.
 7. Candidate clips are cut from the original at high quality with pre/post-roll.
-8. An optional Reviewer evaluates only candidate clips when enabled and affordable.
-9. A local HTML report presents all candidates and a best-of-session shortlist.
-10. The user reviews and decides what, if anything, to publish.
+8. An optional Reviewer evaluates only candidate clips when enabled and affordable, with creator-worthiness separate from raw event-detection confidence.
+9. A local HTML report presents all candidates and a best-of-session shortlist as a creator candidate pack.
+10. The user reviews the shortlist and selects moments for editing rather than rewatching the full VOD.
+11. A later AI rough-editor stage may create editable short-form drafts (tightened pacing, hook suggestion, 9:16 reframing, draft captions, and limited punch-ins) from owner-selected candidates while preserving the untouched candidate.
+12. The user performs final editorial approval and publishes manually; later versions may record post-performance feedback to improve creator-specific ranking and editing.
 
 ## 3. Functional requirements
 
@@ -36,6 +42,9 @@ Game Highlight Finder reduces a 1–4+ hour gameplay recording to a small, ranke
 - **FR-014** Store all candidates meeting the configured threshold; best-of-session is a derived ranking, not deletion.
 - **FR-015** Preserve setup, core-event, and payoff timing so related moments can form one story candidate.
 - **FR-016** Apply configurable pre-roll/post-roll and clamp final clip bounds to the source duration.
+- **FR-017** Keep production detection game-agnostic by default; game-specific profiles may improve quality but must not define what counts as a highlight.
+- **FR-018** Separate gameplay-event significance, detection confidence, and creator/short-form worthiness so a personality-driven funny/reaction moment can outrank a mechanically important event.
+- **FR-019** Treat multi-game coverage as a product requirement; quality validation must include more than one gameplay archetype before creator-beta defaults are considered stable.
 
 ### AI behavior
 
@@ -76,7 +85,7 @@ Game Highlight Finder reduces a 1–4+ hour gameplay recording to a small, ranke
 
 V1 includes a CLI, dependency doctor, ingest/ffprobe, proxy foundation, local signal hooks, provider abstraction, Gemini Scout, validated match/candidate results, extraction, stage cache/resume, cost ledger, HTML report, and automated tests.
 
-V1 excludes social APIs, automatic publishing, GUI, subtitles, vertical reframing, caption generation, facecam tracking, sophisticated auto-editing, and a broad provider catalog.
+V1 excludes social APIs, automatic publishing, GUI, subtitles, vertical reframing, caption generation, facecam tracking, sophisticated auto-editing, and a broad provider catalog. These exclusions define the first candidate-pack release, not the final product direction: AI rough-edit drafts are the next creator-facing layer after candidate quality is usable across multiple game styles.
 
 ## 6. Success measures
 
@@ -86,6 +95,10 @@ V1 excludes social APIs, automatic publishing, GUI, subtitles, vertical reframin
 - The output contains a useful match-aware map, extracted candidates, and a shortlist.
 - The user reviews only a small fraction of source duration. Record `candidate_review_seconds / source_duration_seconds`; initial target is <= 15%, with a stretch target <= 10%.
 - The user can mark candidates accepted/rejected later so precision can be measured.
+- Creator Candidate Pack Beta is validated on multiple gameplay archetypes rather than only one game or HUD.
+- Track candidate -> selected-for-edit and selected -> published conversion once the creator workflow starts.
+- Track time from completed gameplay session to first publish-ready draft; this should fall materially below manual VOD scrubbing + editing time.
+- Once real posts exist, keep creator-performance metrics (retention/completion, shares, saves, comments, follows when measurable) separate from event-detection ground truth and use them to improve creator-specific ranking/editing.
 
 ### Quality metrics for real validation
 

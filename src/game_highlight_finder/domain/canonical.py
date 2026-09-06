@@ -433,6 +433,8 @@ def canonicalize_scout_response(
                 score=fragment.score,
                 confidence=fragment.confidence,
                 reason=fragment.reason.strip(),
+                moment_summary=(fragment.moment_summary or fragment.reason).strip(),
+                creator_reason=(fragment.creator_reason or fragment.reason).strip(),
                 evidence=_canonical_evidence(
                     fragment.evidence,
                     duration_ms=source_duration_ms,

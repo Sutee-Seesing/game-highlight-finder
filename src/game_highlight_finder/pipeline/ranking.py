@@ -16,9 +16,9 @@ from game_highlight_finder.storage.atomic import atomic_write_json, read_json
 from game_highlight_finder.storage.hashing import hash_file
 from game_highlight_finder.storage.sessions import SessionPaths
 
-RANKING_VERSION = "m8-ranking-v2"
-RANKING_SCHEMA_VERSION = 2
-RANKING_BASIS = "scout_short_form_score_then_detection_confidence"
+RANKING_VERSION = "c1-ranking-v3"
+RANKING_SCHEMA_VERSION = 3
+RANKING_BASIS = "creator_short_form_score_then_detection_confidence"
 
 
 class RankingEntry(BaseModel):
@@ -29,6 +29,7 @@ class RankingEntry(BaseModel):
     score: float = Field(ge=0, le=10)
     confidence: float = Field(ge=0, le=1)
     short_form_score: float = Field(ge=0, le=10)
+    creator_score: float = Field(ge=0, le=10)
     detection_confidence: float = Field(ge=0, le=1)
     ranking_key: str = Field(min_length=1, max_length=300)
 
@@ -90,8 +91,10 @@ def rank_session_map(session_map: SessionMap, *, best_of_limit: int = 3) -> Rank
             score=candidate.score,
             confidence=candidate.confidence,
             short_form_score=candidate.score,
+            creator_score=candidate.score,
             detection_confidence=candidate.confidence,
             ranking_key=(
+                f"creator_score={candidate.score:.6f};"
                 f"short_form_score={candidate.score:.6f};"
                 f"detection_confidence={candidate.confidence:.6f};"
                 f"event_start_ms={candidate.event_start_ms};candidate_id={candidate.candidate_id}"

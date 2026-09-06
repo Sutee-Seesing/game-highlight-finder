@@ -56,6 +56,8 @@ def test_multi_candidate_report_is_offline_escaped_and_cached(tmp_path: Path) ->
         score=9,
         confidence=0.9,
         reason="</script><script>alert(1)</script> เหตุการณ์",
+        moment_summary="Player silently finds a hidden route.",
+        creator_reason="The visual reveal is clear without dialogue.",
         evidence=[Evidence(type="fixture", summary='quote "safe"')],
         clip_start_ms=0,
         clip_end_ms=6_000,
@@ -152,7 +154,7 @@ def test_multi_candidate_report_is_offline_escaped_and_cached(tmp_path: Path) ->
     assert second_result.cache_hit is True
     metadata = read_json(paths.report_meta_path)
     assert metadata["cache_key"] == first_result.cache_key
-    assert metadata["report_version"] == "m7-report-v1"
+    assert metadata["report_version"] == "c1-creator-pack-v1"
     assert metadata["report_sha256"] == first_hash
     assert metadata["report_size_bytes"] == paths.report_path.stat().st_size
     assert hash_file(paths.report_path) == first_hash
@@ -161,6 +163,14 @@ def test_multi_candidate_report_is_offline_escaped_and_cached(tmp_path: Path) ->
     assert "&lt;/script&gt;" in html
     assert "No candidates found" not in html
     assert "UNASSIGNED" in html
+    assert "Creator Candidate Pack" in html
+    assert "What happened:" in html
+    assert "Player silently finds a hidden route." in html
+    assert "Why review this:" in html
+    assert "The visual reveal is clear without dialogue." in html
+    assert "creator score" in html
+    assert "detection confidence" in html
+    assert "Technical details" in html
     assert "Open Clip" in html
 
     # Every integrity failure is a stale cache, not a cache hit, and is repaired.

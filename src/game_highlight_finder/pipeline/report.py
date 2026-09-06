@@ -26,7 +26,7 @@ from game_highlight_finder.storage.atomic import atomic_write_bytes, atomic_writ
 from game_highlight_finder.storage.hashing import hash_file
 from game_highlight_finder.storage.sessions import SessionPaths
 
-REPORT_VERSION = "m7-report-v1"
+REPORT_VERSION = "c1-creator-pack-v1"
 MAX_THUMBNAIL_BYTES = 2 * 1024 * 1024
 
 
@@ -323,6 +323,8 @@ def _candidate_card(
     if info is not None:
         href = _relative_url(info["output"], report_path=report_path)
         link = f'<a class="clip" href="{_esc(href)}">Open Clip</a>'
+    moment_summary = candidate.moment_summary or candidate.reason
+    creator_reason = candidate.creator_reason or candidate.reason
     evidence = " · ".join(item.summary for item in candidate.evidence[:3]) or "No compact evidence"
     actions = (
         " · ".join(candidate.normalization_actions) if candidate.normalization_actions else "None"
@@ -338,11 +340,12 @@ def _candidate_card(
       {thumb}
       <div class="card-body"><div class="badge">#{rank}</div>
       <h3>{_esc(candidate.category)} <small>{_esc(candidate.candidate_id)}</small></h3>
-      <p class="meta"><b>{_esc(candidate.kind)}</b> · {_esc(match_label)} · score {_esc(f"{candidate.score:.2f}")} · confidence {_esc(f"{candidate.confidence:.2f}")}</p>
+      <p class="meta"><b>{_esc(candidate.kind)}</b> · {_esc(match_label)} · creator score {_esc(f"{candidate.score:.2f}")} · detection confidence {_esc(f"{candidate.confidence:.2f}")}</p>
       <p><b>Event:</b> {_esc(event)} · <b>Clip:</b> {_esc(clip)} ({_esc(clip_duration)})</p>
-      <p><b>Reason:</b> {_esc(candidate.reason)}</p>
+      <p><b>What happened:</b> {_esc(moment_summary)}</p>
+      <p><b>Why review this:</b> {_esc(creator_reason)}</p>
       <p class="evidence"><b>Evidence:</b> {_esc(evidence)}</p>
-      <p class="meta"><b>Actions:</b> {_esc(actions)} · <b>Windows:</b> {_esc(lineage)}</p>
+      <details class="tech"><summary>Technical details</summary><p class="meta"><b>Scout rationale:</b> {_esc(candidate.reason)}</p><p class="meta"><b>Actions:</b> {_esc(actions)} · <b>Windows:</b> {_esc(lineage)}</p></details>
       {link}</div>
     </article>"""
 
@@ -469,7 +472,7 @@ def render_report(
     )
     html_doc = f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Game Highlight Report — {_esc(session_map.session_id)}</title>
+<title>Creator Candidate Pack — {_esc(session_map.session_id)}</title>
 <style>
 :root {{ color-scheme: dark; font-family: system-ui,-apple-system,Segoe UI,sans-serif; background:#10131a; color:#e9edf5; }}
 body {{ margin:0 auto; max-width:1300px; padding:24px; }} h1,h2,h3 {{ margin:0 0 8px; }}
@@ -481,7 +484,7 @@ body {{ margin:0 auto; max-width:1300px; padding:24px; }} h1,h2,h3 {{ margin:0 0
 .empty {{ padding:20px; border:1px dashed #536078; border-radius:8px; }} table {{ border-collapse:collapse; width:100%; }} td {{ border-bottom:1px solid #2e3747; padding:6px; }}
 details {{ background:#171c25; padding:10px; border-radius:8px; }}
 </style></head><body>
-<header><h1>Game Highlight Report</h1><p class="meta">Generated locally · no external assets · report {_esc(REPORT_VERSION)}</p></header>
+<header><h1>Creator Candidate Pack</h1><p class="meta">Shortlist from your gameplay · generated locally · no external assets · report {_esc(REPORT_VERSION)}</p></header>
 <section class="summary"><h2>Session summary</h2><div class="stats">
 <div class="stat"><span>Session</span><b>{_esc(session_map.session_id)}</b></div><div class="stat"><span>Source</span><b>{_esc(source.path.name)}</b></div>
 <div class="stat"><span>Duration</span><b>{_esc(format_duration(source.duration_ms))}</b></div><div class="stat"><span>Profile</span><b>{_esc(session_map.game_profile)}</b></div>
@@ -491,8 +494,8 @@ details {{ background:#171c25; padding:10px; border-radius:8px; }}
 </div></section>
 <section class="cost"><h2>Session cost</h2><p>Local ledger/list-rate equivalent (not a provider credit-card charge): settled ฿{settled:.6f}; active exposure ฿{exposure:.6f}; {cost["call_count"]} calls.</p>
 <p>{_esc(" · ".join(f"{key}: ฿{value / 1_000_000:.6f}" for key, value in cost["grouping"].items()) or "Fake Scout / local: ฿0.000000")}</p></section>
-<section class="best"><h2>Best Of</h2><div class="cards">{best_cards}</div></section>
-<section><h2>Candidate library</h2>{"".join(match_sections) or '<p class="empty">No candidates found.</p>'}</section>
+<section class="best"><h2>Start Here</h2><p class="meta">Highest-ranked creator moments to review first.</p><div class="cards">{best_cards}</div></section>
+<section><h2>All Candidates</h2>{"".join(match_sections) or '<p class="empty">No candidates found.</p>'}</section>
 <section class="stages"><h2>Stages</h2><table><tbody>{stage_rows}</tbody></table></section>
 <details><summary>Warnings and diagnostics</summary><ul>{warning_html}</ul></details>
 <script>document.querySelectorAll('a.clip').forEach((a) => a.setAttribute('download', ''));</script>

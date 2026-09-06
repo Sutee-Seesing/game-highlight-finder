@@ -274,10 +274,11 @@ provider responses remain local.
 
 ### Candidate-local boundary refinement (diagnostic scaffold)
 
-A provider-free v19 scaffold prepares a narrow context clip around an existing Scout candidate,
-then creates a 2x slow-motion proxy with audio preserved. This is intentionally not wired into
-the production pipeline yet. It exists to test whether higher effective temporal sampling can
-refine fast-action event boundaries without changing Scout detection semantics. Refiner output
-uses slowed-clip-relative timestamps, a strict bounded JSON schema, and deterministic mapping
-back to source time. A refinement must overlap the original Scout event or it is rejected as
-event drift.
+The v19 diagnostic path prepares a narrow context clip around an existing Scout candidate,
+then creates a 2x slow-motion proxy with audio preserved. It is intentionally not wired into the
+production default. The diagnostic runner reuses the existing Gemini provider and cost ledger:
+preflight never reserves or dispatches, paid calls require explicit remote-upload opt-in, settled
+raw results are reused offline, and ambiguous/in-flight calls fail closed with no automatic
+generation retry. Only the committed analysis_proxy.mp4 may be used; the RAW source is rejected.
+Refiner output uses slowed-clip-relative timestamps, a strict bounded JSON schema, deterministic
+mapping back to source time, and must overlap the original Scout event or it is rejected as drift.
