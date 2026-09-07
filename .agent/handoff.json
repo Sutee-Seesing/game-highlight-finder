@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "project": "vdo/game-highlight-finder",
-  "updated_at": "2026-09-07T02:48:00+07:00",
+  "updated_at": "2026-09-07T18:47:00+07:00",
   "resume_phrase": "ต่อ VDO",
   "canonical_repo": {
     "path": "C:\\Data\\Works\\Personal_Projects\\Active_Products\\game-highlight-finder",
@@ -62,7 +62,7 @@
     "decision": "Stop window-duration micro-optimization as the primary workstream; use benchmarks as regression evidence and pivot product work to multi-game creator usefulness."
   },
   "c1_provider_free_progress": {
-    "status": "provider_free_c1_gate_green_vc1a_local_windows_ready_bc_source_selection_pending",
+    "status": "paused_for_folder_reorganization_vc1b_local_signals_complete_vc1c_selected",
     "implemented": [
       "generic DISCOVERY category",
       "backward-compatible moment_summary and creator_reason",
@@ -109,8 +109,33 @@
         "uploads": 0,
         "live_authorized": false
       },
-      "V-C1-B": "source not yet selected; pixel-based OBS source scouting started",
-      "V-C1-C": "source not yet selected; pixel-based OBS source scouting started",
+      "V-C1-B": {
+        "source": "E:\\Obs\\2026-08-24 23-42-23.mkv",
+        "archetype": "sandbox/survival/exploration; quiet visual value",
+        "duration_seconds": 4526.017,
+        "session_id": "2026-08-24_unknown_0db51591365f",
+        "source_sha256": "0db51591365fce491ba0363e05296742062009a8638091e0104a584c0f2da172",
+        "local_session_root_before_reorg": ".t/c1-real-media-validation/data-b/sessions/2026-08-24_unknown_0db51591365f",
+        "ingest": "COMPLETED",
+        "proxy": "COMPLETED",
+        "local_signals": "COMPLETED",
+        "local_task_id": "b801aa31-4d42-42da-901f-354273205cec",
+        "window_materialization": "PENDING",
+        "m6_windows_attempt_task": "48bc7aee-c2c5-4f4e-8aac-1209c1794caf",
+        "m6_windows_attempt_result": "blocked by configuration guard: M6 Gemini requires --allow-remote-upload; flag was not enabled",
+        "provider_calls": 0,
+        "uploads": 0,
+        "new_spend_thb": 0
+      },
+      "V-C1-C": {
+        "source": "E:\\Obs\\2026-08-26 23-17-37.mkv",
+        "archetype": "co-op/social/personality-heavy; Discord-heavy",
+        "duration_seconds": 6853.967,
+        "local_full_pipeline_started": false,
+        "provider_calls": 0,
+        "uploads": 0,
+        "new_spend_thb": 0
+      },
       "creator_review_templates": {
         "candidate": ".t/c1-real-media-validation/CREATOR_REVIEW_TEMPLATE.csv",
         "miss": ".t/c1-real-media-validation/CREATOR_MISS_TEMPLATE.csv",
@@ -120,11 +145,12 @@
     "provider_calls": 0
   },
   "next_action": [
-    "C1 provider-free implementation/test gate is green at 278 passed; preserve the checkpoint and do not retune source/ranking from FPS-only evidence.",
-    "Keep V-C1-A ready. Its three local analysis-window proxies exist under ignored data/; after migration copy/recreate local media artifacts and recompute A reserve from actual proxy files before any live authorization.",
-    "Creator-review and obvious-miss templates are ready under ignored .t/ and remain separate from GT v2.",
-    "Continue pixel-based OBS source scouting, select V-C1-B sandbox/exploration and V-C1-C social/co-op/personality-heavy, then run provider-free local ingest/proxy/window/cost preflight for B and C.",
-    "Only then present exact per-source call counts and proposed hard caps; any provider call requires fresh explicit authorization and should run one source at a time."
+    "PAUSED FOR FOLDER REORGANIZATION. Do not resume C1 execution until the cleanup/move is complete and canonical paths are re-validated.",
+    "Read docs/14_PRE_REORG_CHECKPOINT_2026-09-07.md before moving or deleting tracked/ignored project data.",
+    "Preserve or deliberately migrate the ignored V-C1-B completed local session, C1 review templates, C1 configs/preflight artifacts, and V-C1-A local analysis windows; raw E:\\Obs sources must not be deleted by project cleanup.",
+    "After reorganization, verify Git/config/cache paths first. Then finish provider-free B window materialization and exact cost preflight without weakening allow_remote_upload=false.",
+    "Then run V-C1-C local ingest/proxy/signals as the single heavy media worker while using 2-3 parallel read-only audit/test/performance lanes when useful.",
+    "Stop at the provider boundary and request fresh explicit authorization + hard THB cap before any generation/upload."
   ],
   "ai_editing_decision": {
     "include_in_roadmap": true,
@@ -158,6 +184,7 @@
     "docs/NEXT_ACTION.md",
     "docs/10_CREATOR_GROWTH_AND_AI_EDITING_PLAN.md",
     "docs/13_C1_REAL_MEDIA_VALIDATION_PLAN.md",
+    "docs/14_PRE_REORG_CHECKPOINT_2026-09-07.md",
     "docs/DECISIONS.md",
     "docs/09_CHAT_HANDOFF_PROTOCOL.md"
   ],

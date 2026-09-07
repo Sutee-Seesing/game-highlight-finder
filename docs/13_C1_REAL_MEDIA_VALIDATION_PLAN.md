@@ -135,11 +135,33 @@ C1 does not need benchmark perfection. It is ready to move into owner-selected A
 
 If a failure is isolated to one archetype, fix the specific root cause rather than globally retuning around the FPS benchmark.
 
+## Parallel WorkLab execution policy
+
+Use parallel delegation by default whenever the remaining work can be split safely. The owner should not need to remind the project to use parallel agents again.
+
+Recommended operating model:
+
+- **Coordinator + single writer:** the primary agent owns the plan, integrates findings, makes source edits, and decides which findings are real versus false positives.
+- **Parallel read-only lanes:** delegate independent work such as plan/contract audit, provider-boundary audit, regression/test execution, diff/semantic review, cache/reuse inspection, and GPU/performance investigation while the main media job is running.
+- **One heavy media worker per machine/storage path:** do not start multiple full-source FFmpeg/proxy/local-signal jobs against the same T-small machine or OBS drive merely to create artificial parallelism. Disk I/O, decode, CPU and GPU contention can make total runtime worse.
+- **No shared-file writer races:** do not let multiple agents modify the same source/config/docs concurrently. If parallel implementation becomes useful later, assign disjoint ownership by file/module and integrate through the coordinator.
+- **Use idle time:** while a long ingest/proxy/local-signals task runs, parallel agents should work on non-contentious audits, tests, preflight preparation, source-selection evidence, documentation, or performance plans instead of waiting serially.
+- **C1 correctness before optimization:** GPU/NVDEC/NVENC performance work may be audited and prepared in parallel, but do not change the active C1 benchmark pipeline mid-validation. Merge performance changes only after correctness evidence is preserved and compare them against the baseline.
+- **Quality gate for GPU-first work:** a faster RTX 4070 path is acceptable only if candidate recall, boundary quality, analysis semantics and final-source fidelity do not regress. Final clips must continue to come from the original source, not a lossy analysis proxy.
+
+Default VDO concurrency target on T-small during C1 is therefore:
+
+`1 heavy media worker + 2-3 parallel reasoning/audit agents`
+
+not multiple simultaneous full-video workers.
+
+If delegation is temporarily unavailable, continue serially rather than weakening validation or provider-safety rules.
+
 ## Execution order
 
 1. Finish provider-free C1 source/tests/report gate.
 2. Select/locate V-C1-A, V-C1-B and V-C1-C source media.
-3. Run provider-free ingest/proxy/window/cost preflight for each source.
+3. Run provider-free ingest/proxy/window/cost preflight for each source, using the parallel WorkLab policy above to overlap non-contentious audit/test work.
 4. Present exact per-source call counts and caps for authorization.
 5. Run one authorized source at a time so early creator evidence can stop a bad experiment cheaply.
 6. Generate Candidate Packs and creator review sheets.
