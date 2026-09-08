@@ -1,6 +1,6 @@
 # VDO Next Action
 
-Updated: 2026-09-07 Asia/Bangkok
+Updated: 2026-09-08 Asia/Bangkok
 
 ## Current gate
 
@@ -26,23 +26,23 @@ Completed provider-free:
 8. Added focused creator tests plus offline archetype fixtures for quiet visual discovery, social/co-op payoff without gameplay payoff, tension/fail story, boring-zero-candidate behavior, and legacy compatibility.
 9. Added a provider-free end-to-end C1 integration smoke test covering window payload -> canonicalization -> reconcile -> clip boundaries -> ranking -> extraction manifest -> Creator Candidate Pack report. Focused result: **4 passed in 0.56s**.
 10. Generated an actual local five-family Creator Candidate Pack demo (`DISCOVERY`, `FUNNY`, `FAIL`, `REACTION`, `SKILL`) with playable synthetic MP4 fixtures and thumbnails; provider calls **0**.
-11. Fresh complete local suite including the newest integration test is green: **278 passed in 222.38s (0:03:42)** via durable task `9d34102e-75e6-4b17-a751-02b343a33ed6`.
+11. Fresh complete local suite after the M6 local-windows safety fix is green: **280 passed in 226.41s (0:03:46)** via durable task `9c4044f7-41fb-4918-9bd1-6d26029b02c6`.
 12. Synced `config.example.yaml` to the creator prompt default `gemini-scout-window-v20-creator` so copied configs do not silently fall back to v18.
 13. Added `docs/13_C1_REAL_MEDIA_VALIDATION_PLAN.md` with separate creator-review labels/metrics and three required archetypes.
 14. Prepared V-C1-A fast-action cost preflight using the known cal-01 real source: 3 creator-prompt windows, **estimated aggregate reserve ฿2.514798**, provider calls **0**, uploads **0**, live authorization **false**.
 
 ### Immediate provider-free work
 
-**PAUSED FOR FOLDER REORGANIZATION.** Do not resume C1 execution until the cleanup/move is complete and canonical paths have been re-validated. The exact pre-move state and ignored-artifact preservation list are in `docs/14_PRE_REORG_CHECKPOINT_2026-09-07.md`.
+**C1 EXECUTION RESUMED UNDER RESTRICTED FILE-SCOPE MODE.** Continue normal VDO source/test/media work, but do **not** mass-rename, move a repo/worktree, move a large folder, run recursive cleanup, or create a new workspace structure until the Supervisor Cleanup/Scope fix is ready. Keep the existing canonical paths stable. The pre-cleanup preservation record remains in `docs/14_PRE_REORG_CHECKPOINT_2026-09-07.md`; the scoped cleanup record is in `docs/15_VDO_FOLDER_CLEANUP_2026-09-07.md`.
 
-1. C1 local implementation/test gate is green at **278 passed**; preserve this checkpoint and do not retune source/ranking from FPS-only evidence.
-2. Keep V-C1-A as the ready fast-action source. Its three local analysis-window proxies are already generated provider-free; after migration, copy/recreate the ignored local media artifacts before continuing real-media validation and recompute the A reserve from the actual proxy files before any live authorization.
-3. V-C1-B is selected as `E:\\Obs\\2026-08-24 23-42-23.mkv`; ingest/proxy/local-signals are complete in ignored local session `2026-08-24_unknown_0db51591365f`. Preserve/migrate that local session if practical. Window materialization and exact cost preflight are still pending because the M6 CLI correctly refused Gemini mode without `--allow-remote-upload`; do not weaken this guard during cleanup.
-4. V-C1-C is selected as `E:\\Obs\\2026-08-26 23-17-37.mkv`, but its full local ingest/proxy/signals run has not started. Resume it only after the folder structure is stable.
-5. Creator-review and obvious-miss templates are ready locally under `.t/c1-real-media-validation/`; keep them separate from GT v2. They are ignored by Git, so cleanup must preserve/migrate them or explicitly document regeneration.
-6. **Use WorkLab parallel delegation by default after resume:** keep one coordinator/single writer, run 2-3 independent read-only audit/test/performance lanes in parallel when useful, and keep only one heavy full-video media worker on T-small/OBS storage at a time.
-7. Do not let multiple agents edit the same source/config/docs concurrently. GPU/NVDEC/NVENC optimization may be investigated in parallel, but do not change the active C1 benchmark path until correctness evidence is preserved.
-8. After reorganization, verify paths/configs/caches first, then complete B window/cost preflight, run C local preparation, and only then present exact per-source call counts and proposed hard caps. Any provider call requires a fresh explicit authorization and cap; run one source at a time.
+1. C1 local implementation/test gate is green at **280 passed**; preserve this checkpoint and do not retune source/ranking from FPS-only evidence.
+2. V-C1-A fast-action preflight has been recomputed from the current local state: **3 windows**, aggregate estimated reserve **฿2.514798**, provider calls 0, uploads 0.
+3. V-C1-B quiet/exploration preparation is complete: **17/17 analysis-window proxies**, aggregate estimated reserve **฿15.156116**, provider calls 0, uploads 0.
+4. V-C1-C social/personality preparation is complete after a clean retry: ingest/proxy/local-signals are complete, **26/26 analysis-window proxies** exist, and exact aggregate estimated reserve is **฿23.114436**. The interrupted first proxy attempt is preserved only as failure history and is not validation evidence.
+5. A/B/C provider-free preparation is complete: **46 logical windows total** and aggregate estimated reserve **฿40.785350** if all three sources are authorized. Creator-review and obvious-miss templates remain local under `.t/c1-real-media-validation/` and separate from GT v2.
+6. Stop at the provider boundary. Do not upload or call Gemini until the owner gives a fresh explicit authorization with a hard THB cap. Prefer running one source at a time so each source can be reviewed before spending on the next.
+7. Keep one coordinator/single writer and preserve the current benchmark/config paths. Do not optimize GPU/media behavior mid-validation; schedule that as a separate performance pass after correctness evidence is preserved.
+8. Continue under the restricted file-scope rule: no mass rename, repo/worktree move, large-folder move, recursive cleanup, or new workspace structure until the Supervisor Cleanup/Scope fix is ready.
 
 Do not lock 90-second windows as a universal multi-game default solely from the FPS v21 result; keep duration configurable until creator validation spans multiple gameplay archetypes.
 

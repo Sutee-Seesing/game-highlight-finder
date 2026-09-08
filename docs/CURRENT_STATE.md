@@ -1,6 +1,6 @@
 # VDO Current State
 
-Updated: 2026-09-07 Asia/Bangkok
+Updated: 2026-09-08 Asia/Bangkok
 
 ## Product North Star
 
@@ -67,13 +67,13 @@ Focused C1 integration result: **4 passed in 0.56s**.
 
 A local five-family Creator Candidate Pack demo was generated under `.t/c1-creator-pack-demo/` with synthetic playable MP4 fixtures/thumbnails for `DISCOVERY`, `FUNNY`, `FAIL`, `REACTION`, and `SKILL`. It uses the actual report/ranking pipeline and made **0 provider calls**.
 
-The fresh complete local suite including the newest integration test/config-example state passed **278 tests in 222.38s (0:03:42)** via durable task `9d34102e-75e6-4b17-a751-02b343a33ed6`. The provider-free C1 implementation/test gate is green.
+The fresh complete local suite after the M6 local-windows safety fix passed **280 tests in 226.41s (0:03:46)** via durable task `9c4044f7-41fb-4918-9bd1-6d26029b02c6`. The provider-free C1 implementation/test gate is green.
 
 Real-media validation is specified in `docs/13_C1_REAL_MEDIA_VALIDATION_PLAN.md`. Provider-free V-C1-A fast-action preflight is prepared from cal-01 using the creator prompt: 3 x 300s/30s-overlap windows (last window shorter), aggregate estimated reserve **฿2.514798**, provider calls **0**, uploads **0**, and no live authorization. The three corresponding local `analysis_window.mp4` files now exist under the ignored cal-01 session `data/sessions/2026-08-15_unknown_7db9940058f7/scout/windows/` for window ids `scout_window_87ac84ad01cdabbf`, `scout_window_ef57ca109a4e9708`, and `scout_window_919f91ad02042c1c`. Creator review and obvious-miss templates are also prepared under local-only `.t/c1-real-media-validation/`.
 
-V-C1-B is now selected as `E:\\Obs\\2026-08-24 23-42-23.mkv` (75m26s quiet/exploration source). Provider-free ingest + proxy + local-signals completed successfully under session `2026-08-24_unknown_0db51591365f` via task `b801aa31-4d42-42da-901f-354273205cec`, with **0 provider calls, 0 uploads, ฿0 spend**. A subsequent M6 `windows` CLI attempt was intentionally stopped by the safety guard because Gemini M6 requires `--allow-remote-upload`; the flag was not enabled and no upload occurred. B window materialization and exact cost preflight are therefore still pending.
+V-C1-B is selected as `E:\\Obs\\2026-08-24 23-42-23.mkv` (75m26s quiet/exploration source). Provider-free ingest + proxy + local-signals completed successfully under session `2026-08-24_unknown_0db51591365f` via task `b801aa31-4d42-42da-901f-354273205cec`. The CLI safety guard has been narrowed so Gemini-backed M6 can execute the fully local `windows` stage without enabling remote upload, while Scout/reconcile/extract still require explicit upload authorization. Focused CLI tests pass **7/7**. Provider-free B window materialization completed via task `a5844d26-c3da-4633-8f88-d2dc7eced126`: **17/17 analysis-window proxies** are present. The exact aggregate reserve estimate is **฿15.156116**. Provider calls **0**, uploads **0**, new spend **฿0**.
 
-V-C1-C is now selected as `E:\\Obs\\2026-08-26 23-17-37.mkv` (114m14s social/Discord-heavy source) but its full local ingest/proxy/signals run has not started. Work is intentionally **paused before folder reorganization**. See `docs/14_PRE_REORG_CHECKPOINT_2026-09-07.md` before moving or cleaning any tracked/ignored project data.
+V-C1-C is selected as `E:\\Obs\\2026-08-26 23-17-37.mkv` (114m14s social/Discord-heavy source). After the owner interrupted the first proxy attempt during CPU saturation, the clean retry completed provider-free: ingest reused its cache, proxy and local-signals completed via task `85b5f4fa-a8b2-4c12-8291-0d59d605d9fa`, then local window materialization completed via task `bd1e9980-7169-4e67-88cd-af3c4265412b` with **26/26 analysis-window proxies**. Exact provider-free preflight task `bc5f2f03-a61a-46a0-bda0-e068bbfd2d69` reports aggregate estimated reserve **฿23.114436**, provider calls **0**, uploads **0**, and new spend **฿0**. V-C1-A was also recomputed provider-free from the current local state via task `6bef8c93-3e56-4d3c-ae3b-4473c8b4c1bf` and remains **3 windows / ฿2.514798**. A/B/C local preparation is therefore complete; execution is stopped at the provider boundary pending fresh explicit authorization and a hard THB cap. C1 execution continues under the restricted file-scope rule while the Supervisor Cleanup/Scope fix is pending: **no mass rename, repo/worktree move, large-folder move, recursive cleanup, or new workspace structure**. Existing canonical project paths stay fixed. See `docs/14_PRE_REORG_CHECKPOINT_2026-09-07.md` for the pre-cleanup state and `docs/15_VDO_FOLDER_CLEANUP_2026-09-07.md` for the scoped cleanup record.
 
 ## Benchmark status / what we learned
 

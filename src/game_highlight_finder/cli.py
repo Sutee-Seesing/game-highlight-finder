@@ -924,9 +924,15 @@ def _analyze(
             "--dry-run with --m6 is not yet supported; refusing provider execution. "
             "No provider call or upload was made."
         )
-    if m6 and stop_after.strip().lower().replace("-", "_") not in {"report", "rank"}:
-        if config.scout.backend == "gemini" and not config.scout.allow_remote_upload:
-            raise ConfigError("M6 Gemini requires --allow-remote-upload.")
+    normalized_stop_after = stop_after.strip().lower().replace("-", "_")
+    if m6 and normalized_stop_after not in {"report", "rank"}:
+        provider_required_stages = {"scout", "reconcile", "extract"}
+        if (
+            normalized_stop_after in provider_required_stages
+            and config.scout.backend == "gemini"
+            and not config.scout.allow_remote_upload
+        ):
+            raise ConfigError("M6 Gemini requires --allow-remote-upload before Scout execution.")
         m6_result = analyze_m6_source(video, config, stop_after=stop_after)
         typer.echo("[PASS] M6 windowed analysis completed")
         if m6_result.windows is not None:

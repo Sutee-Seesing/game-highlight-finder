@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "project": "vdo/game-highlight-finder",
-  "updated_at": "2026-09-07T18:47:00+07:00",
+  "updated_at": "2026-09-08T20:05:00+07:00",
   "resume_phrase": "ต่อ VDO",
   "canonical_repo": {
     "path": "C:\\Data\\Works\\Personal_Projects\\Active_Products\\game-highlight-finder",
@@ -62,7 +62,7 @@
     "decision": "Stop window-duration micro-optimization as the primary workstream; use benchmarks as regression evidence and pivot product work to multi-game creator usefulness."
   },
   "c1_provider_free_progress": {
-    "status": "paused_for_folder_reorganization_vc1b_local_signals_complete_vc1c_selected",
+    "status": "provider_free_abc_preflight_complete_waiting_live_authorization",
     "implemented": [
       "generic DISCOVERY category",
       "backward-compatible moment_summary and creator_reason",
@@ -80,8 +80,8 @@
       "unit_suite_before_archetype_fixture": "242 passed in 52.50s",
       "archetype_plus_integration_focused": "4 passed in 0.56s",
       "previous_full_suite": "277 passed in 265.84s",
-      "latest_full_suite_task": "9d34102e-75e6-4b17-a751-02b343a33ed6",
-      "latest_full_suite_result": "278 passed in 222.38s (0:03:42)",
+      "latest_full_suite_task": "9c4044f7-41fb-4918-9bd1-6d26029b02c6",
+      "latest_full_suite_result": "280 passed in 226.41s (0:03:46)",
       "latest_full_suite_state_at_checkpoint": "COMPLETED_GREEN"
     },
     "offline_demo": {
@@ -97,7 +97,10 @@
         "window_duration_seconds": 300,
         "window_overlap_seconds": 30,
         "window_count": 3,
+        "materialized_window_proxy_count": 3,
         "aggregate_estimated_reserve_thb": 2.514798,
+        "recompute_task": "6bef8c93-3e56-4d3c-ae3b-4473c8b4c1bf",
+        "preflight_artifact": ".t/c1-real-media-validation/C1_A_PREFLIGHT.json",
         "local_analysis_windows_ready": true,
         "local_analysis_window_root": "data/sessions/2026-08-15_unknown_7db9940058f7/scout/windows",
         "local_analysis_window_ids": [
@@ -120,9 +123,16 @@
         "proxy": "COMPLETED",
         "local_signals": "COMPLETED",
         "local_task_id": "b801aa31-4d42-42da-901f-354273205cec",
-        "window_materialization": "PENDING",
+        "window_materialization": "COMPLETED_PROVIDER_FREE",
+        "window_materialization_task": "a5844d26-c3da-4633-8f88-d2dc7eced126",
+        "window_count": 17,
+        "materialized_window_proxy_count": 17,
+        "aggregate_estimated_reserve_thb": 15.156116,
+        "preflight_artifact": ".t/c1-real-media-validation/C1_B_PREFLIGHT.json",
+        "cli_guard_fix": "Gemini M6 windows stage is local-only and no longer requires allow_remote_upload; scout/reconcile/extract still require it",
+        "focused_cli_tests": "7 passed in 0.66s; local windows allowed while Scout remains blocked without upload authorization",
         "m6_windows_attempt_task": "48bc7aee-c2c5-4f4e-8aac-1209c1794caf",
-        "m6_windows_attempt_result": "blocked by configuration guard: M6 Gemini requires --allow-remote-upload; flag was not enabled",
+        "m6_windows_attempt_result": "historical blocked attempt; no upload occurred",
         "provider_calls": 0,
         "uploads": 0,
         "new_spend_thb": 0
@@ -131,7 +141,19 @@
         "source": "E:\\Obs\\2026-08-26 23-17-37.mkv",
         "archetype": "co-op/social/personality-heavy; Discord-heavy",
         "duration_seconds": 6853.967,
-        "local_full_pipeline_started": false,
+        "session_id": "2026-08-26_unknown_8434360e27d7",
+        "ingest": "COMPLETED",
+        "proxy": "COMPLETED_CLEAN_RETRY",
+        "local_signals": "COMPLETED",
+        "local_pipeline_task": "85b5f4fa-a8b2-4c12-8291-0d59d605d9fa",
+        "window_materialization": "COMPLETED_PROVIDER_FREE",
+        "window_materialization_task": "bd1e9980-7169-4e67-88cd-af3c4265412b",
+        "window_count": 26,
+        "materialized_window_proxy_count": 26,
+        "aggregate_estimated_reserve_thb": 23.114436,
+        "preflight_task": "bc5f2f03-a61a-46a0-bda0-e068bbfd2d69",
+        "preflight_artifact": ".t/c1-real-media-validation/C1_C_PREFLIGHT.json",
+        "previous_proxy_attempt_result": "FAILED after the owner manually ended ffmpeg while CPU was saturated during gaming; preserved only as failure history and not used as validation evidence",
         "provider_calls": 0,
         "uploads": 0,
         "new_spend_thb": 0
@@ -145,12 +167,12 @@
     "provider_calls": 0
   },
   "next_action": [
-    "PAUSED FOR FOLDER REORGANIZATION. Do not resume C1 execution until the cleanup/move is complete and canonical paths are re-validated.",
-    "Read docs/14_PRE_REORG_CHECKPOINT_2026-09-07.md before moving or deleting tracked/ignored project data.",
-    "Preserve or deliberately migrate the ignored V-C1-B completed local session, C1 review templates, C1 configs/preflight artifacts, and V-C1-A local analysis windows; raw E:\\Obs sources must not be deleted by project cleanup.",
-    "After reorganization, verify Git/config/cache paths first. Then finish provider-free B window materialization and exact cost preflight without weakening allow_remote_upload=false.",
-    "Then run V-C1-C local ingest/proxy/signals as the single heavy media worker while using 2-3 parallel read-only audit/test/performance lanes when useful.",
-    "Stop at the provider boundary and request fresh explicit authorization + hard THB cap before any generation/upload."
+    "Continue C1 in restricted file-scope mode: no mass rename, repo/worktree move, large-folder move, recursive cleanup, or new workspace structure until the Supervisor Cleanup/Scope fix is ready.",
+    "Keep all existing canonical paths fixed and do not delete or reorganize raw E:\\Obs media or ignored C1 artifacts.",
+    "A/B/C provider-free preparation is complete: A=3 windows/2.514798 THB reserve, B=17/15.156116, C=26/23.114436; total=46 logical windows/40.785350 THB reserve if all three are authorized.",
+    "Remain stopped at the provider boundary with provider_calls=0/uploads=0/new spend=0 until the owner provides a fresh explicit hard THB authorization.",
+    "When authorized, prefer one source at a time and review its creator candidates before spending on the next source.",
+    "Keep GPU-first media optimization separate from the active correctness validation baseline."
   ],
   "ai_editing_decision": {
     "include_in_roadmap": true,
