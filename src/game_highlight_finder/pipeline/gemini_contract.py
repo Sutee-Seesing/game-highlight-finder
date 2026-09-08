@@ -7,7 +7,7 @@ import json
 from collections.abc import Mapping
 from typing import Any
 
-from game_highlight_finder.domain.models import CandidateCategory
+from game_highlight_finder.domain.models import CandidateCategory, EditorialRole
 
 GEMINI_PROMPT_VERSION = "gemini-scout-v1"
 GEMINI_SCHEMA_VERSION = 1
@@ -51,6 +51,10 @@ def gemini_scout_schema() -> dict[str, Any]:
             "reason": {"type": "string"},
             "moment_summary": {"type": "string"},
             "creator_reason": {"type": "string"},
+            "editorial_role": {
+                "type": "string",
+                "enum": [role.value for role in EditorialRole],
+            },
             "setup_start_ms": {"type": "integer"},
             "payoff_end_ms": {"type": "integer"},
             "evidence": {"type": "array", "items": evidence},

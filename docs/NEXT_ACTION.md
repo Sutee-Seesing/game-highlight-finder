@@ -1,6 +1,6 @@
 # VDO Next Action
 
-Updated: 2026-09-08 Asia/Bangkok
+Updated: 2026-09-09 Asia/Bangkok
 
 ## Current gate
 
@@ -10,7 +10,7 @@ No new provider call is currently authorized.
 
 ## Exact next objective
 
-Finish provider-free hardening of **Creator Candidate Pack Beta (C1)**, then prepare a real multi-game validation proposal. Do not start paid inference or C2 AI rough editing until C1's local contract is stable.
+Implement the **C1 Hybrid Creator Triage + Story Verification** pivot from `docs/16_C1_HYBRID_CREATOR_TRIAGE_PLAN.md`. Preserve the existing media/extraction/cost/report substrate, but replace the monolithic semantic Scout center with provider-neutral proposals -> focused semantic judgment -> factual resolution verification -> story assembly/boundaries -> creator ranking. Do not start paid inference or C2 AI rough editing until this hybrid contract is stable provider-free.
 
 ### C1 implementation progress
 
@@ -19,7 +19,7 @@ Completed provider-free:
 1. Added generic `DISCOVERY` to the controlled candidate taxonomy.
 2. Added backward-compatible `moment_summary` (what happened) and `creator_reason` (why review it for short-form); legacy responses fall back to `reason`.
 3. Kept creator/editorial score separate from detection/timing confidence and exposed an explicit `creator_score` in ranking artifacts.
-4. Added creator-balanced `gemini-scout-window-v20-creator` and made it the default prompt version. Gameplay, funny, reaction, friend/social, discovery, WTF/unexpected, fail, tension/payoff, skill/clutch and personality-driven stories are peer targets.
+4. Added creator-balanced `gemini-scout-window-v20-creator` as the first creator prompt; after A owner review failed standalone usefulness, provider-free revision `gemini-scout-window-v21-editorial-role` became the default contract with explicit standalone-vs-montage roles and real-resolution requirements.
 5. Added hard prompt/editorial principles: `silence != dead air`, `no speech != boring`, and audio activity is evidence rather than an inclusion gate.
 6. Preserved setup -> event -> payoff behavior and creator-facing semantics through canonicalization/reconciliation.
 7. Converted report cards toward `Creator Candidate Pack`: `What happened`, `Why review this`, creator score, detection confidence, Open Clip, with technical lineage secondary.
@@ -27,24 +27,42 @@ Completed provider-free:
 9. Added a provider-free end-to-end C1 integration smoke test covering window payload -> canonicalization -> reconcile -> clip boundaries -> ranking -> extraction manifest -> Creator Candidate Pack report. Focused result: **4 passed in 0.56s**.
 10. Generated an actual local five-family Creator Candidate Pack demo (`DISCOVERY`, `FUNNY`, `FAIL`, `REACTION`, `SKILL`) with playable synthetic MP4 fixtures and thumbnails; provider calls **0**.
 11. Fresh complete local suite after the M6 local-windows safety fix is green: **280 passed in 226.41s (0:03:46)** via durable task `9c4044f7-41fb-4918-9bd1-6d26029b02c6`.
-12. Synced `config.example.yaml` to the creator prompt default `gemini-scout-window-v20-creator` so copied configs do not silently fall back to v18.
+12. Synced `config.example.yaml` to the current creator contract; it now defaults to `gemini-scout-window-v21-editorial-role` so copied configs include editorial-role and resolution rules.
 13. Added `docs/13_C1_REAL_MEDIA_VALIDATION_PLAN.md` with separate creator-review labels/metrics and three required archetypes.
 14. Prepared V-C1-A fast-action cost preflight using the known cal-01 real source: 3 creator-prompt windows, **estimated aggregate reserve ฿2.514798**, provider calls **0**, uploads **0**, live authorization **false**.
+15. Deep Research pivot plan is now canonical at `docs/16_C1_HYBRID_CREATOR_TRIAGE_PLAN.md`; architecture/pipeline/data-model/implementation docs are marked to preserve historical infrastructure while superseding the monolithic semantic Scout center.
+16. Hybrid H1 implemented provider-free: `StoryState`, `ResolutionState`, evidence-backed `CandidateClaim`/`ClaimStatus`, and ranking gate that blocks unresolved/contradicted `STANDALONE_STORY` candidates from normal creator review.
+17. Hybrid H2 implemented provider-free: provider-neutral `Proposal` / `ProposalArtifact` contracts plus deterministic local activity-signal adapter. Proposal records intentionally contain no creator score or editorial role.
+18. Hybrid H3 implemented provider-free: proposal-centered context planner with bounded initial context, explicit `needs_more_context` expansion, source-edge clamping, and maximum-context exhaustion.
+19. Hybrid H4/H5 contracts are implemented provider-free: sequential fake semantic judgments can request bounded context expansion, while a separate `CandidateVerification` / fake verifier contract alone may attach verified or contradicted terminal evidence.
+20. Hybrid H6 is implemented provider-free: `StoryAssembly` records setup/event/payoff/reaction semantic boundaries and refuses standalone story assembly until the candidate is `COMPLETE` with `VERIFIED` or `NOT_APPLICABLE` resolution.
+21. Added provider-free hybrid orchestration and persistence: proposal -> dynamic context -> semantic judgment -> factual verification -> story assembly -> creator-review eligibility -> clip-boundary derivation, with full/review maps persisted under `session/hybrid/`.
+22. Added a separate creator-evaluation corpus for `KEEP` / `MAYBE` / rejection reasons, owner editorial-role corrections, desired boundary corrections, review time and `MISS_OBVIOUS`; these product labels do not mutate event GT.
+23. Provider-free CLI/session workflow is integrated without replacing the historical flat-Scout path: `hybrid proposals`, `hybrid run-fixture`, `hybrid review-template`, and `hybrid review-summary` now persist/consume hybrid artifacts deterministically.
+24. H2.1 proposal enrichment is implemented: source-bound `ManualProposalMarkerSet` fixtures can feed both proposal preparation and local fixture runs; nearby compatible factual anchors are clustered while conflicting explicit event hypotheses remain separate.
+25. Creator review now round-trips deterministically from review map -> editable worksheet -> separate creator-evaluation corpus/summary with KEEP/MAYBE/rejection, role/boundary corrections, review time and `MISS_OBVIOUS` metrics.
+26. Post-H2.1 full local suite is green: **302 passed in 199.24s (0:03:19)** via task `3a7a4d49-f79d-4393-b8ce-2aeff0937750`. Focused Hybrid/CLI/M6 regression is **40 passed in 56.44s**; Ruff is green and `mypy src` is green across **72 source files**.
 
 ### Immediate provider-free work
 
 **C1 EXECUTION RESUMED UNDER RESTRICTED FILE-SCOPE MODE.** Continue normal VDO source/test/media work, but do **not** mass-rename, move a repo/worktree, move a large folder, run recursive cleanup, or create a new workspace structure until the Supervisor Cleanup/Scope fix is ready. Keep the existing canonical paths stable. The pre-cleanup preservation record remains in `docs/14_PRE_REORG_CHECKPOINT_2026-09-07.md`; the scoped cleanup record is in `docs/15_VDO_FOLDER_CLEANUP_2026-09-07.md`.
 
-1. C1 local implementation/test gate is green at **280 passed**; preserve this checkpoint and do not retune source/ranking from FPS-only evidence.
-2. V-C1-A fast-action preflight has been recomputed from the current local state: **3 windows**, aggregate estimated reserve **฿2.514798**, provider calls 0, uploads 0.
-3. V-C1-B quiet/exploration preparation is complete: **17/17 analysis-window proxies**, aggregate estimated reserve **฿15.156116**, provider calls 0, uploads 0.
-4. V-C1-C social/personality preparation is complete after a clean retry: ingest/proxy/local-signals are complete, **26/26 analysis-window proxies** exist, and exact aggregate estimated reserve is **฿23.114436**. The interrupted first proxy attempt is preserved only as failure history and is not validation evidence.
-5. A/B/C provider-free preparation is complete: **46 logical windows total** and aggregate estimated reserve **฿40.785350** if all three sources are authorized. Creator-review and obvious-miss templates remain local under `.t/c1-real-media-validation/` and separate from GT v2.
-6. Stop at the provider boundary. Do not upload or call Gemini until the owner gives a fresh explicit authorization with a hard THB cap. Prefer running one source at a time so each source can be reviewed before spending on the next.
-7. Keep one coordinator/single writer and preserve the current benchmark/config paths. Do not optimize GPU/media behavior mid-validation; schedule that as a separate performance pass after correctness evidence is preserved.
-8. Continue under the restricted file-scope rule: no mass rename, repo/worktree move, large-folder move, recursive cleanup, or new workspace structure until the Supervisor Cleanup/Scope fix is ready.
+1. Preserve the live A baseline exactly: 3 calls, settled cost **฿0.996318**, 6 extracted candidates, owner standalone usefulness **0/6**. Treat it as the regression baseline for the architecture pivot.
+2. H1 is implemented: preserve the new story/resolution/claim invariants and extend tests rather than weakening the standalone-review gate for convenience.
+3. Keep the Spike case as a mandatory provider-free semantic regression: plant/objective state change is allowed, but `ROUND_WON` / `CLUTCH_WIN` cannot become verified without terminal evidence.
+4. H2 is implemented as an interface proof. Next enrich proposal sources (ASR/visual/OCR/game adapters) only after the core orchestration is coherent; do not promote loudness/activity into creator truth.
+5. Keep v21 flat Scout artifacts/configs as historical baseline only. Do not spend on a v22/v23 monolithic prompt loop as the main fix.
+6. B and C remain fully prepared but paused: B **17 windows / ฿15.224148 preflight**, C **26 windows / ฿23.218504 preflight**, provider calls 0 / uploads 0 for both. These cost artifacts are historical planning evidence until the hybrid architecture reaches a new provider boundary.
+7. CLI/session integration and deterministic owner-review round-trip are implemented. Preserve those contracts and use them for local learning rather than rebuilding another parallel review path.
+8. H2.1 manual-marker enrichment and compatible-neighborhood clustering are implemented. Next measure proposal density/duplication on a small local/real source and add another factual evidence adapter only if it improves recall without exploding review/inference burden.
+9. Preferred next provider-free evidence branch is a transcript/ASR fixture adapter, because it can surface social/personality/joke setup that loudness and generic scene activity cannot represent. Keep it provider-neutral first; do not assume speech is required for highlights.
+10. Add a provider-free replay fixture for the historical Spike failure so every future semantic-judge/verifier adapter must keep `ROUND_WON` / `CLUTCH_WIN` unverified until terminal evidence is present.
+11. Design the future real semantic-judge/verifier provider boundary and exact cost preflight separately from the old full-window Scout contract. No upload/generation is authorized by this design work.
+12. Keep existing ingest/proxy/source identity/original-source extraction/reconcile/cost ledger/report infrastructure unless a concrete regression proves it must change.
+13. Keep one coordinator/single writer and preserve current benchmark/config paths. Do not optimize GPU/media behavior mid-semantic validation.
+14. Full-suite validation is green. Run the final handoff/diff checks and checkpoint the coherent provider-free pivot before starting the next evidence-adapter slice. No provider generation is required.
 
-Do not lock 90-second windows as a universal multi-game default solely from the FPS v21 result; keep duration configurable until creator validation spans multiple gameplay archetypes.
+Do not lock 90-second, 120-second or 300-second windows as a universal semantic unit. Window duration remains transport/coarse-context infrastructure until the hybrid pipeline has real creator evidence.
 
 ## Creator-beta acceptance
 

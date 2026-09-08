@@ -1,5 +1,24 @@
 # Architecture
 
+## Current C1 semantic architecture — 2026-09-09 realignment
+
+The media/storage/provider-safety architecture below remains valid, but the semantic center has changed after the first creator review and external Deep Research. The canonical current plan is `docs/16_C1_HYBRID_CREATOR_TRIAGE_PLAN.md`.
+
+Current target flow:
+
+```text
+source -> ingest/proxy -> cheap factual proposals
+       -> proposal-centered semantic context
+       -> multimodal judge
+       -> factual resolution verifier
+       -> story assembly + semantic boundaries
+       -> creator ranker
+       -> original-source extraction
+       -> human review
+```
+
+Fixed Scout windows remain useful transport/coarse-context infrastructure; they are no longer treated as the authoritative semantic/story unit. Existing source identity, analysis proxies, canonical artifact storage, original-source extraction, cost ledger and provider adapters are preserved. Optional game-specific event adapters plug into the generic proposal contract rather than defining the product.
+
 ## 1. Architectural style
 
 Use a single-process, modular Python CLI with file-based session artifacts and one SQLite cost ledger. Each pipeline stage has a narrow input/output contract. External systems—FFmpeg, ffprobe, optional transcription, and AI providers—sit behind adapters.

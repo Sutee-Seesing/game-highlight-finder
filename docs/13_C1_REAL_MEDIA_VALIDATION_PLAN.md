@@ -1,6 +1,8 @@
 # C1 Real-Media Creator Validation Plan
 
-Updated: 2026-09-07 Asia/Bangkok
+Updated: 2026-09-09 Asia/Bangkok
+
+> Architecture note: the archetypes, creator-review labels and real-media evaluation rules in this document remain valid, but the execution architecture is now superseded by `docs/16_C1_HYBRID_CREATOR_TRIAGE_PLAN.md`. B/C paid inference is paused until the hybrid proposal -> verify -> story -> rank contract is coherent provider-free.
 
 ## Purpose
 
@@ -56,7 +58,7 @@ First real-media creator pass:
 - do not tune window length after looking at the same source's creator labels and then report the retuned result as validation;
 - if one archetype clearly needs a different context length, record that as evidence for a later profile-aware experiment.
 
-The current default Creator Scout prompt is `gemini-scout-window-v20-creator`.
+The flat-Scout baseline default is `gemini-scout-window-v21-editorial-role`, but it is now historical comparison evidence rather than the target semantic architecture. In the hybrid path, fixed windows are transport/coarse-context units only; proposal-centered semantic context may expand dynamically until resolution is verified, contradicted, abandoned, or the context budget is reached. Historical A/B/C provider-free artifacts remain preserved for comparison and cost evidence.
 
 ## Provider-free preflight for each source
 
@@ -96,6 +98,15 @@ For each candidate, record one primary decision:
 - `REJECT_WRONG_EVENT` — description/event is materially wrong;
 - `REJECT_BAD_BOUNDARY` — underlying moment is useful but the extracted story is materially cut too early/late;
 - `REJECT_DUPLICATE` — redundant with a better candidate.
+
+Also record an **editorial role** independently from the event category:
+
+- `STANDALONE_STORY` — understandable and potentially postable as one self-contained clip after editing;
+- `MONTAGE_BEAT` — useful visual/mechanical/social beat that may belong in a compilation but does not carry a complete story alone;
+- `NONE` — should not consume creator editing time;
+- optional `CONTEXT_ONLY` — useful only as setup/reaction context attached to another beat.
+
+A candidate must not be labelled `STANDALONE_STORY` merely because a real kill/plant/ability event occurred. The evidence must include the actual resolution/payoff/reaction when the story depends on it; for example, a Spike plant is not itself proof of a round win or clutch while enemies remain and the round is unresolved.
 
 Separately record obvious creator-worthy moments that were not surfaced as `MISS_OBVIOUS` with source timestamp and a short explanation.
 

@@ -276,6 +276,40 @@ class CandidateCategory(StrEnum):
 Category = CandidateCategory
 
 
+class EditorialRole(StrEnum):
+    """Creator-facing use of a detected event, separate from its event category."""
+
+    STANDALONE_STORY = "STANDALONE_STORY"
+    MONTAGE_BEAT = "MONTAGE_BEAT"
+    CONTEXT_ONLY = "CONTEXT_ONLY"
+    NONE = "NONE"
+
+
+class StoryState(StrEnum):
+    """Whether the candidate contains a complete understandable story arc."""
+
+    COMPLETE = "COMPLETE"
+    INCOMPLETE = "INCOMPLETE"
+    UNKNOWN = "UNKNOWN"
+
+
+class ResolutionState(StrEnum):
+    """Independent factual state for the candidate's claimed payoff/outcome."""
+
+    VERIFIED = "VERIFIED"
+    UNVERIFIED = "UNVERIFIED"
+    CONTRADICTED = "CONTRADICTED"
+    NOT_APPLICABLE = "NOT_APPLICABLE"
+
+
+class ClaimStatus(StrEnum):
+    """Verification status for one explicit semantic claim."""
+
+    VERIFIED = "VERIFIED"
+    UNVERIFIED = "UNVERIFIED"
+    CONTRADICTED = "CONTRADICTED"
+
+
 GENERIC_CATEGORIES = frozenset(
     category.value
     for category in CandidateCategory
@@ -345,6 +379,24 @@ class Evidence(PersistedModel):
     def evidence_interval_is_ordered(self) -> Evidence:
         if self.start_ms is not None and self.end_ms is not None and self.end_ms <= self.start_ms:
             raise ValueError("evidence end must be greater than start")
+        return self
+
+
+class CandidateClaim(PersistedModel):
+    """One auditable semantic proposition attached to a candidate."""
+
+    claim_type: str = Field(pattern=r"^[A-Z][A-Z0-9_]{1,63}$")
+    status: ClaimStatus
+    evidence: list[Evidence] = Field(default_factory=list, max_length=16)
+    reason: str | None = Field(default=None, min_length=1, max_length=500)
+
+    @model_validator(mode="after")
+    def resolved_claim_requires_evidence(self) -> CandidateClaim:
+        if self.status in {ClaimStatus.VERIFIED, ClaimStatus.CONTRADICTED}:
+            if not self.evidence:
+                raise ValueError("verified or contradicted claims require explicit evidence")
+            if not any(item.start_ms is not None for item in self.evidence):
+                raise ValueError("verified or contradicted claims require timestamped evidence")
         return self
 
 
@@ -421,11 +473,16 @@ class Candidate(PersistedModel):
     event_end_ms: int = Field(gt=0)
     setup_start_ms: int | None = Field(default=None, ge=0)
     payoff_end_ms: int | None = Field(default=None, gt=0)
+    reaction_end_ms: int | None = Field(default=None, gt=0)
     score: float = Field(ge=0, le=10)
     confidence: float = Field(ge=0, le=1)
     reason: str = Field(min_length=1, max_length=500)
     moment_summary: str | None = Field(default=None, min_length=1, max_length=500)
     creator_reason: str | None = Field(default=None, min_length=1, max_length=500)
+    editorial_role: EditorialRole | None = None
+    story_state: StoryState | None = None
+    resolution_state: ResolutionState | None = None
+    claims: list[CandidateClaim] = Field(default_factory=list, max_length=32)
     evidence: list[Evidence] = Field(default_factory=list, max_length=16)
     source_window_ids: list[str] = Field(default_factory=list, max_length=32)
     related_candidate_ids: list[str] = Field(default_factory=list, max_length=32)
@@ -439,6 +496,7 @@ class Candidate(PersistedModel):
         "event_end_ms",
         "setup_start_ms",
         "payoff_end_ms",
+        "reaction_end_ms",
         "clip_start_ms",
         "clip_end_ms",
         mode="before",
@@ -476,12 +534,25 @@ class Candidate(PersistedModel):
             raise ValueError("candidate setup must not start after the event")
         if self.payoff_end_ms is not None and self.payoff_end_ms < self.event_end_ms:
             raise ValueError("candidate payoff must include the event")
+        if self.reaction_end_ms is not None:
+            if self.reaction_end_ms < self.event_end_ms:
+                raise ValueError("candidate reaction must not end before the event")
+            if self.payoff_end_ms is not None and self.reaction_end_ms < self.payoff_end_ms:
+                raise ValueError("candidate reaction must not end before the payoff")
         if (
             self.clip_start_ms is not None
             and self.clip_end_ms is not None
             and self.clip_end_ms <= self.clip_start_ms
         ):
             raise ValueError("candidate clip end must be greater than start")
+        if self.resolution_state is ResolutionState.VERIFIED and not any(
+            claim.status is ClaimStatus.VERIFIED for claim in self.claims
+        ):
+            raise ValueError("verified resolution requires at least one verified claim")
+        if self.resolution_state is ResolutionState.CONTRADICTED and not any(
+            claim.status is ClaimStatus.CONTRADICTED for claim in self.claims
+        ):
+            raise ValueError("contradicted resolution requires at least one contradicted claim")
         return self
 
 
@@ -533,6 +604,7 @@ class ScoutCandidateFragment(PersistedModel):
     reason: str = Field(min_length=1, max_length=500)
     moment_summary: str | None = Field(default=None, min_length=1, max_length=500)
     creator_reason: str | None = Field(default=None, min_length=1, max_length=500)
+    editorial_role: EditorialRole | None = None
     evidence: list[ScoutEvidence] = Field(default_factory=list, max_length=16)
     match_id: str | None = Field(default=None, max_length=128)
     match_index: int | None = Field(default=None, ge=0)

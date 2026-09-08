@@ -96,7 +96,7 @@ def test_stale_v1_ranking_is_recreated_safely(tmp_path: Path) -> None:
     assert cache_hit is False
     assert recreated.ranking_version == RANKING_VERSION
     assert recreated.ranking_basis == RANKING_BASIS
-    assert persisted["schema_version"] == 3
+    assert persisted["schema_version"] == 5
     assert persisted["ranking_version"] == RANKING_VERSION
     assert persisted["ranking_basis"] == RANKING_BASIS
 

@@ -44,21 +44,33 @@ from game_highlight_finder.config import (
 )
 from game_highlight_finder.cost import CostService, Money
 from game_highlight_finder.doctor import run_doctor
+from game_highlight_finder.domain.proposals import ManualProposalMarkerSet
 from game_highlight_finder.domain.time import format_duration
 from game_highlight_finder.errors import AppError, ConfigError, ErrorCategory
 from game_highlight_finder.media.ffmpeg import ProgressUpdate
+from game_highlight_finder.pipeline.creator_evaluation import (
+    create_creator_review_template,
+    creator_evaluation_from_template,
+    load_creator_review_template,
+    persist_creator_evaluation,
+    persist_creator_review_template,
+    summarize_creator_evaluation,
+)
 from game_highlight_finder.pipeline.gemini_scout import (
     generate_gemini_scout,
     preflight_gemini_scout,
 )
+from game_highlight_finder.pipeline.hybrid_triage import HybridFixtureBundle, load_hybrid_triage
 from game_highlight_finder.pipeline.ranking import load_or_create_ranking
 from game_highlight_finder.pipeline.report import load_report_inputs, render_report
 from game_highlight_finder.pipeline.runner import (
     AnalysisResult,
     V1AnalysisResult,
+    analyze_hybrid_fixture_source,
     analyze_m6_source,
     analyze_source,
     analyze_v1_source,
+    prepare_hybrid_proposals,
 )
 from game_highlight_finder.pipeline.windowed_scout import ExecutionActivity
 from game_highlight_finder.providers import ProviderRegistry
@@ -78,9 +90,14 @@ benchmark_app = typer.Typer(
     help="Build and evaluate private, provider-neutral M8 benchmark artifacts.",
     no_args_is_help=True,
 )
+hybrid_app = typer.Typer(
+    help="Exercise the provider-free C1 hybrid proposal/verification workflow.",
+    no_args_is_help=True,
+)
 app.add_typer(config_app, name="config")
 app.add_typer(cost_app, name="cost")
 app.add_typer(benchmark_app, name="benchmark")
+app.add_typer(hybrid_app, name="hybrid")
 
 
 @dataclass(frozen=True)
@@ -836,6 +853,159 @@ def _benchmark_compare(
     typer.echo(f"[PASS] comparison JSON: {result.json_path}")
     typer.echo(f"[PASS] comparison Markdown: {result.markdown_path}")
     typer.echo(f"groups: {len(result.aggregate.groups)}")
+    typer.echo("provider calls: ZERO")
+
+
+@hybrid_app.command("proposals")
+def hybrid_proposals(
+    ctx: typer.Context,
+    video: Annotated[Path, typer.Argument(help="Local source gameplay recording.")],
+    manual_markers: Annotated[
+        Path | None,
+        typer.Option(
+            "--manual-markers",
+            help="Optional source-bound ManualProposalMarkerSet JSON; remains provider-free.",
+        ),
+    ] = None,
+) -> None:
+    """Persist clustered factual proposal anchors from local evidence and optional markers."""
+    _execute(ctx, lambda options: _hybrid_proposals(options, video, manual_markers))
+
+
+def _hybrid_proposals(
+    options: RuntimeOptions,
+    video: Path,
+    manual_markers: Path | None,
+) -> None:
+    marker_set = (
+        ManualProposalMarkerSet.model_validate(read_json(manual_markers))
+        if manual_markers is not None
+        else None
+    )
+    result = prepare_hybrid_proposals(
+        video,
+        _load(options).config,
+        manual_markers=marker_set,
+    )
+    typer.echo("[PASS] hybrid proposals prepared")
+    typer.echo(f"proposals: {len(result.proposals.proposals)}")
+    typer.echo(f"artifact: {result.proposals_path}")
+    typer.echo(f"session ID: {result.ingest.session_id}")
+    typer.echo(f"source SHA-256: {result.ingest.source.sha256}")
+    typer.echo("provider calls: ZERO")
+
+
+@hybrid_app.command("run-fixture")
+def hybrid_run_fixture(
+    ctx: typer.Context,
+    video: Annotated[Path, typer.Argument(help="Local source gameplay recording.")],
+    fixture: Annotated[
+        Path,
+        typer.Argument(help="Local HybridFixtureBundle JSON; no provider is invoked."),
+    ],
+    manual_markers: Annotated[
+        Path | None,
+        typer.Option(
+            "--manual-markers",
+            help="Optional source-bound ManualProposalMarkerSet JSON; remains provider-free.",
+        ),
+    ] = None,
+) -> None:
+    """Run proposal -> judge -> verify -> story -> extraction using local fixtures."""
+    _execute(
+        ctx,
+        lambda options: _hybrid_run_fixture(options, video, fixture, manual_markers),
+    )
+
+
+def _hybrid_run_fixture(
+    options: RuntimeOptions,
+    video: Path,
+    fixture: Path,
+    manual_markers: Path | None,
+) -> None:
+    bundle = HybridFixtureBundle.model_validate(read_json(fixture))
+    marker_set = (
+        ManualProposalMarkerSet.model_validate(read_json(manual_markers))
+        if manual_markers is not None
+        else None
+    )
+    result = analyze_hybrid_fixture_source(
+        video,
+        _load(options).config,
+        bundle,
+        manual_markers=marker_set,
+    )
+    typer.echo("[PASS] hybrid fixture run completed")
+    typer.echo(f"proposals: {len(result.preparation.proposals.proposals)}")
+    typer.echo(f"semantic judgments: {len(result.triage.judgments)}")
+    typer.echo(f"verifications: {len(result.triage.verifications)}")
+    typer.echo(f"creator-review candidates: {len(result.triage.review_map.candidates)}")
+    typer.echo(
+        f"hybrid extractions: {result.extraction.completed} completed, "
+        f"{result.extraction.incomplete} incomplete"
+    )
+    typer.echo(f"hybrid run: {result.persistence.run_path}")
+    typer.echo(f"review template: {result.creator_review_template_path}")
+    typer.echo("provider calls: ZERO")
+
+
+@hybrid_app.command("review-template")
+def hybrid_review_template(
+    ctx: typer.Context,
+    session_id: Annotated[str, typer.Argument(help="Session containing hybrid/run.json.")],
+) -> None:
+    """Regenerate the editable owner-review worksheet from the persisted review map."""
+    _execute(ctx, lambda options: _hybrid_review_template(options, session_id))
+
+
+def _hybrid_review_template(options: RuntimeOptions, session_id: str) -> None:
+    config = _load(options).config
+    paths = session_paths(config.storage.data_dir, session_id)
+    if not paths.hybrid_run_path.is_file():
+        raise ConfigError("Hybrid run artifact is missing.", hint=str(paths.hybrid_run_path))
+    run = load_hybrid_triage(paths)
+    template = create_creator_review_template(run.review_map)
+    persist_creator_review_template(paths, template)
+    typer.echo(f"[PASS] creator review template: {paths.creator_review_template_path}")
+    typer.echo(f"candidates: {len(template.candidates)}")
+    typer.echo("provider calls: ZERO")
+
+
+@hybrid_app.command("review-summary")
+def hybrid_review_summary(
+    ctx: typer.Context,
+    session_id: Annotated[str, typer.Argument(help="Session containing hybrid/run.json.")],
+    review_file: Annotated[
+        Path,
+        typer.Argument(help="Completed creator_review_template.json to validate and summarize."),
+    ],
+) -> None:
+    """Persist owner labels separately from GT and print creator-facing usefulness metrics."""
+    _execute(ctx, lambda options: _hybrid_review_summary(options, session_id, review_file))
+
+
+def _hybrid_review_summary(
+    options: RuntimeOptions,
+    session_id: str,
+    review_file: Path,
+) -> None:
+    config = _load(options).config
+    paths = session_paths(config.storage.data_dir, session_id)
+    if not paths.hybrid_run_path.is_file():
+        raise ConfigError("Hybrid run artifact is missing.", hint=str(paths.hybrid_run_path))
+    run = load_hybrid_triage(paths)
+    template = load_creator_review_template(review_file)
+    corpus = creator_evaluation_from_template(template)
+    persist_creator_evaluation(paths, corpus, run.review_map)
+    summary = summarize_creator_evaluation(corpus)
+    typer.echo(f"[PASS] creator evaluation: {paths.creator_evaluation_path}")
+    typer.echo(f"reviewed: {summary.reviewed_count}")
+    typer.echo(f"KEEP: {summary.keep_count}; MAYBE: {summary.maybe_count}")
+    typer.echo(f"standalone KEEP rate: {summary.standalone_keep_rate:.3f}")
+    typer.echo(f"montage useful rate: {summary.montage_useful_rate:.3f}")
+    typer.echo(f"MISS_OBVIOUS: {summary.obvious_miss_count}")
+    typer.echo(f"summary: {paths.creator_evaluation_summary_path}")
     typer.echo("provider calls: ZERO")
 
 

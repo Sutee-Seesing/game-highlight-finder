@@ -67,31 +67,56 @@ warnings[]
 
 Matches may overlap slightly during raw Scout output but canonical matches should not overlap after reconciliation unless the selected game profile explicitly permits nesting. Unassigned candidates belong to a synthetic `UNASSIGNED` group, not a fabricated match interval.
 
+### Proposal
+
+A proposal is a high-recall factual anchor **before** creator/story judgment:
+
+```text
+proposal_id
+start_ms
+end_ms
+signal_type               # audio/scene/ASR/visual/OCR/game event/manual marker
+event_hypothesis          # optional factual hypothesis
+confidence                 # confidence that the evidence/anchor exists
+sources[]                  # provenance adapters
+metadata{}
+```
+
+A proposal deliberately has no creator score or editorial role. Provider-neutral proposal artifacts allow generic local evidence, ASR, optional OCR, game telemetry/plugins and manual markers to feed the same downstream semantic pipeline.
+
 ### Candidate
 
 ```text
 candidate_id
 match_id                 # nullable / UNASSIGNED
 kind                     # MOMENT or STORY
-category                 # required enum
+category                 # factual/semantic event family
+editorial_role           # STANDALONE_STORY / MONTAGE_BEAT / CONTEXT_ONLY / NONE
+story_state              # COMPLETE / INCOMPLETE / UNKNOWN
+resolution_state         # VERIFIED / UNVERIFIED / CONTRADICTED / NOT_APPLICABLE
+claims[]                 # explicit propositions with verification status + evidence
 event_start_ms
 event_end_ms
 setup_start_ms           # optional
 payoff_end_ms            # optional
-score
-confidence
+score                    # provisional creator/editorial prior, not verification
+confidence               # detection/timing certainty, not verification
 reason
+moment_summary
+creator_reason
 evidence[]
 source_window_ids[]
 related_candidate_ids[]
-clip_start_ms             # derived after roll/clamp
-clip_end_ms               # derived after roll/clamp
+clip_start_ms             # derived after verification/boundary policy
+clip_end_ms               # derived after verification/boundary policy
 normalization_actions[]
-review                    # optional
-rank                      # optional
+review                    # optional human feedback
+rank                      # separate derived artifact
 ```
 
-`evidence` should be compact, such as visual event, spoken reaction, game-state change, and why the payoff is understandable. Do not store chain-of-thought.
+Terminal semantic truth is represented by explicit claims rather than prose alone. A `VERIFIED` or `CONTRADICTED` claim requires compact timestamped evidence; provider self-confidence cannot substitute for evidence. A `STANDALONE_STORY` is normal-review eligible only when `story_state=COMPLETE` and `resolution_state` is `VERIFIED` or `NOT_APPLICABLE`.
+
+`evidence` should be compact, such as visual event, spoken reaction, game-state change, and why a factual claim is supported. Do not store chain-of-thought.
 
 ### Review
 

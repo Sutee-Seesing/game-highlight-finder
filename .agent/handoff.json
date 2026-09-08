@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "project": "vdo/game-highlight-finder",
-  "updated_at": "2026-09-08T20:05:00+07:00",
+  "updated_at": "2026-09-09T03:51:00+07:00",
   "resume_phrase": "ต่อ VDO",
   "canonical_repo": {
     "path": "C:\\Data\\Works\\Personal_Projects\\Active_Products\\game-highlight-finder",
@@ -62,7 +62,7 @@
     "decision": "Stop window-duration micro-optimization as the primary workstream; use benchmarks as regression evidence and pivot product work to multi-game creator usefulness."
   },
   "c1_provider_free_progress": {
-    "status": "provider_free_abc_preflight_complete_waiting_live_authorization",
+    "status": "c1_hybrid_h2_1_provider_free_green",
     "implemented": [
       "generic DISCOVERY category",
       "backward-compatible moment_summary and creator_reason",
@@ -74,20 +74,50 @@
       "offline archetype fixtures for quiet visual discovery, social/co-op payoff, tension/fail story, boring zero-candidate, and legacy fallback",
       "provider-free end-to-end C1 integration smoke from window payloads through report",
       "five-family synthetic Creator Candidate Pack with playable local clips/thumbnails",
-      "real-media creator validation protocol with separate creator labels from GT truth"
+      "real-media creator validation protocol with separate creator labels from GT truth",
+      "Deep Research pivot plan docs/16_C1_HYBRID_CREATOR_TRIAGE_PLAN.md",
+      "H1 story/resolution/claim truth model with evidence-backed verification gate",
+      "H2 provider-neutral factual Proposal artifacts plus deterministic local activity adapter",
+      "H3 bounded proposal-centered dynamic context planner",
+      "H4 provider-free fake semantic judge with provisional unverified claims",
+      "H5 independent CandidateVerification contract; terminal evidence required before standalone eligibility",
+      "H6 verified StoryAssembly with setup/event/payoff/reaction boundaries",
+      "provider-free hybrid orchestration and persisted full/review maps",
+      "separate creator-evaluation corpus for KEEP/MAYBE/rejections, role/boundary corrections, review time, and MISS_OBVIOUS",
+      "provider-free CLI/session workflow for hybrid proposals, fixture runs, review templates, and review summaries",
+      "H2.1 source-bound ManualProposalMarkerSet enrichment with exact source SHA-256 + duration validation",
+      "deterministic nearby-proposal clustering that preserves provenance and refuses conflicting explicit event hypotheses"
     ],
     "tests": {
       "unit_suite_before_archetype_fixture": "242 passed in 52.50s",
       "archetype_plus_integration_focused": "4 passed in 0.56s",
       "previous_full_suite": "277 passed in 265.84s",
-      "latest_full_suite_task": "9c4044f7-41fb-4918-9bd1-6d26029b02c6",
-      "latest_full_suite_result": "280 passed in 226.41s (0:03:46)",
+      "latest_pre_hybrid_full_suite_task": "3d86ac97-f462-4ddf-941c-762ff342abe6",
+      "latest_pre_hybrid_full_suite_result": "282 passed in 98.36s (0:01:38)",
+      "previous_hybrid_full_suite_task": "a7e4def7-1b8d-473b-917b-dce7d71fb361",
+      "previous_hybrid_full_suite_result": "291 passed in 101.96s",
+      "hybrid_focused_result": "40 passed in 56.44s after H2.1 clustering/manual-marker/CLI integration",
+      "hybrid_ruff_result": "All checks passed on changed Hybrid/CLI/M6 files",
+      "hybrid_mypy_result": "Success: no issues found in 72 source files",
+      "latest_completed_full_suite_task": "3a7a4d49-f79d-4393-b8ce-2aeff0937750",
+      "latest_completed_full_suite_result": "302 passed in 199.24s (0:03:19) post-H2.1",
+      "latest_full_suite_task": "3a7a4d49-f79d-4393-b8ce-2aeff0937750",
+      "latest_full_suite_result": "302 passed in 199.24s (0:03:19)",
       "latest_full_suite_state_at_checkpoint": "COMPLETED_GREEN"
     },
     "offline_demo": {
       "path": ".t/c1-creator-pack-demo/output/data/sessions/2026-09-07_unknown_c1c1c1c1c1c1/reports/index.html",
       "families": ["DISCOVERY", "FUNNY", "FAIL", "REACTION", "SKILL"],
       "provider_calls": 0
+    },
+    "hybrid_architecture": {
+      "deep_research_verdict": "CONTINUE + PIVOT + SIMPLIFY",
+      "canonical_plan": "docs/16_C1_HYBRID_CREATOR_TRIAGE_PLAN.md",
+      "target_flow": "factual proposals -> proposal-centered context -> semantic judge -> resolution verifier -> story assembly/boundaries -> creator ranking",
+      "implemented_provider_free": ["H1", "H2", "H2.1 clustering/manual markers", "H3", "H4 contract", "H5 contract", "H6", "hybrid orchestration", "CLI/session workflow", "creator evaluation corpus/workflow"],
+      "paid_bc_paused": true,
+      "new_provider_calls": 0,
+      "new_uploads": 0
     },
     "real_media_preflight": {
       "plan": "docs/13_C1_REAL_MEDIA_VALIDATION_PLAN.md",
@@ -108,9 +138,26 @@
           "scout_window_ef57ca109a4e9708",
           "scout_window_919f91ad02042c1c"
         ],
-        "provider_calls": 0,
-        "uploads": 0,
-        "live_authorized": false
+        "provider_calls": 3,
+        "uploads": 3,
+        "live_authorized": false,
+        "live_authorization_consumed": true,
+        "live_task": "fe945f6f-3a0c-4e06-a704-a4da17c807a9",
+        "authorized_logical_call_cap": 3,
+        "authorized_hard_cap_thb": 2.52,
+        "attempt_cap_per_window": 1,
+        "automatic_generation_retries": 0,
+        "settled_cost_thb": 0.996318,
+        "ledger_rows": 3,
+        "ledger_status": "3/3 SETTLED; no reserved/in-flight ambiguity",
+        "remote_file_cleanup": "3/3 deletion_status=deleted",
+        "raw_candidate_count": 6,
+        "raw_candidate_families": {"FUNNY": 2, "CLUTCH": 2, "FRIEND_MOMENT": 1, "FAIL": 1},
+        "offline_finalize_task": "18357ac4-cc23-4e34-b395-19388a426250",
+        "offline_finalize_status": "COMPLETED_PROVIDER_FREE",
+        "reconciled_candidate_count": 6,
+        "extraction_completed": 6,
+        "owner_creator_review": "0/6 usable as standalone creator clips; preserve as creator-usefulness evidence, not GT-v2 truth"
       },
       "V-C1-B": {
         "source": "E:\\Obs\\2026-08-24 23-42-23.mkv",
@@ -127,7 +174,9 @@
         "window_materialization_task": "a5844d26-c3da-4633-8f88-d2dc7eced126",
         "window_count": 17,
         "materialized_window_proxy_count": 17,
-        "aggregate_estimated_reserve_thb": 15.156116,
+        "prompt": "gemini-scout-window-v21-editorial-role",
+        "aggregate_estimated_reserve_thb": 15.224148,
+        "preflight_task": "d610af52-065d-48bf-88cb-4631151de7c9",
         "preflight_artifact": ".t/c1-real-media-validation/C1_B_PREFLIGHT.json",
         "cli_guard_fix": "Gemini M6 windows stage is local-only and no longer requires allow_remote_upload; scout/reconcile/extract still require it",
         "focused_cli_tests": "7 passed in 0.66s; local windows allowed while Scout remains blocked without upload authorization",
@@ -150,8 +199,9 @@
         "window_materialization_task": "bd1e9980-7169-4e67-88cd-af3c4265412b",
         "window_count": 26,
         "materialized_window_proxy_count": 26,
-        "aggregate_estimated_reserve_thb": 23.114436,
-        "preflight_task": "bc5f2f03-a61a-46a0-bda0-e068bbfd2d69",
+        "prompt": "gemini-scout-window-v21-editorial-role",
+        "aggregate_estimated_reserve_thb": 23.218504,
+        "preflight_task": "e42a3019-3bb7-46ef-8e63-1921909971ae",
         "preflight_artifact": ".t/c1-real-media-validation/C1_C_PREFLIGHT.json",
         "previous_proxy_attempt_result": "FAILED after the owner manually ended ffmpeg while CPU was saturated during gaming; preserved only as failure history and not used as validation evidence",
         "provider_calls": 0,
@@ -164,14 +214,18 @@
         "local_only": true
       }
     },
-    "provider_calls": 0
+    "provider_calls": 3
   },
   "next_action": [
     "Continue C1 in restricted file-scope mode: no mass rename, repo/worktree move, large-folder move, recursive cleanup, or new workspace structure until the Supervisor Cleanup/Scope fix is ready.",
     "Keep all existing canonical paths fixed and do not delete or reorganize raw E:\\Obs media or ignored C1 artifacts.",
-    "A/B/C provider-free preparation is complete: A=3 windows/2.514798 THB reserve, B=17/15.156116, C=26/23.114436; total=46 logical windows/40.785350 THB reserve if all three are authorized.",
-    "Remain stopped at the provider boundary with provider_calls=0/uploads=0/new spend=0 until the owner provides a fresh explicit hard THB authorization.",
-    "When authorized, prefer one source at a time and review its creator candidates before spending on the next source.",
+    "A live v20 evidence is complete and owner review judged 0/6 extracted candidates usable as standalone creator clips; treat this as creator-usefulness evidence, not GT-v2 truth.",
+    "Deep Research + repo audit is complete with CONTINUE + PIVOT + SIMPLIFY; canonical plan is docs/16_C1_HYBRID_CREATOR_TRIAGE_PLAN.md.",
+    "Hybrid H1-H6 plus provider-free orchestration/persistence are implemented: factual proposals, dynamic context, provisional semantic judgment, independent resolution verification, verified story assembly, creator-review gating, and post-verification clip boundaries.",
+    "H2.1 is green: source-bound manual-marker enrichment and deterministic compatible-neighborhood clustering are implemented; conflicting explicit event hypotheses remain separate.",
+    "Local CLI/session workflow and creator-evaluation round-trip are implemented for proposals, fixture runs, review templates, KEEP/MAYBE/rejections, role/boundary corrections, review time and MISS_OBVIOUS without mutating event GT.",
+    "Next provider-free slice: measure proposal density/duplication on local/real media, add a transcript/ASR fixture adapter if it improves factual proposal recall, and build a replay harness for the historical Spike unresolved-outcome failure before designing new semantic-judge/verifier provider preflight.",
+    "B/C remain paused at the provider boundary: B=17 windows/15.224148 THB historical v21 preflight; C=26/23.218504; fresh explicit hard THB authorization is required before any future upload/generation.",
     "Keep GPU-first media optimization separate from the active correctness validation baseline."
   ],
   "ai_editing_decision": {

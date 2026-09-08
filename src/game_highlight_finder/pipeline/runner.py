@@ -13,9 +13,21 @@ from pydantic import BaseModel, ConfigDict
 
 from game_highlight_finder.config import AppConfig
 from game_highlight_finder.domain.models import ErrorRecord, SessionMap, StageStatus
+from game_highlight_finder.domain.proposals import ManualProposalMarkerSet, ProposalArtifact
 from game_highlight_finder.domain.reconcile import derive_clip_boundaries, reconcile_session_maps
 from game_highlight_finder.errors import ConfigError
+from game_highlight_finder.pipeline.creator_evaluation import (
+    create_creator_review_template,
+    persist_creator_review_template,
+)
 from game_highlight_finder.pipeline.extraction import ExtractionResult, extract_candidates
+from game_highlight_finder.pipeline.hybrid_triage import (
+    HybridFixtureBundle,
+    HybridTriagePersistence,
+    HybridTriageRun,
+    persist_hybrid_triage,
+    run_hybrid_fixture_bundle,
+)
 from game_highlight_finder.pipeline.ingest import IngestResult, ingest_source
 from game_highlight_finder.pipeline.local_signals import LocalSignalsResult, generate_local_signals
 from game_highlight_finder.pipeline.manifest import (
@@ -26,6 +38,11 @@ from game_highlight_finder.pipeline.manifest import (
     invalidate_from,
     recover_interrupted,
     start_stage,
+)
+from game_highlight_finder.pipeline.proposals import (
+    combine_and_cluster_proposals,
+    proposals_from_local_signals,
+    proposals_from_manual_markers,
 )
 from game_highlight_finder.pipeline.proxy import ProxyResult, generate_proxy
 from game_highlight_finder.pipeline.ranking import RankingArtifact, load_or_create_ranking
@@ -85,6 +102,30 @@ class V1AnalysisResult(BaseModel):
     stop_after: V1StopAfter
 
 
+class HybridProposalPreparationResult(BaseModel):
+    """Provider-free local preparation through the factual proposal artifact."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, arbitrary_types_allowed=True)
+
+    ingest: IngestResult
+    proxy: ProxyResult
+    local_signals: LocalSignalsResult
+    proposals: ProposalArtifact
+    proposals_path: Path
+
+
+class HybridFixtureAnalysisResult(BaseModel):
+    """Local fixture-driven hybrid run with isolated review extraction artifacts."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, arbitrary_types_allowed=True)
+
+    preparation: HybridProposalPreparationResult
+    triage: HybridTriageRun
+    persistence: HybridTriagePersistence
+    extraction: ExtractionResult
+    creator_review_template_path: Path
+
+
 def normalize_stop_after(value: str) -> StopAfter:
     normalized = value.strip().lower().replace("-", "_")
     if normalized == "fake_scout":
@@ -124,6 +165,86 @@ def analyze_source(
         local_signals=signals,
         scout=scout,
         stop_after=boundary,
+    )
+
+
+def prepare_hybrid_proposals(
+    video: Path,
+    config: AppConfig,
+    *,
+    manual_markers: ManualProposalMarkerSet | None = None,
+) -> HybridProposalPreparationResult:
+    """Run local ingest/proxy/signals, enrich factual anchors, and persist proposals."""
+
+    local = analyze_source(video, config, stop_after="local-signals")
+    assert local.proxy is not None and local.local_signals is not None
+    local_proposals = proposals_from_local_signals(
+        session_id=local.ingest.session_id,
+        source_id=local.ingest.source.source_id,
+        signals=local.local_signals.signals,
+        created_at=local.ingest.source.created_at,
+    )
+    artifacts = [local_proposals]
+    if manual_markers is not None:
+        artifacts.append(
+            proposals_from_manual_markers(
+                session_id=local.ingest.session_id,
+                source_id=local.ingest.source.source_id,
+                source_sha256=local.ingest.source.sha256,
+                source_duration_ms=local.ingest.source.duration_ms,
+                marker_set=manual_markers,
+                created_at=local.ingest.source.created_at,
+            )
+        )
+    proposals = combine_and_cluster_proposals(artifacts)
+    paths = session_paths(config.storage.data_dir, local.ingest.session_id)
+    paths.hybrid_dir.mkdir(parents=True, exist_ok=True)
+    atomic_write_json(paths.hybrid_proposals_path, proposals.model_dump(mode="json"))
+    return HybridProposalPreparationResult(
+        ingest=local.ingest,
+        proxy=local.proxy,
+        local_signals=local.local_signals,
+        proposals=proposals,
+        proposals_path=paths.hybrid_proposals_path,
+    )
+
+
+def analyze_hybrid_fixture_source(
+    video: Path,
+    config: AppConfig,
+    fixture: HybridFixtureBundle,
+    *,
+    manual_markers: ManualProposalMarkerSet | None = None,
+) -> HybridFixtureAnalysisResult:
+    """Exercise the hybrid semantic center locally without any provider generation."""
+
+    preparation = prepare_hybrid_proposals(
+        video,
+        config,
+        manual_markers=manual_markers,
+    )
+    triage = run_hybrid_fixture_bundle(
+        proposals=preparation.proposals,
+        fixture=fixture,
+        extraction_config=config.media.extraction,
+        created_at=preparation.ingest.source.created_at,
+    )
+    paths = session_paths(config.storage.data_dir, preparation.ingest.session_id)
+    persistence = persist_hybrid_triage(paths, triage)
+    extraction = extract_candidates(
+        preparation.ingest.source,
+        triage.review_map,
+        config,
+        namespace="hybrid",
+    )
+    review_template = create_creator_review_template(triage.review_map)
+    persist_creator_review_template(paths, review_template)
+    return HybridFixtureAnalysisResult(
+        preparation=preparation,
+        triage=triage,
+        persistence=persistence,
+        extraction=extraction,
+        creator_review_template_path=paths.creator_review_template_path,
     )
 
 

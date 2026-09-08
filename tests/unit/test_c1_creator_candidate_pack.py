@@ -1,12 +1,17 @@
 from __future__ import annotations
 
+# ruff: noqa: E501
 from datetime import UTC, datetime
 from pathlib import Path
 
 from game_highlight_finder import __version__
 from game_highlight_finder.config import AppConfig, ExtractionConfig
 from game_highlight_finder.domain.canonical import canonicalize_scout_response
-from game_highlight_finder.domain.models import Rational, SourceAsset, VideoStream
+from game_highlight_finder.domain.models import (
+    Rational,
+    SourceAsset,
+    VideoStream,
+)
 from game_highlight_finder.domain.reconcile import derive_clip_boundaries, reconcile_session_maps
 from game_highlight_finder.domain.windows import plan_scout_windows
 from game_highlight_finder.pipeline.extraction import ExtractionManifest, ExtractionRecord
@@ -15,7 +20,6 @@ from game_highlight_finder.pipeline.ranking import rank_session_map
 from game_highlight_finder.pipeline.report import render_report
 from game_highlight_finder.storage.hashing import hash_file
 from game_highlight_finder.storage.sessions import load_manifest, session_paths
-
 
 SOURCE_ID = "src_" + "c" * 16
 SESSION_ID = "c1_creator_fixture"
@@ -51,6 +55,7 @@ def _candidate(
     reason: str,
     moment_summary: str | None = None,
     creator_reason: str | None = None,
+    editorial_role: str | None = None,
 ) -> dict[str, object]:
     payload: dict[str, object] = {
         "start_ms": start_ms,
@@ -65,6 +70,8 @@ def _candidate(
         payload["moment_summary"] = moment_summary
     if creator_reason is not None:
         payload["creator_reason"] = creator_reason
+    if editorial_role is not None:
+        payload["editorial_role"] = editorial_role
     return payload
 
 
@@ -240,6 +247,81 @@ def test_c1_boring_window_can_return_zero_candidates_without_synthetic_fill() ->
 
     assert session_map.candidates == []
     assert rank_session_map(session_map).candidate_count == 0
+
+
+def test_c1_editorial_role_separates_standalone_montage_and_non_review_items() -> None:
+    window = plan_scout_windows(
+        DURATION_MS,
+        max_duration_ms=60_000,
+        overlap_ms=0,
+        session_id=SESSION_ID,
+        source_id=SOURCE_ID,
+    ).windows[0]
+    session_map = canonicalize_scout_response(
+        _payload(
+            window_start_ms=0,
+            window_end_ms=60_000,
+            candidates=[
+                _candidate(
+                    start_ms=5_000,
+                    end_ms=12_000,
+                    category="CLUTCH",
+                    score=8.0,
+                    confidence=0.9,
+                    reason="Round fully resolves after the final elimination.",
+                    editorial_role="STANDALONE_STORY",
+                ),
+                _candidate(
+                    start_ms=20_000,
+                    end_ms=24_000,
+                    category="SKILL",
+                    score=9.5,
+                    confidence=0.98,
+                    reason="Clean mechanical kill without a complete story arc.",
+                    editorial_role="MONTAGE_BEAT",
+                ),
+                _candidate(
+                    start_ms=30_000,
+                    end_ms=35_000,
+                    category="OTHER",
+                    score=10.0,
+                    confidence=0.99,
+                    reason="Real interval but not useful to the creator.",
+                    editorial_role="NONE",
+                ),
+                _candidate(
+                    start_ms=40_000,
+                    end_ms=45_000,
+                    category="OTHER",
+                    score=9.0,
+                    confidence=0.9,
+                    reason="Setup context that belongs to another beat.",
+                    editorial_role="CONTEXT_ONLY",
+                ),
+            ],
+        ),
+        session_id=SESSION_ID,
+        source_id=SOURCE_ID,
+        source_duration_ms=DURATION_MS,
+        source_window_id=window.window_id,
+        source_window_start_ms=0,
+        source_window_end_ms=60_000,
+    )
+
+    ranking = rank_session_map(session_map)
+
+    assert [candidate.editorial_role.value for candidate in session_map.candidates] == [
+        "STANDALONE_STORY",
+        "MONTAGE_BEAT",
+        "NONE",
+        "CONTEXT_ONLY",
+    ]
+    # A provider-proposed standalone role is no longer enough by itself. Until a
+    # separate verifier supplies COMPLETE + VERIFIED/NOT_APPLICABLE state, only
+    # the montage beat is creator-review eligible.
+    assert ranking.candidate_count == 1
+    assert [entry.editorial_role.value for entry in ranking.entries] == ["MONTAGE_BEAT"]
+    assert ranking.entries[0].creator_score == 9.5
 
 
 def test_c1_provider_free_pipeline_renders_creator_pack_from_window_payloads(tmp_path: Path) -> None:

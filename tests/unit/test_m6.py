@@ -122,6 +122,35 @@ def test_window_prompt_v20_creator_treats_visual_silence_and_social_as_first_cla
     assert "Only after concrete gameplay anchors are covered" not in prompt
 
 
+def test_window_prompt_v21_requires_editorial_role_and_real_resolution() -> None:
+    source_id = "src_" + "a" * 16
+    window = plan_scout_windows(20_000, session_id="session", source_id=source_id).windows[0]
+    prompt = build_window_prompt(
+        source_duration_ms=20_000,
+        window=window,
+        local_signal_summary={},
+        prompt_version="gemini-scout-window-v21-editorial-role",
+    )
+    assert (
+        "editorial_role must be one of STANDALONE_STORY, MONTAGE_BEAT, CONTEXT_ONLY, or NONE"
+        in prompt
+    )
+    assert (
+        "a real kill, headshot, plant, ability play, or loud reaction is not "
+        "automatically a standalone clip"
+        in prompt
+    )
+    assert (
+        "Do not claim a win, clutch, escape, boss defeat, joke payoff, or other resolution before"
+        in prompt
+    )
+    assert (
+        "planting an objective while opponents remain is not proof that the round was won "
+        "or clutched"
+        in prompt
+    )
+
+
 def test_window_canonicalization_preserves_creator_fields_and_discovery_category() -> None:
     payload = _window_response(
         duration_ms=20_000,
@@ -134,6 +163,7 @@ def test_window_canonicalization_preserves_creator_fields_and_discovery_category
     candidate["category"] = "DISCOVERY"  # type: ignore[index]
     candidate["moment_summary"] = "Player silently discovers a hidden area."  # type: ignore[index]
     candidate["creator_reason"] = "The visual reveal is understandable without dialogue."  # type: ignore[index]
+    candidate["editorial_role"] = "STANDALONE_STORY"  # type: ignore[index]
     session_map = canonicalize_scout_response(
         payload,
         session_id="session",
@@ -147,6 +177,7 @@ def test_window_canonicalization_preserves_creator_fields_and_discovery_category
     assert result.category == "DISCOVERY"
     assert result.moment_summary == "Player silently discovers a hidden area."
     assert result.creator_reason == "The visual reveal is understandable without dialogue."
+    assert result.editorial_role.value == "STANDALONE_STORY"
 
 
 def test_window_canonicalization_derives_match_ordinal_from_array_order() -> None:

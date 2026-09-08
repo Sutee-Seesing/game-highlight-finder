@@ -17,10 +17,15 @@ from game_highlight_finder.config import (
 from game_highlight_finder.cost.fx import FxSnapshot
 from game_highlight_finder.cost.production import production_pricing_catalog
 from game_highlight_finder.cost.service import CostService
+from game_highlight_finder.domain.proposals import (
+    ManualProposalMarker,
+    ManualProposalMarkerSet,
+    ProposalSignalType,
+)
 from game_highlight_finder.media.ffmpeg import FFmpegCancelled
 from game_highlight_finder.pipeline.extraction import extract_candidates
 from game_highlight_finder.pipeline.gemini_scout import build_gemini_registry
-from game_highlight_finder.pipeline.runner import analyze_m6_source
+from game_highlight_finder.pipeline.runner import analyze_m6_source, prepare_hybrid_proposals
 from game_highlight_finder.pipeline.windowed_scout import (
     FakeWindowScout,
     aggregate_window_preflight,
@@ -29,6 +34,7 @@ from game_highlight_finder.pipeline.windowed_scout import (
 )
 from game_highlight_finder.providers.gemini import FakeGeminiTransport, GeminiProviderError
 from game_highlight_finder.storage.atomic import read_json
+from game_highlight_finder.storage.sessions import session_paths
 
 
 def _config(data_dir: Path, ffmpeg: Path, ffprobe: Path) -> AppConfig:
@@ -151,6 +157,71 @@ def test_m6_offline_window_reconcile_extract_resume(
     assert second.extraction is not None
     assert second.extraction.cache_hits == second.extraction.completed
     assert tiny_video.read_bytes() == original
+
+
+def test_hybrid_extraction_namespace_does_not_overwrite_legacy_artifacts(
+    tmp_path: Path, tiny_video: Path, ffmpeg_path: Path, ffprobe_path: Path
+) -> None:
+    config = _config(tmp_path / "library", ffmpeg_path, ffprobe_path)
+    baseline = analyze_m6_source(tiny_video, config)
+    assert baseline.session_map is not None and baseline.extraction is not None
+
+    hybrid = extract_candidates(
+        baseline.ingest.source,
+        baseline.session_map,
+        config,
+        namespace="hybrid",
+    )
+    paths = session_paths(config.storage.data_dir, baseline.ingest.session_id)
+
+    assert baseline.extraction.manifest_path == paths.extraction_manifest
+    assert hybrid.manifest_path == paths.hybrid_extraction_manifest
+    assert paths.extraction_manifest.is_file()
+    assert paths.hybrid_extraction_manifest.is_file()
+    assert baseline.extraction.manifest_path != hybrid.manifest_path
+    for record in hybrid.manifest.records:
+        assert record.output_path.startswith("hybrid/candidates/")
+        assert (paths.root / record.output_path).is_file()
+
+
+def test_hybrid_manual_marker_enrichment_stays_local_and_persists_clustered_proposals(
+    tmp_path: Path,
+    tiny_video: Path,
+    ffmpeg_path: Path,
+    ffprobe_path: Path,
+) -> None:
+    config = _config(tmp_path / "library", ffmpeg_path, ffprobe_path)
+    ingested = analyze_m6_source(tiny_video, config, stop_after="ingest")
+    source = ingested.ingest.source
+    marker_set = ManualProposalMarkerSet(
+        source_sha256=source.sha256,
+        source_duration_ms=source.duration_ms,
+        markers=[
+            ManualProposalMarker(
+                start_ms=500,
+                end_ms=900,
+                label="fixture factual marker",
+                event_hypothesis="OBJECTIVE_PLANTED",
+            )
+        ],
+    )
+
+    prepared = prepare_hybrid_proposals(
+        tiny_video,
+        config,
+        manual_markers=marker_set,
+    )
+    paths = session_paths(config.storage.data_dir, prepared.ingest.session_id)
+
+    assert prepared.proposals_path == paths.hybrid_proposals_path
+    assert paths.hybrid_proposals_path.is_file()
+    marker_proposals = [
+        proposal for proposal in prepared.proposals.proposals if "manual_marker" in proposal.sources
+    ]
+    assert len(marker_proposals) == 1
+    assert marker_proposals[0].event_hypothesis == "OBJECTIVE_PLANTED"
+    assert marker_proposals[0].signal_type is ProposalSignalType.MANUAL_MARKER
+    assert config.scout.allow_remote_upload is False
 
 
 def test_m6_stops_before_reconcile_without_extracting(

@@ -11,14 +11,20 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from game_highlight_finder import __version__
 from game_highlight_finder.config import AppConfig
-from game_highlight_finder.domain.models import Candidate, SessionMap
+from game_highlight_finder.domain.models import (
+    Candidate,
+    EditorialRole,
+    ResolutionState,
+    SessionMap,
+    StoryState,
+)
 from game_highlight_finder.storage.atomic import atomic_write_json, read_json
 from game_highlight_finder.storage.hashing import hash_file
 from game_highlight_finder.storage.sessions import SessionPaths
 
-RANKING_VERSION = "c1-ranking-v3"
-RANKING_SCHEMA_VERSION = 3
-RANKING_BASIS = "creator_short_form_score_then_detection_confidence"
+RANKING_VERSION = "c1-ranking-v5-verified-editorial-role"
+RANKING_SCHEMA_VERSION = 5
+RANKING_BASIS = "verified_editorial_role_then_creator_score_then_detection_confidence"
 
 
 class RankingEntry(BaseModel):
@@ -31,7 +37,10 @@ class RankingEntry(BaseModel):
     short_form_score: float = Field(ge=0, le=10)
     creator_score: float = Field(ge=0, le=10)
     detection_confidence: float = Field(ge=0, le=1)
-    ranking_key: str = Field(min_length=1, max_length=300)
+    editorial_role: EditorialRole | None = None
+    story_state: StoryState | None = None
+    resolution_state: ResolutionState | None = None
+    ranking_key: str = Field(min_length=1, max_length=400)
 
 
 class RankingArtifact(BaseModel):
@@ -50,8 +59,50 @@ class RankingArtifact(BaseModel):
     cache_key: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
-def _candidate_key(candidate: Candidate) -> tuple[float, float, int, str]:
+def _editorial_role_priority(candidate: Candidate) -> int:
+    return {
+        EditorialRole.STANDALONE_STORY: 0,
+        EditorialRole.MONTAGE_BEAT: 1,
+        None: 2,  # backward-compatible legacy candidates
+        EditorialRole.CONTEXT_ONLY: 3,
+        EditorialRole.NONE: 4,
+    }[candidate.editorial_role]
+
+
+def _editorial_role_label(candidate: Candidate) -> str:
+    return candidate.editorial_role.value if candidate.editorial_role else "LEGACY_UNSPECIFIED"
+
+
+def _story_state_label(candidate: Candidate) -> str:
+    return candidate.story_state.value if candidate.story_state else "UNSPECIFIED"
+
+
+def _resolution_state_label(candidate: Candidate) -> str:
+    return candidate.resolution_state.value if candidate.resolution_state else "UNSPECIFIED"
+
+
+def is_creator_review_eligible(candidate: Candidate) -> bool:
+    """Gate normal creator review on explicit verified story semantics.
+
+    Legacy candidates remain visible for backward-compatible historical reports. A new
+    standalone story, however, cannot enter the shortlist until its story is complete
+    and its resolution is either verified or explicitly not applicable.
+    """
+
+    if candidate.editorial_role in {EditorialRole.NONE, EditorialRole.CONTEXT_ONLY}:
+        return False
+    if candidate.editorial_role is EditorialRole.STANDALONE_STORY:
+        return (
+            candidate.story_state is StoryState.COMPLETE
+            and candidate.resolution_state
+            in {ResolutionState.VERIFIED, ResolutionState.NOT_APPLICABLE}
+        )
+    return True
+
+
+def _candidate_key(candidate: Candidate) -> tuple[int, float, float, int, str]:
     return (
+        _editorial_role_priority(candidate),
         -candidate.score,  # current Scout short-form editorial score
         -candidate.confidence,  # current Scout detection confidence
         candidate.event_start_ms,
@@ -83,7 +134,14 @@ def ranking_cache_key(session_map: SessionMap, *, best_of_limit: int) -> str:
 def rank_session_map(session_map: SessionMap, *, best_of_limit: int = 3) -> RankingArtifact:
     """Return a separate ranking artifact; never mutate the canonical map."""
 
-    ordered = sorted(session_map.candidates, key=_candidate_key)
+    ordered = sorted(
+        (
+            candidate
+            for candidate in session_map.candidates
+            if is_creator_review_eligible(candidate)
+        ),
+        key=_candidate_key,
+    )
     entries = [
         RankingEntry(
             candidate_id=candidate.candidate_id,
@@ -93,7 +151,13 @@ def rank_session_map(session_map: SessionMap, *, best_of_limit: int = 3) -> Rank
             short_form_score=candidate.score,
             creator_score=candidate.score,
             detection_confidence=candidate.confidence,
+            editorial_role=candidate.editorial_role,
+            story_state=candidate.story_state,
+            resolution_state=candidate.resolution_state,
             ranking_key=(
+                f"editorial_role={_editorial_role_label(candidate)};"
+                f"story_state={_story_state_label(candidate)};"
+                f"resolution_state={_resolution_state_label(candidate)};"
                 f"creator_score={candidate.score:.6f};"
                 f"short_form_score={candidate.score:.6f};"
                 f"detection_confidence={candidate.confidence:.6f};"
@@ -146,6 +210,7 @@ __all__ = [
     "RANKING_VERSION",
     "RankingArtifact",
     "RankingEntry",
+    "is_creator_review_eligible",
     "load_or_create_ranking",
     "rank_session_map",
     "ranking_cache_key",

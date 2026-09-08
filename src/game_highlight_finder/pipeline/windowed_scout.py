@@ -1,5 +1,7 @@
 """Offline M6 window preparation, fake Scout execution, and cost preflight."""
 
+# ruff: noqa: E501
+
 from __future__ import annotations
 
 import hashlib
@@ -380,7 +382,7 @@ def build_window_prompt(
     summary = json.dumps(
         dict(local_signal_summary), ensure_ascii=False, sort_keys=True, separators=(",", ":")
     )
-    if prompt_version == "gemini-scout-window-v20-creator":
+    if prompt_version in {"gemini-scout-window-v20-creator", "gemini-scout-window-v21-editorial-role"}:
         return "\n".join(
             [
                 f"Game Highlight Finder Creator Scout {prompt_version}.",
@@ -413,6 +415,28 @@ def build_window_prompt(
                 (
                     "For every candidate, moment_summary must state what actually happened. creator_reason must separately "
                     "state why the moment may be worth reviewing for TikTok/short-form. reason may remain a concise provider rationale."
+                ),
+                *(
+                    [
+                        (
+                            "For every candidate, editorial_role must be one of STANDALONE_STORY, MONTAGE_BEAT, CONTEXT_ONLY, or NONE. "
+                            "Event category and editorial role are separate: a real kill, headshot, plant, ability play, or loud reaction is not automatically a standalone clip."
+                        ),
+                        (
+                            "Use STANDALONE_STORY only when the supplied media contains enough setup plus the actual resolution/payoff/reaction to make the moment understandable on its own. "
+                            "Do not claim a win, clutch, escape, boss defeat, joke payoff, or other resolution before that resolution is visibly or audibly evidenced."
+                        ),
+                        (
+                            "If an event is a useful mechanical/visual/social ingredient but lacks a complete self-contained arc, label it MONTAGE_BEAT instead of inflating it into a standalone story. "
+                            "Use CONTEXT_ONLY only when the interval is useful mainly as setup/reaction attached to another beat; use NONE for intervals that should not consume creator review time."
+                        ),
+                        (
+                            "Concrete example of the resolution rule: planting an objective while opponents remain is not proof that the round was won or clutched. "
+                            "Keep watching until the encounter actually resolves before describing or timing a standalone payoff."
+                        ),
+                    ]
+                    if prompt_version == "gemini-scout-window-v21-editorial-role"
+                    else []
                 ),
                 (
                     "score is creator/editorial short-form potential from 0 to 10; confidence is certainty from 0 to 1 that "

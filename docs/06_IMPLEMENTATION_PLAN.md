@@ -213,14 +213,21 @@ The original milestone order is adjusted so schemas/fake AI and budget controls 
 
 The project North Star is now explicitly multi-game creator growth, not benchmark perfection or FPS-event detection. The next product sequence is:
 
-#### C1 — Creator Candidate Pack Beta (next product milestone)
+#### C1 — Hybrid Creator Candidate Pack Beta (current product milestone)
 
-- Lock a provisional Scout configuration only as far as needed to make the product usable; benchmark work must not become an endless blocker.
+The first live creator pass invalidated the assumption that one long-window Scout should own event discovery, outcome inference, boundaries and creator judgment. The canonical implementation plan is now `docs/16_C1_HYBRID_CREATOR_TRIAGE_PLAN.md`.
+
+- Preserve the existing ingest/proxy/source identity/original-source extraction/reconcile/cost/report substrate.
+- Add provider-neutral factual proposals from cheap evidence; proposal records must not contain creator/editorial scores.
+- Apply multimodal reasoning only around plausible proposal neighborhoods by default, with dynamic context expansion when the story is unresolved.
+- Separate semantic judgment from factual resolution verification. Terminal claims require explicit evidence.
+- Keep `STANDALONE_STORY / MONTAGE_BEAT / CONTEXT_ONLY / NONE`, plus orthogonal story and resolution state.
+- Run story assembly and semantic boundary verification after the factual premise is supported.
+- Keep detection confidence separate from verification and creator worthiness.
 - Validate candidate usefulness on multiple gameplay archetypes, not only Valorant/FPS cases.
-- Present a ranked creator pack containing funny, fail, reaction, friend/social, WTF/unexpected, tension/payoff, discovery, skill/clutch, and personality-driven moments.
-- Keep detection confidence separate from short-form/creator worthiness.
-- Preserve enough setup -> event -> payoff for later editing.
-- Exit: the owner can feed a real long VOD from different game styles and reviewing the generated pack is materially easier than scrubbing the original source.
+- Exit: the owner can feed a real long VOD from different game styles and reviewing the generated pack is materially easier than scrubbing the original source, with no contradicted terminal claims in the evaluated shortlist.
+
+B/C paid inference remains paused until this hybrid contract is coherent provider-free.
 
 #### C2 — AI Rough Editor
 

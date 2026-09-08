@@ -2,19 +2,25 @@
 
 ## 1. Pipeline overview
 
+The original flat Scout flow remains historical baseline infrastructure. The current C1 target is the hybrid flow in `docs/16_C1_HYBRID_CREATOR_TRIAGE_PLAN.md`:
+
 ```text
 source (read-only)
   -> ingest/ffprobe
   -> proxy
-  -> local signals [and optional transcript]
-  -> Scout windows
-  -> reconcile session/matches/candidates/stories
-  -> extract candidates from source
-  -> rank (local deterministic M7)
+  -> local evidence [activity; later ASR/OCR/game adapters]
+  -> provider-neutral factual proposals
+  -> proposal-centered context retrieval / dynamic expansion
+  -> semantic judge
+  -> factual resolution verifier
+  -> story assembly + semantic boundary verification
+  -> reconcile/dedupe overlapping fragments
+  -> creator rank
+  -> extract verified/reviewable candidates from source
   -> report (local self-contained HTML)
 ```
 
-Ranking and reporting are local. Reviewer is not a dependency for extraction or a valid report.
+Fixed Scout windows are transport/coarse-context units, not story truth. Ranking and reporting remain local. Provider self-score or self-confidence does not verify a terminal claim. Boundary refinement follows factual verification rather than assuming the Scout premise is true.
 
 ## 2. Stages and exit artifacts
 
@@ -148,9 +154,11 @@ rank/report: stale
 `--dry-run` performs local conservative Gemini estimation and quoting only; it
 does not upload, instantiate the SDK, reserve a ledger call, or generate.
 
-## 7. Long-video Scout strategy
+## 7. Long-video transport and semantic-context strategy
 
-Do not send a four-hour proxy as one request. Plan windows with a 300-second hard maximum and 30 seconds overlap. Shorter windows increase provider calls and cost, but provide tighter coverage and timestamp localization; they are not a claim that quality has passed validation.
+Do not send a four-hour proxy as one undifferentiated semantic request. The implemented flat baseline can still plan 300-second windows with 30 seconds overlap, but those values are now **transport/coarse-context policy only**, not semantic story boundaries or the primary optimization target.
+
+The hybrid path first creates cheap factual proposals, then retrieves bounded media around a proposal. If the semantic judge/verifier reports unresolved context, the context planner expands before/after in controlled steps until resolution is verified, contradicted, abandoned, or the context budget is reached. Increasing fixed overlap globally is not the default solution to missing payoff context.
 
 Each window includes:
 

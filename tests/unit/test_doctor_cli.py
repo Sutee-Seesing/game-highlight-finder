@@ -135,6 +135,103 @@ def test_m6_windows_stage_is_allowed_without_remote_upload(
     }
 
 
+def test_hybrid_proposals_cli_is_local_only(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    observed: dict[str, object] = {}
+    source = tmp_path / "synthetic.mp4"
+    artifact = tmp_path / "data" / "sessions" / "fixture" / "hybrid" / "proposals.json"
+
+    def fake_prepare(
+        video: Path,
+        config: AppConfig,
+        *,
+        manual_markers: object | None = None,
+    ) -> object:
+        observed["video"] = video
+        observed["allow_remote_upload"] = config.scout.allow_remote_upload
+        observed["manual_markers"] = manual_markers
+        return SimpleNamespace(
+            proposals=SimpleNamespace(proposals=[object(), object()]),
+            proposals_path=artifact,
+            ingest=SimpleNamespace(
+                session_id="fixture",
+                source=SimpleNamespace(sha256="a" * 64),
+            ),
+        )
+
+    monkeypatch.setattr("game_highlight_finder.cli.prepare_hybrid_proposals", fake_prepare)
+    result = runner.invoke(
+        app,
+        ["--data-dir", str(tmp_path / "data"), "hybrid", "proposals", str(source)],
+    )
+
+    assert result.exit_code == 0
+    assert observed == {
+        "video": source,
+        "allow_remote_upload": False,
+        "manual_markers": None,
+    }
+    assert "proposals: 2" in result.output
+    assert "provider calls: ZERO" in result.output
+
+
+def test_hybrid_proposals_cli_accepts_source_bound_manual_markers(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    observed: dict[str, object] = {}
+    source = tmp_path / "synthetic.mp4"
+    marker_file = tmp_path / "manual_markers.json"
+    marker_file.write_text(
+        '{"schema_version":1,"source_sha256":"'
+        + "b" * 64
+        + '","source_duration_ms":1000,"markers":[{'
+        '"start_ms":100,"end_ms":200,"label":"owner marker",'
+        '"event_hypothesis":"OBJECTIVE_PLANTED","confidence":1.0}],"notes":[]}',
+        encoding="utf-8",
+    )
+
+    def fake_prepare(
+        video: Path,
+        config: AppConfig,
+        *,
+        manual_markers: object | None = None,
+    ) -> object:
+        observed["video"] = video
+        observed["allow_remote_upload"] = config.scout.allow_remote_upload
+        observed["manual_markers"] = manual_markers
+        return SimpleNamespace(
+            proposals=SimpleNamespace(proposals=[object()]),
+            proposals_path=tmp_path / "proposals.json",
+            ingest=SimpleNamespace(
+                session_id="fixture",
+                source=SimpleNamespace(sha256="b" * 64),
+            ),
+        )
+
+    monkeypatch.setattr("game_highlight_finder.cli.prepare_hybrid_proposals", fake_prepare)
+    result = runner.invoke(
+        app,
+        [
+            "--data-dir",
+            str(tmp_path / "data"),
+            "hybrid",
+            "proposals",
+            str(source),
+            "--manual-markers",
+            str(marker_file),
+        ],
+    )
+
+    assert result.exit_code == 0
+    marker_set = observed["manual_markers"]
+    assert marker_set is not None
+    assert marker_set.source_sha256 == "b" * 64
+    assert marker_set.markers[0].event_hypothesis == "OBJECTIVE_PLANTED"
+    assert "provider calls: ZERO" in result.output
+
+
 def test_m6_gemini_scout_still_requires_remote_upload(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

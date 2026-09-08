@@ -105,3 +105,35 @@ Decision:
 - Every draft remains traceable to source timestamps and the untouched candidate is always preserved.
 - Human approval remains required before publish-ready output.
 - Success for C2 means reducing manual editing time substantially without making timing/personality feel artificial.
+
+## 2026-09-08 — Do not compete with event-trigger recorders; separate creator stories from montage beats
+
+The first live C1-A creator pass produced technically valid extracted clips, but the owner judged **0/6 as usable standalone creator clips**. One candidate treated a Spike plant as if the round payoff had already happened even though the round was still unresolved, while several ordinary gunfight moments were potentially useful only as ingredients in a montage/highlight reel rather than as self-contained posts.
+
+Decision:
+
+- Do not define product value as "find kills/shots". SteelSeries/Razer-style event capture already handles many obvious FPS triggers cheaply and reliably; those events may be used as signals or candidate seeds rather than the product's final judgment.
+- Add an explicit editorial role separate from event category: at minimum `STANDALONE_STORY`, `MONTAGE_BEAT`, and `NONE` (a `CONTEXT_ONLY` role may be added if implementation benefits from it).
+- A valid gameplay event is not automatically a creator-worthy standalone clip. A kill/headshot/multi-kill may be useful as `MONTAGE_BEAT` even when it lacks a self-contained setup/payoff arc.
+- A `STANDALONE_STORY` must preserve enough temporal context to establish setup -> event -> real resolution/payoff/reaction. Do not declare a win/clutch/payoff before the round/encounter outcome is actually visible or otherwise evidenced.
+- Prefer a hybrid hierarchy: cheap/local/game-event signals propose moments; multimodal AI judges story/social/personality value, resolves context, groups related beats, and decides standalone-vs-montage role.
+- Do not fund B/C live inference until this contract is implemented and tested provider-free. The A result is a product-quality failure that should change the contract, not be hidden by running more paid sources.
+- Preserve A's 6 clips and owner review as diagnostic evidence; do not convert the owner preference labels into GT-v2 event truth.
+
+## 2026-09-09 — Deep Research pivot: proposal -> verify -> story -> rank
+
+External Deep Research and a targeted repository audit concluded that the product direction remains viable, but the monolithic long-window Scout should not remain the semantic source of truth. Current long-video multimodal models are useful for contextual interpretation but are not reliable enough to own dense event capture, terminal outcome verification, exact temporal truth and creator ranking in one call.
+
+Decision:
+
+- Continue the project; preserve the North Star and existing engineering substrate.
+- Keep source identity, local analysis proxies, original-source extraction, canonical artifacts, reconcile/dedupe, cost ledger/provider safety and creator report.
+- Retire the one-Scout-owns-everything semantic architecture as the long-term design.
+- Make `docs/16_C1_HYBRID_CREATOR_TRIAGE_PLAN.md` the canonical next implementation plan.
+- Build a provider-neutral factual proposal layer first. Proposals are anchors/evidence and must not contain creator/editorial scores.
+- Add explicit story state, resolution state and evidence-backed claim status. A standalone story is not creator-review eligible until its story is complete and its required resolution is verified (or explicitly not applicable).
+- Make the unresolved Spike plant case a permanent semantic regression: objective plant may be detected, but `ROUND_WON` / `CLUTCH_WIN` cannot be verified without terminal evidence.
+- Separate semantic judgment from factual resolution verification; separate story assembly from overlap dedupe; run boundary refinement after verification.
+- Treat 300s/120s/90s windows as transport/coarse-context policy rather than semantic story units.
+- Pause B/C paid inference while the hybrid contract is implemented provider-free. Do not spend on another monolithic prompt iteration merely to collect more examples of the known A failure.
+- Defer C2 AI rough editing until C1 materially reduces creator review burden and produces useful verified candidates.

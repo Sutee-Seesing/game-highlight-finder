@@ -40,15 +40,32 @@ Expected journey:
 
 1. Owner records or streams gameplay normally.
 2. `Game Highlight Finder` analyzes a 1-4+ hour source locally-first.
-3. Scout finds creator-relevant candidate moments from the full timeline.
-4. Reconcile/dedupe preserves setup -> event -> payoff and avoids duplicate fragments.
-5. High-quality candidate clips are extracted from the original source.
-6. Ranking/Reviewer produces a creator shortlist with reasons such as why a moment may work as short-form content.
-7. Owner reviews only the shortlist instead of rewatching the whole VOD.
-8. Selected candidates move to an editing stage.
-9. Owner approves the final post.
+3. Cheap/local/optional game-specific evidence creates high-recall factual proposals from the full timeline.
+4. Proposal-centered multimodal judgment inspects only plausible semantic neighborhoods, requests more context when needed, and proposes creator/editorial use without self-certifying terminal outcomes.
+5. A separate resolution verifier checks explicit outcome/payoff claims; story assembly and semantic boundary verification then recover setup -> event -> real resolution/payoff/reaction.
+6. Reconcile/dedupe remains responsible for overlapping fragments, while a separate creator ranker produces the shortlist from verified story state, editorial role, creator value and later creator preferences.
+7. High-quality candidate clips are extracted from the original source.
+8. Owner reviews only the shortlist instead of rewatching the whole VOD.
+9. Selected candidates move to an editing stage.
+10. Owner approves the final post.
 
 The system must never require every candidate to be a standalone finished TikTok. Its job is to surface good raw material with enough context for editing.
+
+However, the product must now distinguish **what kind of raw material it found** instead of presenting every real event as the same kind of creator clip:
+
+- `STANDALONE_STORY` — a self-contained candidate with enough setup -> event -> actual resolution/payoff/reaction to be understandable on its own;
+- `MONTAGE_BEAT` — a mechanically/visually useful beat (for example a kill, headshot, ability play, movement sequence, or short reaction) that is not strong enough as a standalone story but may be valuable when combined with other beats;
+- `NONE` — a real interval that should not consume owner review time.
+
+Editorial role is not proof of completion. Track orthogonal semantic state as well:
+
+- story state: `COMPLETE` / `INCOMPLETE` / `UNKNOWN`;
+- resolution state: `VERIFIED` / `UNVERIFIED` / `CONTRADICTED` / `NOT_APPLICABLE`;
+- explicit terminal claims with timestamped evidence.
+
+A `STANDALONE_STORY` may enter the standalone shortlist only when story state is `COMPLETE` and resolution is `VERIFIED` or `NOT_APPLICABLE`. Provider/model self-confidence never overrides missing evidence.
+
+A kill or other event category and an editorial role are separate axes. The project should not compete with event-trigger recorders merely by rediscovering obvious kills. Cheap/local game-event capture can provide proposal signals; multimodal AI should earn its cost by judging context, creator/social value, narrative resolution, grouping, and whether a moment belongs alone or inside a montage.
 
 ## 4. AI editing decision
 

@@ -60,6 +60,17 @@ class SessionPaths:
     tmp_dir: Path
     scout_windows_dir: Path
     reconcile_dir: Path
+    hybrid_dir: Path
+    hybrid_proposals_path: Path
+    hybrid_run_path: Path
+    hybrid_session_map_path: Path
+    hybrid_review_map_path: Path
+    hybrid_candidates_dir: Path
+    hybrid_thumbnails_dir: Path
+    hybrid_extraction_manifest: Path
+    creator_review_template_path: Path
+    creator_evaluation_path: Path
+    creator_evaluation_summary_path: Path
     candidates_dir: Path
     thumbnails_dir: Path
     extraction_manifest: Path
@@ -91,6 +102,17 @@ def session_paths(data_dir: Path, session_id: str) -> SessionPaths:
         tmp_dir=root / "tmp",
         scout_windows_dir=root / "scout" / "windows",
         reconcile_dir=root / "reconcile",
+        hybrid_dir=root / "hybrid",
+        hybrid_proposals_path=root / "hybrid" / "proposals.json",
+        hybrid_run_path=root / "hybrid" / "run.json",
+        hybrid_session_map_path=root / "hybrid" / "session_map.json",
+        hybrid_review_map_path=root / "hybrid" / "review_map.json",
+        hybrid_candidates_dir=root / "hybrid" / "candidates",
+        hybrid_thumbnails_dir=root / "hybrid" / "thumbnails",
+        hybrid_extraction_manifest=root / "hybrid" / "extraction_manifest.json",
+        creator_review_template_path=root / "hybrid" / "creator_review_template.json",
+        creator_evaluation_path=root / "hybrid" / "creator_evaluation.json",
+        creator_evaluation_summary_path=root / "hybrid" / "creator_evaluation_summary.json",
         candidates_dir=root / "candidates",
         thumbnails_dir=root / "thumbnails",
         extraction_manifest=root / "extraction_manifest.json",

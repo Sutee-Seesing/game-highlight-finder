@@ -7,6 +7,7 @@ import json
 from contextlib import suppress
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -142,14 +143,26 @@ def extract_candidates(
     source: SourceAsset,
     session_map: SessionMap,
     config: AppConfig,
+    *,
+    namespace: Literal["default", "hybrid"] = "default",
 ) -> ExtractionResult:
-    """Extract all canonical candidates from the immutable original source."""
+    """Extract canonical candidates from RAW into an isolated artifact namespace."""
 
     _source_identity_is_current(source)
     session_id = make_session_id(source)
     paths = session_paths(config.storage.data_dir, session_id)
-    paths.candidates_dir.mkdir(parents=True, exist_ok=True)
-    paths.thumbnails_dir.mkdir(parents=True, exist_ok=True)
+    if namespace == "hybrid":
+        candidates_dir = paths.hybrid_candidates_dir
+        thumbnails_dir = paths.hybrid_thumbnails_dir
+        manifest_path = paths.hybrid_extraction_manifest
+        output_prefix = "hybrid/"
+    else:
+        candidates_dir = paths.candidates_dir
+        thumbnails_dir = paths.thumbnails_dir
+        manifest_path = paths.extraction_manifest
+        output_prefix = ""
+    candidates_dir.mkdir(parents=True, exist_ok=True)
+    thumbnails_dir.mkdir(parents=True, exist_ok=True)
     paths.tmp_dir.mkdir(parents=True, exist_ok=True)
     ffmpeg = tool_identity("ffmpeg", config.tools.ffmpeg_path)
     ffprobe = tool_identity("ffprobe", config.tools.ffprobe_path, include_capabilities=False)
@@ -158,7 +171,7 @@ def extract_candidates(
     )
     bounded_map = derive_clip_boundaries(session_map, source.duration_ms, config.media.extraction)
     now = datetime.now(UTC)
-    old = _load_manifest(paths.extraction_manifest)
+    old = _load_manifest(manifest_path)
     existing = {record.candidate_id: record for record in (old.records if old else ())}
     records: list[ExtractionRecord] = []
     cache_hits = 0
@@ -167,8 +180,8 @@ def extract_candidates(
         if candidate.clip_start_ms is None or candidate.clip_end_ms is None:
             incomplete += 1
             continue
-        output_rel = f"candidates/{candidate.candidate_id}.mp4"
-        thumb_rel = f"thumbnails/{candidate.candidate_id}.jpg"
+        output_rel = f"{output_prefix}candidates/{candidate.candidate_id}.mp4"
+        thumb_rel = f"{output_prefix}thumbnails/{candidate.candidate_id}.jpg"
         output = paths.root / output_rel
         thumbnail = paths.root / thumb_rel
         previous = existing.get(candidate.candidate_id)
@@ -189,7 +202,7 @@ def extract_candidates(
             records.append(previous)
             cache_hits += 1
             continue
-        temp_dir = paths.tmp_dir / f"extract-{candidate.candidate_id}"
+        temp_dir = paths.tmp_dir / f"extract-{namespace}-{candidate.candidate_id}"
         temp_dir.mkdir(parents=True, exist_ok=True)
         temp_output = temp_dir / "candidate.partial.mp4"
         temp_thumbnail = temp_dir / "thumbnail.partial.jpg"
@@ -307,7 +320,7 @@ def extract_candidates(
             status="INCOMPLETE" if incomplete else "COMPLETED",
             warnings=tuple(["one or more candidates require retry"] if incomplete else []),
         )
-        atomic_write_json(paths.extraction_manifest, partial_manifest.model_dump(mode="json"))
+        atomic_write_json(manifest_path, partial_manifest.model_dump(mode="json"))
     final = ExtractionManifest(
         created_at=old.created_at if old else now,
         updated_at=datetime.now(UTC),
@@ -319,10 +332,10 @@ def extract_candidates(
         status="INCOMPLETE" if incomplete else "COMPLETED",
         warnings=tuple(["one or more candidates require retry"] if incomplete else []),
     )
-    atomic_write_json(paths.extraction_manifest, final.model_dump(mode="json"))
+    atomic_write_json(manifest_path, final.model_dump(mode="json"))
     return ExtractionResult(
         manifest=final,
-        manifest_path=paths.extraction_manifest,
+        manifest_path=manifest_path,
         completed=sum(1 for item in records if item.status == "COMPLETED"),
         cache_hits=cache_hits,
         incomplete=incomplete,

@@ -114,6 +114,9 @@ def _merge_candidate(left: Candidate, right: Candidate) -> Candidate:
     payoff_values = [
         value for value in (left.payoff_end_ms, right.payoff_end_ms) if value is not None
     ]
+    reaction_values = [
+        value for value in (left.reaction_end_ms, right.reaction_end_ms) if value is not None
+    ]
     preferred = left if (left.confidence, left.score) >= (right.confidence, right.score) else right
     return left.model_copy(
         update={
@@ -122,11 +125,19 @@ def _merge_candidate(left: Candidate, right: Candidate) -> Candidate:
             "event_end_ms": end,
             "setup_start_ms": min(setup_values) if setup_values else None,
             "payoff_end_ms": max(payoff_values) if payoff_values else None,
+            "reaction_end_ms": max(reaction_values) if reaction_values else None,
             "score": max(left.score, right.score),
             "confidence": max(left.confidence, right.confidence),
             "reason": preferred.reason,
-            "moment_summary": preferred.moment_summary or left.moment_summary or right.moment_summary,
-            "creator_reason": preferred.creator_reason or left.creator_reason or right.creator_reason,
+            "moment_summary": (
+                preferred.moment_summary or left.moment_summary or right.moment_summary
+            ),
+            "creator_reason": (
+                preferred.creator_reason or left.creator_reason or right.creator_reason
+            ),
+            "editorial_role": (
+                preferred.editorial_role or left.editorial_role or right.editorial_role
+            ),
             "evidence": _merge_evidence([*left.evidence, *right.evidence], limit=16),
             "source_window_ids": list(
                 dict.fromkeys([*left.source_window_ids, *right.source_window_ids])
@@ -360,7 +371,11 @@ def derive_clip_boundaries(
         event_start = min(
             candidate.event_start_ms, candidate.setup_start_ms or candidate.event_start_ms
         )
-        event_end = max(candidate.event_end_ms, candidate.payoff_end_ms or candidate.event_end_ms)
+        event_end = max(
+            candidate.event_end_ms,
+            candidate.payoff_end_ms or candidate.event_end_ms,
+            candidate.reaction_end_ms or candidate.event_end_ms,
+        )
         start = max(0, event_start - pre_ms)
         end = min(source_duration_ms, event_end + post_ms)
         actions = list(candidate.normalization_actions)

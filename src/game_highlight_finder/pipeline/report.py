@@ -325,6 +325,17 @@ def _candidate_card(
         link = f'<a class="clip" href="{_esc(href)}">Open Clip</a>'
     moment_summary = candidate.moment_summary or candidate.reason
     creator_reason = candidate.creator_reason or candidate.reason
+    editorial_role = (
+        candidate.editorial_role.value
+        if candidate.editorial_role is not None
+        else "LEGACY_UNSPECIFIED"
+    )
+    story_state = candidate.story_state.value if candidate.story_state is not None else "UNSPECIFIED"
+    resolution_state = (
+        candidate.resolution_state.value
+        if candidate.resolution_state is not None
+        else "UNSPECIFIED"
+    )
     evidence = " · ".join(item.summary for item in candidate.evidence[:3]) or "No compact evidence"
     actions = (
         " · ".join(candidate.normalization_actions) if candidate.normalization_actions else "None"
@@ -340,7 +351,7 @@ def _candidate_card(
       {thumb}
       <div class="card-body"><div class="badge">#{rank}</div>
       <h3>{_esc(candidate.category)} <small>{_esc(candidate.candidate_id)}</small></h3>
-      <p class="meta"><b>{_esc(candidate.kind)}</b> · {_esc(match_label)} · creator score {_esc(f"{candidate.score:.2f}")} · detection confidence {_esc(f"{candidate.confidence:.2f}")}</p>
+      <p class="meta"><b>{_esc(candidate.kind)}</b> · role {_esc(editorial_role)} · story {_esc(story_state)} · resolution {_esc(resolution_state)} · {_esc(match_label)} · creator score {_esc(f"{candidate.score:.2f}")} · detection confidence {_esc(f"{candidate.confidence:.2f}")}</p>
       <p><b>Event:</b> {_esc(event)} · <b>Clip:</b> {_esc(clip)} ({_esc(clip_duration)})</p>
       <p><b>What happened:</b> {_esc(moment_summary)}</p>
       <p><b>Why review this:</b> {_esc(creator_reason)}</p>
@@ -401,12 +412,15 @@ def render_report(
 
     matches = {match.match_id: match for match in session_map.matches}
     rank_by_id = {entry.candidate_id: entry.rank for entry in ranking.entries}
+    presented_candidates = [
+        candidate for candidate in session_map.candidates if candidate.candidate_id in rank_by_id
+    ]
     by_match: dict[str, list[Candidate]] = defaultdict(list)
     for candidate in sorted(
-        session_map.candidates, key=lambda item: (item.event_start_ms, item.candidate_id)
+        presented_candidates, key=lambda item: (item.event_start_ms, item.candidate_id)
     ):
         by_match[candidate.match_id or "__unassigned__"].append(candidate)
-    review_ms = review_duration_ms(session_map.candidates)
+    review_ms = review_duration_ms(presented_candidates)
     ratio = (review_ms / session_map.duration_ms * 100) if session_map.duration_ms else 0.0
     warnings = list(source.warnings) + list(session_map.warnings) + extraction_warnings
     if cost["safety_hold_active"]:
