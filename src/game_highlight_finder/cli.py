@@ -44,7 +44,7 @@ from game_highlight_finder.config import (
 )
 from game_highlight_finder.cost import CostService, Money
 from game_highlight_finder.doctor import run_doctor
-from game_highlight_finder.domain.proposals import ManualProposalMarkerSet
+from game_highlight_finder.domain.proposals import ManualProposalMarkerSet, TranscriptFixture
 from game_highlight_finder.domain.time import format_duration
 from game_highlight_finder.errors import AppError, ConfigError, ErrorCategory
 from game_highlight_finder.media.ffmpeg import ProgressUpdate
@@ -71,6 +71,7 @@ from game_highlight_finder.pipeline.runner import (
     analyze_source,
     analyze_v1_source,
     prepare_hybrid_proposals,
+    prepare_hybrid_routing,
 )
 from game_highlight_finder.pipeline.windowed_scout import ExecutionActivity
 from game_highlight_finder.providers import ProviderRegistry
@@ -867,31 +868,105 @@ def hybrid_proposals(
             help="Optional source-bound ManualProposalMarkerSet JSON; remains provider-free.",
         ),
     ] = None,
+    transcript: Annotated[
+        Path | None,
+        typer.Option(
+            "--transcript",
+            help="Optional source-bound TranscriptFixture JSON; remains provider-free.",
+        ),
+    ] = None,
 ) -> None:
-    """Persist clustered factual proposal anchors from local evidence and optional markers."""
-    _execute(ctx, lambda options: _hybrid_proposals(options, video, manual_markers))
+    """Persist clustered factual proposal anchors from provider-free local evidence."""
+    _execute(
+        ctx,
+        lambda options: _hybrid_proposals(options, video, manual_markers, transcript),
+    )
 
 
 def _hybrid_proposals(
     options: RuntimeOptions,
     video: Path,
     manual_markers: Path | None,
+    transcript: Path | None,
 ) -> None:
     marker_set = (
         ManualProposalMarkerSet.model_validate(read_json(manual_markers))
         if manual_markers is not None
         else None
     )
+    transcript_fixture = (
+        TranscriptFixture.model_validate(read_json(transcript))
+        if transcript is not None
+        else None
+    )
     result = prepare_hybrid_proposals(
         video,
         _load(options).config,
         manual_markers=marker_set,
+        transcript=transcript_fixture,
     )
     typer.echo("[PASS] hybrid proposals prepared")
     typer.echo(f"proposals: {len(result.proposals.proposals)}")
+    typer.echo(
+        "proposal density/source-hour: "
+        f"{result.proposal_summary.proposals_per_source_hour:.3f}"
+    )
+    typer.echo(
+        "clustered reduction: "
+        f"{result.proposal_summary.clustered_reduction_count}"
+    )
     typer.echo(f"artifact: {result.proposals_path}")
+    typer.echo(f"summary: {result.proposal_summary_path}")
     typer.echo(f"session ID: {result.ingest.session_id}")
     typer.echo(f"source SHA-256: {result.ingest.source.sha256}")
+    typer.echo("provider calls: ZERO")
+
+
+@hybrid_app.command("route")
+def hybrid_route(
+    ctx: typer.Context,
+    session_id: Annotated[str, typer.Argument(help="Session containing hybrid/proposals.json.")],
+    weak_sample_interval_seconds: Annotated[
+        int,
+        typer.Option(
+            "--weak-sample-interval-seconds",
+            min=1,
+            help=(
+                "Required experimental temporal coverage interval for weak single-source "
+                "proposal sampling; no universal default is assumed."
+            ),
+        ),
+    ],
+) -> None:
+    """Persist an evidence-aware provider-free routing plan over full factual proposals."""
+    _execute(
+        ctx,
+        lambda options: _hybrid_route(
+            options,
+            session_id,
+            weak_sample_interval_seconds,
+        ),
+    )
+
+
+def _hybrid_route(
+    options: RuntimeOptions,
+    session_id: str,
+    weak_sample_interval_seconds: int,
+) -> None:
+    result = prepare_hybrid_routing(
+        _load(options).config,
+        session_id,
+        weak_sample_interval_ms=weak_sample_interval_seconds * 1_000,
+    )
+    typer.echo("[PASS] hybrid proposal routing prepared")
+    typer.echo(f"full proposal neighborhoods: {len(result.proposals.proposals)}")
+    typer.echo(f"selected for semantic inspection: {len(result.routing.selected_proposal_ids)}")
+    typer.echo(f"deferred weak neighborhoods: {len(result.routing.deferred_proposal_ids)}")
+    typer.echo(f"selected/source-hour: {result.routing.selected_per_source_hour:.3f}")
+    typer.echo(f"routes: {result.routing.route_counts}")
+    typer.echo(f"routing plan: {result.routing_plan_path}")
+    typer.echo(f"routed proposals: {result.routed_proposals_path}")
     typer.echo("provider calls: ZERO")
 
 
@@ -910,11 +985,24 @@ def hybrid_run_fixture(
             help="Optional source-bound ManualProposalMarkerSet JSON; remains provider-free.",
         ),
     ] = None,
+    transcript: Annotated[
+        Path | None,
+        typer.Option(
+            "--transcript",
+            help="Optional source-bound TranscriptFixture JSON; remains provider-free.",
+        ),
+    ] = None,
 ) -> None:
     """Run proposal -> judge -> verify -> story -> extraction using local fixtures."""
     _execute(
         ctx,
-        lambda options: _hybrid_run_fixture(options, video, fixture, manual_markers),
+        lambda options: _hybrid_run_fixture(
+            options,
+            video,
+            fixture,
+            manual_markers,
+            transcript,
+        ),
     )
 
 
@@ -923,6 +1011,7 @@ def _hybrid_run_fixture(
     video: Path,
     fixture: Path,
     manual_markers: Path | None,
+    transcript: Path | None,
 ) -> None:
     bundle = HybridFixtureBundle.model_validate(read_json(fixture))
     marker_set = (
@@ -930,11 +1019,17 @@ def _hybrid_run_fixture(
         if manual_markers is not None
         else None
     )
+    transcript_fixture = (
+        TranscriptFixture.model_validate(read_json(transcript))
+        if transcript is not None
+        else None
+    )
     result = analyze_hybrid_fixture_source(
         video,
         _load(options).config,
         bundle,
         manual_markers=marker_set,
+        transcript=transcript_fixture,
     )
     typer.echo("[PASS] hybrid fixture run completed")
     typer.echo(f"proposals: {len(result.preparation.proposals.proposals)}")

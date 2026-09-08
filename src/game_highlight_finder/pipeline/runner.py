@@ -13,7 +13,13 @@ from pydantic import BaseModel, ConfigDict
 
 from game_highlight_finder.config import AppConfig
 from game_highlight_finder.domain.models import ErrorRecord, SessionMap, StageStatus
-from game_highlight_finder.domain.proposals import ManualProposalMarkerSet, ProposalArtifact
+from game_highlight_finder.domain.proposals import (
+    ManualProposalMarkerSet,
+    ProposalArtifact,
+    ProposalRoutingPlan,
+    ProposalSummary,
+    TranscriptFixture,
+)
 from game_highlight_finder.domain.reconcile import derive_clip_boundaries, reconcile_session_maps
 from game_highlight_finder.errors import ConfigError
 from game_highlight_finder.pipeline.creator_evaluation import (
@@ -43,6 +49,10 @@ from game_highlight_finder.pipeline.proposals import (
     combine_and_cluster_proposals,
     proposals_from_local_signals,
     proposals_from_manual_markers,
+    proposals_from_transcript,
+    route_proposals,
+    selected_proposal_artifact,
+    summarize_proposals,
 )
 from game_highlight_finder.pipeline.proxy import ProxyResult, generate_proxy
 from game_highlight_finder.pipeline.ranking import RankingArtifact, load_or_create_ranking
@@ -54,7 +64,7 @@ from game_highlight_finder.pipeline.windowed_scout import (
     prepare_scout_windows,
     run_windowed_scout,
 )
-from game_highlight_finder.storage.atomic import atomic_write_json
+from game_highlight_finder.storage.atomic import atomic_write_json, read_json
 from game_highlight_finder.storage.lock import SessionLock
 from game_highlight_finder.storage.sessions import (
     artifact_identity,
@@ -111,7 +121,21 @@ class HybridProposalPreparationResult(BaseModel):
     proxy: ProxyResult
     local_signals: LocalSignalsResult
     proposals: ProposalArtifact
+    proposal_summary: ProposalSummary
     proposals_path: Path
+    proposal_summary_path: Path
+
+
+class HybridProposalRoutingResult(BaseModel):
+    """Persisted provider-free routing plan plus its semantic-inspection subset."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, arbitrary_types_allowed=True)
+
+    proposals: ProposalArtifact
+    routing: ProposalRoutingPlan
+    routed_proposals: ProposalArtifact
+    routing_plan_path: Path
+    routed_proposals_path: Path
 
 
 class HybridFixtureAnalysisResult(BaseModel):
@@ -173,6 +197,7 @@ def prepare_hybrid_proposals(
     config: AppConfig,
     *,
     manual_markers: ManualProposalMarkerSet | None = None,
+    transcript: TranscriptFixture | None = None,
 ) -> HybridProposalPreparationResult:
     """Run local ingest/proxy/signals, enrich factual anchors, and persist proposals."""
 
@@ -196,16 +221,66 @@ def prepare_hybrid_proposals(
                 created_at=local.ingest.source.created_at,
             )
         )
+    if transcript is not None:
+        artifacts.append(
+            proposals_from_transcript(
+                session_id=local.ingest.session_id,
+                source_id=local.ingest.source.source_id,
+                source_sha256=local.ingest.source.sha256,
+                source_duration_ms=local.ingest.source.duration_ms,
+                transcript=transcript,
+                created_at=local.ingest.source.created_at,
+            )
+        )
     proposals = combine_and_cluster_proposals(artifacts)
+    proposal_summary = summarize_proposals(proposals)
     paths = session_paths(config.storage.data_dir, local.ingest.session_id)
     paths.hybrid_dir.mkdir(parents=True, exist_ok=True)
     atomic_write_json(paths.hybrid_proposals_path, proposals.model_dump(mode="json"))
+    atomic_write_json(
+        paths.hybrid_proposal_summary_path,
+        proposal_summary.model_dump(mode="json"),
+    )
     return HybridProposalPreparationResult(
         ingest=local.ingest,
         proxy=local.proxy,
         local_signals=local.local_signals,
         proposals=proposals,
+        proposal_summary=proposal_summary,
         proposals_path=paths.hybrid_proposals_path,
+        proposal_summary_path=paths.hybrid_proposal_summary_path,
+    )
+
+
+def prepare_hybrid_routing(
+    config: AppConfig,
+    session_id: str,
+    *,
+    weak_sample_interval_ms: int,
+) -> HybridProposalRoutingResult:
+    """Persist a deterministic cost/coverage routing plan over full factual proposals."""
+
+    paths = session_paths(config.storage.data_dir, session_id)
+    if not paths.hybrid_proposals_path.is_file():
+        raise ConfigError(
+            "Hybrid proposal artifact is missing.",
+            hint=str(paths.hybrid_proposals_path),
+        )
+    proposals = ProposalArtifact.model_validate(read_json(paths.hybrid_proposals_path))
+    routing = route_proposals(
+        proposals,
+        weak_sample_interval_ms=weak_sample_interval_ms,
+    )
+    routed = selected_proposal_artifact(proposals, routing)
+    paths.hybrid_dir.mkdir(parents=True, exist_ok=True)
+    atomic_write_json(paths.hybrid_routing_plan_path, routing.model_dump(mode="json"))
+    atomic_write_json(paths.hybrid_routed_proposals_path, routed.model_dump(mode="json"))
+    return HybridProposalRoutingResult(
+        proposals=proposals,
+        routing=routing,
+        routed_proposals=routed,
+        routing_plan_path=paths.hybrid_routing_plan_path,
+        routed_proposals_path=paths.hybrid_routed_proposals_path,
     )
 
 
@@ -215,6 +290,7 @@ def analyze_hybrid_fixture_source(
     fixture: HybridFixtureBundle,
     *,
     manual_markers: ManualProposalMarkerSet | None = None,
+    transcript: TranscriptFixture | None = None,
 ) -> HybridFixtureAnalysisResult:
     """Exercise the hybrid semantic center locally without any provider generation."""
 
@@ -222,6 +298,7 @@ def analyze_hybrid_fixture_source(
         video,
         config,
         manual_markers=manual_markers,
+        transcript=transcript,
     )
     triage = run_hybrid_fixture_bundle(
         proposals=preparation.proposals,

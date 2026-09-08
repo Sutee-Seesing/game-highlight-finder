@@ -51,6 +51,7 @@ RAW VOD
        - manual markers
   -> high-recall factual proposals
   -> cluster/dedupe/diversify proposals
+  -> evidence-aware proposal routing (preserve all; inspect a bounded subset)
   -> proposal-centered context retrieval
   -> multimodal semantic judge
   -> dynamic context expansion when unresolved
@@ -150,6 +151,28 @@ Metrics for this layer:
 - proposals/source-hour;
 - duplicate proposal burden;
 - cost = local/provider-free where possible.
+
+### H2.3 — Evidence-aware proposal routing / diversity
+
+The complete factual proposal artifact stays preserved for recall and audit. A separate routing plan decides which proposal neighborhoods are worth spending semantic-inspection budget on; routing is **not** a creator score and must not rewrite proposal truth.
+
+Initial provider-free routing semantics should distinguish at least:
+
+- `MUST_INSPECT`: explicit/manual/game-state anchors or other evidence that policy says must not be skipped;
+- `SUPPORTED`: neighborhoods supported by multiple independent evidence sources;
+- `SAMPLED_WEAK`: deterministic temporal/diversity samples from weak single-source evidence for coverage;
+- `DEFERRED_WEAK`: retained in the full artifact but not automatically sent to an expensive semantic judge in this pass.
+
+Important invariants:
+
+1. Routing never deletes the underlying proposal.
+2. Weak audio/activity density must not linearly determine provider call count.
+3. Multi-source support may raise routing priority, but it still does not prove creator value.
+4. Sampling must be deterministic and coverage-oriented, not tuned to one Valorant recording.
+5. Do not lock a universal routed-proposals/source-hour cap until at least action + non-FPS real sources are measured.
+6. Manual/game explicit anchors can bypass weak-evidence sampling, but terminal story claims still require H5 verification.
+
+Track routed neighborhoods/source-hour, deferred neighborhoods/source-hour, temporal coverage, evidence-source mix and downstream creator utility separately.
 
 ### H3 — Dynamic semantic context planner
 
@@ -371,15 +394,18 @@ Provider-free follow-through after H6:
 - local CLI/session integration now exists through `hybrid proposals`, `hybrid run-fixture`, `hybrid review-template`, and `hybrid review-summary`; the historical flat-Scout path is still preserved separately;
 - creator-review worksheets and summaries now round-trip deterministically into the separate creator-evaluation corpus;
 - H2.1 adds source-bound `ManualProposalMarkerSet` fixtures plus deterministic proposal clustering: nearby compatible factual anchors can share one semantic neighborhood, while conflicting explicit event hypotheses are never merged;
-- manual markers are bound to exact source SHA-256 + duration, carry no creator/editorial score, and can be supplied to both `hybrid proposals` and the provider-free `hybrid run-fixture` path;
-- clustering preserves source provenance and records the contributing signal types rather than promoting loudness/activity to semantic truth.
+- H2.2 adds source-bound `TranscriptFixture` utterances as `ASR_UTTERANCE` factual evidence. Transcript text/speaker/language can help retrieve social/personality/joke setup, but speech presence alone never implies highlight quality;
+- manual markers and transcripts are bound to exact source SHA-256 + duration, carry no creator/editorial score, and can enrich both `hybrid proposals` and the provider-free `hybrid run-fixture` path;
+- clustering preserves source provenance and records the contributing signal types rather than promoting loudness/activity/transcript text to semantic truth;
+- `ProposalSummary` persists density/duplication telemetry (`factual anchors -> clustered neighborhoods`, proposals/source-hour, source diversity, explicit hypotheses) so proposal recall improvements can be weighed against downstream inference/review burden;
+- the historical A Spike-plant failure now has a permanent provider-free replay regression: even when the semantic judge proposes `ROUND_WON`, an independent verifier that sees no terminal result leaves the claim `UNVERIFIED` and the item cannot enter the standalone review map.
 
 Next learning steps before any paid run:
 
-1. exercise the enriched proposal/owner-review workflow on a small local media fixture and then on one carefully chosen real source without provider inference;
-2. add proposal-density/diversity metrics and one additional provider-free evidence adapter only if it materially improves proposal recall (ASR/transcript fixture is the preferred next candidate; avoid broad game-specific detector sprawl);
+1. finish local validation of the transcript/density slice and exercise the enriched proposal workflow on a small real source without provider inference;
+2. compare proposal density/duplication with and without clustering/transcript evidence; keep the adapter only if recall/diversity improves without exploding semantic neighborhoods;
 3. design the real semantic-judge and independent resolution-verifier provider contracts, privacy boundary, cache identity, and exact cost preflight separately from the old full-window Scout contract;
-4. add a provider-free replay harness for the historical Spike failure so future semantic/verifier adapters must keep `ROUND_WON` unverified until terminal evidence exists;
+4. keep the historical Spike replay as a mandatory adapter regression and add more cross-game terminal-claim fixtures only when evidence justifies them;
 5. only then select unseen real media and request a fresh explicit hard THB authorization if paid inference still has enough learning value.
 
 ## Current authorization

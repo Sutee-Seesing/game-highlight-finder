@@ -21,11 +21,17 @@ from game_highlight_finder.domain.proposals import (
     ManualProposalMarker,
     ManualProposalMarkerSet,
     ProposalSignalType,
+    TranscriptFixture,
+    TranscriptUtterance,
 )
 from game_highlight_finder.media.ffmpeg import FFmpegCancelled
 from game_highlight_finder.pipeline.extraction import extract_candidates
 from game_highlight_finder.pipeline.gemini_scout import build_gemini_registry
-from game_highlight_finder.pipeline.runner import analyze_m6_source, prepare_hybrid_proposals
+from game_highlight_finder.pipeline.runner import (
+    analyze_m6_source,
+    prepare_hybrid_proposals,
+    prepare_hybrid_routing,
+)
 from game_highlight_finder.pipeline.windowed_scout import (
     FakeWindowScout,
     aggregate_window_preflight,
@@ -221,6 +227,78 @@ def test_hybrid_manual_marker_enrichment_stays_local_and_persists_clustered_prop
     assert len(marker_proposals) == 1
     assert marker_proposals[0].event_hypothesis == "OBJECTIVE_PLANTED"
     assert marker_proposals[0].signal_type is ProposalSignalType.MANUAL_MARKER
+    assert prepared.proposal_summary_path == paths.hybrid_proposal_summary_path
+    assert paths.hybrid_proposal_summary_path.is_file()
+    assert prepared.proposal_summary.proposal_neighborhood_count == len(
+        prepared.proposals.proposals
+    )
+    assert config.scout.allow_remote_upload is False
+
+
+def test_hybrid_transcript_enrichment_stays_local_and_persists_density_summary(
+    tmp_path: Path,
+    tiny_video: Path,
+    ffmpeg_path: Path,
+    ffprobe_path: Path,
+) -> None:
+    config = _config(tmp_path / "library", ffmpeg_path, ffprobe_path)
+    ingested = analyze_m6_source(tiny_video, config, stop_after="ingest")
+    source = ingested.ingest.source
+    transcript = TranscriptFixture(
+        source_sha256=source.sha256,
+        source_duration_ms=source.duration_ms,
+        utterances=[
+            TranscriptUtterance(
+                start_ms=600,
+                end_ms=1_000,
+                text="wait, what just happened?",
+                speaker="owner",
+                language="en",
+                confidence=0.9,
+            )
+        ],
+    )
+
+    prepared = prepare_hybrid_proposals(
+        tiny_video,
+        config,
+        transcript=transcript,
+    )
+    paths = session_paths(config.storage.data_dir, prepared.ingest.session_id)
+
+    transcript_proposals = [
+        proposal
+        for proposal in prepared.proposals.proposals
+        if "transcript_fixture" in proposal.sources
+    ]
+    assert len(transcript_proposals) == 1
+    assert transcript_proposals[0].signal_type is ProposalSignalType.ASR_UTTERANCE
+    assert transcript_proposals[0].metadata["text"] == "wait, what just happened?"
+    assert prepared.proposal_summary_path == paths.hybrid_proposal_summary_path
+    assert paths.hybrid_proposal_summary_path.is_file()
+    assert prepared.proposal_summary.proposal_neighborhood_count == len(
+        prepared.proposals.proposals
+    )
+    assert prepared.proposal_summary.proposals_per_source_hour > 0
+
+    routing = prepare_hybrid_routing(
+        config,
+        prepared.ingest.session_id,
+        weak_sample_interval_ms=1_000,
+    )
+    assert routing.routing_plan_path == paths.hybrid_routing_plan_path
+    assert routing.routed_proposals_path == paths.hybrid_routed_proposals_path
+    assert paths.hybrid_routing_plan_path.is_file()
+    assert paths.hybrid_routed_proposals_path.is_file()
+    assert len(routing.routing.decisions) == len(prepared.proposals.proposals)
+    assert (
+        len(routing.routing.selected_proposal_ids)
+        + len(routing.routing.deferred_proposal_ids)
+        == len(prepared.proposals.proposals)
+    )
+    assert len(routing.routed_proposals.proposals) == len(
+        routing.routing.selected_proposal_ids
+    )
     assert config.scout.allow_remote_upload is False
 
 

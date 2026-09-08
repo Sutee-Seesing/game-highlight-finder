@@ -13,9 +13,15 @@ from game_highlight_finder.domain.proposals import (
     ManualProposalMarkerSet,
     Proposal,
     ProposalArtifact,
+    ProposalRoute,
+    ProposalRoutingDecision,
+    ProposalRoutingPlan,
     ProposalSignalType,
+    ProposalSummary,
+    TranscriptFixture,
 )
 
+ROUTING_POLICY_VERSION = "c1-proposal-routing-v1"
 DEFAULT_MAX_PROPOSAL_INTERVAL_MS = 20_000
 DEFAULT_MAX_PROPOSALS = 2_000
 DEFAULT_CLUSTER_GAP_MS = 750
@@ -188,6 +194,212 @@ def proposals_from_manual_markers(
     )
 
 
+def proposals_from_transcript(
+    *,
+    session_id: str,
+    source_id: str,
+    source_sha256: str,
+    source_duration_ms: int,
+    transcript: TranscriptFixture,
+    created_at: datetime | None = None,
+) -> ProposalArtifact:
+    """Bind source-checked transcript utterances as factual speech anchors only."""
+
+    if transcript.source_sha256 != source_sha256:
+        raise ValueError("transcript source SHA-256 does not match the analyzed source")
+    if transcript.source_duration_ms != source_duration_ms:
+        raise ValueError("transcript source duration does not match the analyzed source")
+
+    proposals: list[Proposal] = []
+    for utterance in transcript.utterances:
+        metadata = {"text": utterance.text}
+        if utterance.speaker is not None:
+            metadata["speaker"] = utterance.speaker
+        if utterance.language is not None:
+            metadata["language"] = utterance.language
+        proposals.append(
+            _proposal(
+                source_id=source_id,
+                start_ms=utterance.start_ms,
+                end_ms=utterance.end_ms,
+                signal_type=ProposalSignalType.ASR_UTTERANCE,
+                source="transcript_fixture",
+                confidence=utterance.confidence,
+                metadata=metadata,
+            )
+        )
+    return ProposalArtifact(
+        created_at=created_at or datetime.now(UTC),
+        producer_version=__version__,
+        session_id=session_id,
+        source_id=source_id,
+        source_duration_ms=source_duration_ms,
+        proposals=_ordered(proposals),
+        warnings=list(transcript.notes),
+    )
+
+
+def summarize_proposals(artifact: ProposalArtifact) -> ProposalSummary:
+    """Measure proposal density and clustering burden without creator-quality claims."""
+
+    anchor_count = sum(_raw_anchor_count(proposal) for proposal in artifact.proposals)
+    neighborhood_count = len(artifact.proposals)
+    source_hours = artifact.source_duration_ms / 3_600_000
+    by_signal_type: dict[str, int] = {}
+    for proposal in artifact.proposals:
+        key = proposal.signal_type.value
+        by_signal_type[key] = by_signal_type.get(key, 0) + 1
+    return ProposalSummary(
+        created_at=artifact.created_at,
+        session_id=artifact.session_id,
+        source_id=artifact.source_id,
+        source_duration_ms=artifact.source_duration_ms,
+        factual_anchor_count_before_clustering=anchor_count,
+        proposal_neighborhood_count=neighborhood_count,
+        clustered_reduction_count=max(0, anchor_count - neighborhood_count),
+        multi_source_neighborhood_count=sum(
+            len(proposal.sources) > 1 for proposal in artifact.proposals
+        ),
+        explicit_hypothesis_count=sum(
+            proposal.event_hypothesis is not None for proposal in artifact.proposals
+        ),
+        proposals_per_source_hour=(
+            neighborhood_count / source_hours if source_hours > 0 else 0.0
+        ),
+        by_signal_type=by_signal_type,
+    )
+
+
+def route_proposals(
+    artifact: ProposalArtifact,
+    *,
+    weak_sample_interval_ms: int,
+    created_at: datetime | None = None,
+) -> ProposalRoutingPlan:
+    """Bound semantic-inspection density without deleting factual proposal evidence.
+
+    Strong/explicit or multi-source neighborhoods route directly. Weak single-source
+    neighborhoods are deterministically sampled for temporal coverage; all others remain
+    preserved as deferred decisions in the routing plan.
+    """
+
+    if weak_sample_interval_ms <= 0:
+        raise ValueError("weak_sample_interval_ms must be positive")
+
+    route_by_id: dict[str, ProposalRoute] = {}
+    reason_by_id: dict[str, str] = {}
+    weak_by_bucket: dict[int, list[Proposal]] = {}
+    covered_buckets: set[int] = set()
+
+    for proposal in artifact.proposals:
+        bucket = _routing_bucket(proposal, weak_sample_interval_ms)
+        if proposal.event_hypothesis is not None or proposal.signal_type in {
+            ProposalSignalType.GAME_EVENT,
+            ProposalSignalType.MANUAL_MARKER,
+        }:
+            route_by_id[proposal.proposal_id] = ProposalRoute.MUST_INSPECT
+            reason_by_id[proposal.proposal_id] = (
+                "Explicit/manual/game-state factual anchor bypasses weak-evidence sampling."
+            )
+            covered_buckets.add(bucket)
+        elif len(proposal.sources) > 1:
+            route_by_id[proposal.proposal_id] = ProposalRoute.SUPPORTED
+            reason_by_id[proposal.proposal_id] = (
+                "Multiple independent evidence sources support this proposal neighborhood."
+            )
+            covered_buckets.add(bucket)
+        else:
+            weak_by_bucket.setdefault(bucket, []).append(proposal)
+
+    for bucket, weak in sorted(weak_by_bucket.items()):
+        ordered = sorted(weak, key=_weak_routing_key)
+        sampled_id: str | None = None
+        if bucket not in covered_buckets and ordered:
+            sampled_id = ordered[0].proposal_id
+        for proposal in ordered:
+            if proposal.proposal_id == sampled_id:
+                route_by_id[proposal.proposal_id] = ProposalRoute.SAMPLED_WEAK
+                reason_by_id[proposal.proposal_id] = (
+                    "Deterministic weak-evidence sample retained for temporal coverage."
+                )
+            else:
+                route_by_id[proposal.proposal_id] = ProposalRoute.DEFERRED_WEAK
+                reason_by_id[proposal.proposal_id] = (
+                    "Weak single-source evidence retained for audit but deferred from this "
+                    "semantic-inspection pass."
+                )
+
+    decisions = [
+        ProposalRoutingDecision(
+            proposal_id=proposal.proposal_id,
+            route=route_by_id[proposal.proposal_id],
+            reason=reason_by_id[proposal.proposal_id],
+        )
+        for proposal in artifact.proposals
+    ]
+    selected_ids = [
+        decision.proposal_id
+        for decision in decisions
+        if decision.route is not ProposalRoute.DEFERRED_WEAK
+    ]
+    deferred_ids = [
+        decision.proposal_id
+        for decision in decisions
+        if decision.route is ProposalRoute.DEFERRED_WEAK
+    ]
+    source_hours = artifact.source_duration_ms / 3_600_000
+    route_counts = {
+        route.value: sum(decision.route is route for decision in decisions)
+        for route in ProposalRoute
+    }
+    return ProposalRoutingPlan(
+        policy_version=ROUTING_POLICY_VERSION,
+        created_at=created_at or artifact.created_at,
+        session_id=artifact.session_id,
+        source_id=artifact.source_id,
+        source_duration_ms=artifact.source_duration_ms,
+        weak_sample_interval_ms=weak_sample_interval_ms,
+        decisions=decisions,
+        selected_proposal_ids=selected_ids,
+        deferred_proposal_ids=deferred_ids,
+        selected_per_source_hour=(len(selected_ids) / source_hours if source_hours > 0 else 0.0),
+        route_counts=route_counts,
+    )
+
+
+def selected_proposal_artifact(
+    artifact: ProposalArtifact,
+    routing: ProposalRoutingPlan,
+) -> ProposalArtifact:
+    """Materialize the routed semantic-inspection subset without mutating full evidence."""
+
+    if (
+        artifact.session_id != routing.session_id
+        or artifact.source_id != routing.source_id
+        or artifact.source_duration_ms != routing.source_duration_ms
+    ):
+        raise ValueError("proposal routing plan belongs to a different source session")
+    proposal_ids = {proposal.proposal_id for proposal in artifact.proposals}
+    decision_ids = {decision.proposal_id for decision in routing.decisions}
+    if proposal_ids != decision_ids:
+        raise ValueError("proposal routing plan does not cover the exact proposal artifact")
+    selected = set(routing.selected_proposal_ids)
+    return artifact.model_copy(
+        update={
+            "proposals": [
+                proposal for proposal in artifact.proposals if proposal.proposal_id in selected
+            ],
+            "warnings": [
+                *artifact.warnings,
+                (
+                    f"Routing {routing.policy_version}: selected {len(selected)} of "
+                    f"{len(artifact.proposals)} proposal neighborhoods."
+                ),
+            ][:100],
+        }
+    )
+
+
 def combine_and_cluster_proposals(
     artifacts: Iterable[ProposalArtifact],
     *,
@@ -292,7 +504,7 @@ def _merge_cluster(source_id: str, cluster: list[Proposal]) -> Proposal:
     event_hypothesis = hypotheses[0] if hypotheses else None
     sources = tuple(sorted({source for item in cluster for source in item.sources}))
     metadata = _merge_metadata(cluster)
-    metadata["cluster_size"] = str(len(cluster))
+    metadata["cluster_size"] = str(sum(_raw_anchor_count(item) for item in cluster))
     metadata["signal_types"] = ",".join(sorted({item.signal_type.value for item in cluster}))
     return Proposal(
         proposal_id=deterministic_proposal_id(
@@ -311,6 +523,31 @@ def _merge_cluster(source_id: str, cluster: list[Proposal]) -> Proposal:
         sources=list(sources),
         metadata=metadata,
     )
+
+
+def _routing_bucket(proposal: Proposal, interval_ms: int) -> int:
+    midpoint_ms = proposal.start_ms + (proposal.end_ms - proposal.start_ms) // 2
+    return midpoint_ms // interval_ms
+
+
+def _weak_routing_key(proposal: Proposal) -> tuple[int, float, int, str]:
+    return (
+        -_SIGNAL_PRIORITY[proposal.signal_type],
+        -proposal.confidence,
+        proposal.start_ms,
+        proposal.proposal_id,
+    )
+
+
+def _raw_anchor_count(proposal: Proposal) -> int:
+    raw = proposal.metadata.get("cluster_size")
+    if raw is None:
+        return 1
+    try:
+        value = int(raw)
+    except ValueError:
+        return 1
+    return max(1, value)
 
 
 def _merge_metadata(cluster: list[Proposal]) -> dict[str, str]:
@@ -371,8 +608,13 @@ __all__ = [
     "DEFAULT_MAX_CLUSTER_SPAN_MS",
     "DEFAULT_MAX_PROPOSALS",
     "DEFAULT_MAX_PROPOSAL_INTERVAL_MS",
+    "ROUTING_POLICY_VERSION",
     "combine_and_cluster_proposals",
     "deterministic_proposal_id",
     "proposals_from_local_signals",
     "proposals_from_manual_markers",
+    "proposals_from_transcript",
+    "route_proposals",
+    "selected_proposal_artifact",
+    "summarize_proposals",
 ]

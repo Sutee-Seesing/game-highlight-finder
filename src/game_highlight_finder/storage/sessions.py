@@ -62,6 +62,9 @@ class SessionPaths:
     reconcile_dir: Path
     hybrid_dir: Path
     hybrid_proposals_path: Path
+    hybrid_proposal_summary_path: Path
+    hybrid_routing_plan_path: Path
+    hybrid_routed_proposals_path: Path
     hybrid_run_path: Path
     hybrid_session_map_path: Path
     hybrid_review_map_path: Path
@@ -104,6 +107,9 @@ def session_paths(data_dir: Path, session_id: str) -> SessionPaths:
         reconcile_dir=root / "reconcile",
         hybrid_dir=root / "hybrid",
         hybrid_proposals_path=root / "hybrid" / "proposals.json",
+        hybrid_proposal_summary_path=root / "hybrid" / "proposal_summary.json",
+        hybrid_routing_plan_path=root / "hybrid" / "routing_plan.json",
+        hybrid_routed_proposals_path=root / "hybrid" / "routed_proposals.json",
         hybrid_run_path=root / "hybrid" / "run.json",
         hybrid_session_map_path=root / "hybrid" / "session_map.json",
         hybrid_review_map_path=root / "hybrid" / "review_map.json",

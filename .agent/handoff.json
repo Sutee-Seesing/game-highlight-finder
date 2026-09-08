@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "project": "vdo/game-highlight-finder",
-  "updated_at": "2026-09-09T03:51:00+07:00",
+  "updated_at": "2026-09-09T04:52:00+07:00",
   "resume_phrase": "ต่อ VDO",
   "canonical_repo": {
     "path": "C:\\Data\\Works\\Personal_Projects\\Active_Products\\game-highlight-finder",
@@ -62,7 +62,7 @@
     "decision": "Stop window-duration micro-optimization as the primary workstream; use benchmarks as regression evidence and pivot product work to multi-game creator usefulness."
   },
   "c1_provider_free_progress": {
-    "status": "c1_hybrid_h2_1_provider_free_green",
+    "status": "c1_hybrid_h2_2_routing_provider_free_green",
     "implemented": [
       "generic DISCOVERY category",
       "backward-compatible moment_summary and creator_reason",
@@ -84,9 +84,13 @@
       "H6 verified StoryAssembly with setup/event/payoff/reaction boundaries",
       "provider-free hybrid orchestration and persisted full/review maps",
       "separate creator-evaluation corpus for KEEP/MAYBE/rejections, role/boundary corrections, review time, and MISS_OBVIOUS",
-      "provider-free CLI/session workflow for hybrid proposals, fixture runs, review templates, and review summaries",
+      "provider-free CLI/session workflow for hybrid proposals, routing, fixture runs, review templates, and review summaries",
       "H2.1 source-bound ManualProposalMarkerSet enrichment with exact source SHA-256 + duration validation",
-      "deterministic nearby-proposal clustering that preserves provenance and refuses conflicting explicit event hypotheses"
+      "H2.2 source-bound TranscriptFixture / ASR_UTTERANCE evidence",
+      "deterministic nearby-proposal clustering that preserves provenance and refuses conflicting explicit event hypotheses",
+      "ProposalSummary density/duplication telemetry persisted under session/hybrid/",
+      "auditable MUST_INSPECT/SUPPORTED/SAMPLED_WEAK/DEFERRED_WEAK proposal routing with deferred evidence preserved",
+      "historical unresolved-Spike replay gate that blocks unverified ROUND_WON from standalone review"
     ],
     "tests": {
       "unit_suite_before_archetype_fixture": "242 passed in 52.50s",
@@ -96,13 +100,13 @@
       "latest_pre_hybrid_full_suite_result": "282 passed in 98.36s (0:01:38)",
       "previous_hybrid_full_suite_task": "a7e4def7-1b8d-473b-917b-dce7d71fb361",
       "previous_hybrid_full_suite_result": "291 passed in 101.96s",
-      "hybrid_focused_result": "40 passed in 56.44s after H2.1 clustering/manual-marker/CLI integration",
+      "hybrid_focused_result": "47 passed in 56.37s after transcript/proposal-summary/routing/Spike-replay slice",
       "hybrid_ruff_result": "All checks passed on changed Hybrid/CLI/M6 files",
       "hybrid_mypy_result": "Success: no issues found in 72 source files",
-      "latest_completed_full_suite_task": "3a7a4d49-f79d-4393-b8ce-2aeff0937750",
-      "latest_completed_full_suite_result": "302 passed in 199.24s (0:03:19) post-H2.1",
-      "latest_full_suite_task": "3a7a4d49-f79d-4393-b8ce-2aeff0937750",
-      "latest_full_suite_result": "302 passed in 199.24s (0:03:19)",
+      "latest_completed_full_suite_task": "3c26aa87-0ab2-4e11-8f3d-30f7a2e62ad5",
+      "latest_completed_full_suite_result": "309 passed in 177.92s (0:02:57) after transcript/proposal-routing/Spike-replay slice",
+      "latest_full_suite_task": "3c26aa87-0ab2-4e11-8f3d-30f7a2e62ad5",
+      "latest_full_suite_result": "309 passed in 177.92s (0:02:57)",
       "latest_full_suite_state_at_checkpoint": "COMPLETED_GREEN"
     },
     "offline_demo": {
@@ -114,7 +118,13 @@
       "deep_research_verdict": "CONTINUE + PIVOT + SIMPLIFY",
       "canonical_plan": "docs/16_C1_HYBRID_CREATOR_TRIAGE_PLAN.md",
       "target_flow": "factual proposals -> proposal-centered context -> semantic judge -> resolution verifier -> story assembly/boundaries -> creator ranking",
-      "implemented_provider_free": ["H1", "H2", "H2.1 clustering/manual markers", "H3", "H4 contract", "H5 contract", "H6", "hybrid orchestration", "CLI/session workflow", "creator evaluation corpus/workflow"],
+      "implemented_provider_free": ["H1", "H2", "H2.1 clustering/manual markers", "H2.2 transcript/ASR fixtures", "ProposalSummary telemetry", "proposal routing", "Spike unresolved-outcome replay", "H3", "H4 contract", "H5 contract", "H6", "hybrid orchestration", "CLI/session workflow", "creator evaluation corpus/workflow"],
+      "proposal_density_evidence": {
+        "A_cal01": "860 raw weak audio anchors -> 84 clustered neighborhoods over 600.886s (~503.26/hour); weak coverage routing diagnostics: 30s=20 selected (~119.8/hour), 60s=10 (~59.9/hour), 120s=5 (~30.0/hour)",
+        "B_existing_local_signals": "0 proposal neighborhoods",
+        "C_existing_local_signals": "0 proposal neighborhoods",
+        "interpretation": "local audio/activity is optional navigation evidence, not the universal multi-game proposal backbone; do not tune one loudness threshold as highlight truth"
+      },
       "paid_bc_paused": true,
       "new_provider_calls": 0,
       "new_uploads": 0
@@ -222,9 +232,11 @@
     "A live v20 evidence is complete and owner review judged 0/6 extracted candidates usable as standalone creator clips; treat this as creator-usefulness evidence, not GT-v2 truth.",
     "Deep Research + repo audit is complete with CONTINUE + PIVOT + SIMPLIFY; canonical plan is docs/16_C1_HYBRID_CREATOR_TRIAGE_PLAN.md.",
     "Hybrid H1-H6 plus provider-free orchestration/persistence are implemented: factual proposals, dynamic context, provisional semantic judgment, independent resolution verification, verified story assembly, creator-review gating, and post-verification clip boundaries.",
-    "H2.1 is green: source-bound manual-marker enrichment and deterministic compatible-neighborhood clustering are implemented; conflicting explicit event hypotheses remain separate.",
-    "Local CLI/session workflow and creator-evaluation round-trip are implemented for proposals, fixture runs, review templates, KEEP/MAYBE/rejections, role/boundary corrections, review time and MISS_OBVIOUS without mutating event GT.",
-    "Next provider-free slice: measure proposal density/duplication on local/real media, add a transcript/ASR fixture adapter if it improves factual proposal recall, and build a replay harness for the historical Spike unresolved-outcome failure before designing new semantic-judge/verifier provider preflight.",
+    "H2 evidence enrichment/routing is implemented provider-free: source-bound manual markers, source-bound transcript/ASR fixtures, compatible-neighborhood clustering, ProposalSummary density telemetry, and auditable MUST_INSPECT/SUPPORTED/SAMPLED_WEAK/DEFERRED_WEAK routing; conflicting explicit event hypotheses remain separate.",
+    "Local CLI/session workflow and creator-evaluation round-trip are implemented for proposals, routing, fixture runs, review templates, KEEP/MAYBE/rejections, role/boundary corrections, review time and MISS_OBVIOUS without mutating event GT.",
+    "Historical Spike unresolved-outcome replay is a mandatory provider-free regression: ROUND_WON/CLUTCH_WIN stays unverified and excluded from standalone review without terminal evidence.",
+    "Proposal-density evidence: A=860 weak anchors -> 84 neighborhoods (~503/hour), while existing B/C local-signal artifacts each produce 0 neighborhoods; do not tune local audio/activity into a universal detector.",
+    "Next provider-free slice: exercise a richer non-audio evidence source on non-FPS/social media (transcript first where a local fixture exists, otherwise bounded visual/OCR fixture), measure recall vs routed inspection density, then design the new routed semantic-judge/verifier provider preflight separately from the old flat Scout.",
     "B/C remain paused at the provider boundary: B=17 windows/15.224148 THB historical v21 preflight; C=26/23.218504; fresh explicit hard THB authorization is required before any future upload/generation.",
     "Keep GPU-first media optimization separate from the active correctness validation baseline."
   ],

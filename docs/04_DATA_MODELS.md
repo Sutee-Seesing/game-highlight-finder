@@ -84,6 +84,13 @@ metadata{}
 
 A proposal deliberately has no creator score or editorial role. Provider-neutral proposal artifacts allow generic local evidence, ASR, optional OCR, game telemetry/plugins and manual markers to feed the same downstream semantic pipeline.
 
+Source-bound provider-free evidence fixtures now include:
+
+- `ManualProposalMarkerSet`: owner/test factual markers bound to exact source SHA-256 + duration;
+- `TranscriptFixture`: timestamped utterances (text/speaker/language/confidence) bound to exact source SHA-256 + duration. Speech remains evidence only and never implies creator value by itself.
+
+`ProposalSummary` records proposal density/duplication telemetry such as factual-anchor count before clustering, proposal neighborhoods after clustering, clustered reduction, multi-source neighborhoods, explicit hypotheses, proposals/source-hour and counts by signal type. These are retrieval-efficiency metrics, not creator-quality scores.
+
 ### Candidate
 
 ```text

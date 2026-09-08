@@ -27,7 +27,10 @@ from game_highlight_finder.domain.proposals import (
     ManualProposalMarkerSet,
     Proposal,
     ProposalArtifact,
+    ProposalRoute,
     ProposalSignalType,
+    TranscriptFixture,
+    TranscriptUtterance,
 )
 from game_highlight_finder.pipeline.context_expansion import (
     expand_if_needed,
@@ -57,6 +60,10 @@ from game_highlight_finder.pipeline.proposals import (
     combine_and_cluster_proposals,
     proposals_from_local_signals,
     proposals_from_manual_markers,
+    proposals_from_transcript,
+    route_proposals,
+    selected_proposal_artifact,
+    summarize_proposals,
 )
 from game_highlight_finder.pipeline.ranking import (
     is_creator_review_eligible,
@@ -146,6 +153,75 @@ def test_unresolved_spike_style_claim_cannot_enter_standalone_shortlist() -> Non
 
     assert is_creator_review_eligible(unresolved) is False
     assert rank_session_map(_map(unresolved)).candidate_count == 0
+
+
+def test_historical_spike_plant_replay_blocks_premature_round_win() -> None:
+    session_id = "2026-08-15_unknown_7db9940058f7"
+    proposal = Proposal(
+        proposal_id="prop_00000000000000a1",
+        start_ms=228_000,
+        end_ms=238_000,
+        signal_type=ProposalSignalType.GAME_EVENT,
+        event_hypothesis="OBJECTIVE_PLANTED",
+        confidence=0.95,
+        sources=["historical_a_replay"],
+    )
+    proposals = ProposalArtifact(
+        created_at=NOW,
+        producer_version=__version__,
+        session_id=session_id,
+        source_id=SOURCE_ID,
+        source_duration_ms=600_886,
+        proposals=[proposal],
+    )
+    judgment = SemanticJudgment(
+        proposal_id=proposal.proposal_id,
+        event_start_ms=228_000,
+        event_end_ms=238_000,
+        category="CLUTCH",
+        editorial_role=EditorialRole.STANDALONE_STORY,
+        creator_score=8.5,
+        confidence=0.95,
+        moment_summary="The objective is planted during a tense late-round sequence.",
+        creator_reason=(
+            "Potential clutch story if the round actually resolves in the player's favor."
+        ),
+        claim_hypotheses=["ROUND_WON"],
+        needs_more_context=False,
+        reason="Historical semantic replay intentionally proposes the premature win hypothesis.",
+    )
+    candidate_id = deterministic_candidate_id(
+        session_id=session_id,
+        match_id=None,
+        start_ms=228_000,
+        end_ms=238_000,
+        category="CLUTCH",
+    )
+    verification = CandidateVerification(
+        candidate_id=candidate_id,
+        story_state=StoryState.INCOMPLETE,
+        resolution_state=ResolutionState.UNVERIFIED,
+        claims=[CandidateClaim(claim_type="ROUND_WON", status=ClaimStatus.UNVERIFIED)],
+        needs_more_context=False,
+        reason=(
+            "Spike plant is visible, but enemies remain and no terminal round result is present."
+        ),
+    )
+
+    run = run_provider_free_hybrid_triage(
+        proposals=proposals,
+        semantic_judge=FakeSemanticJudge({proposal.proposal_id: judgment}),
+        resolution_verifier=FakeResolutionVerifier({candidate_id: verification}),
+        extraction_config=ExtractionConfig(),
+        created_at=NOW,
+    )
+
+    assert len(run.session_map.candidates) == 1
+    candidate = run.session_map.candidates[0]
+    assert candidate.resolution_state is ResolutionState.UNVERIFIED
+    assert candidate.story_state is StoryState.INCOMPLETE
+    assert candidate.claims[0].status is ClaimStatus.UNVERIFIED
+    assert run.review_map.candidates == []
 
 
 def test_unresolved_real_event_may_still_be_a_montage_beat() -> None:
@@ -511,6 +587,182 @@ def test_proposal_clustering_reduces_duplicate_neighborhoods_without_merging_con
         "ROUND_WON",
         "ROUND_LOST",
     ]
+
+
+def test_transcript_proposals_are_source_bound_speech_evidence_not_creator_truth() -> None:
+    transcript = TranscriptFixture(
+        source_sha256="d" * 64,
+        source_duration_ms=60_000,
+        utterances=[
+            TranscriptUtterance(
+                start_ms=12_000,
+                end_ms=13_200,
+                text="wait, what just happened?",
+                speaker="owner",
+                language="en",
+                confidence=0.91,
+            )
+        ],
+        notes=["fixture transcript only"],
+    )
+    artifact = proposals_from_transcript(
+        session_id=SESSION_ID,
+        source_id=SOURCE_ID,
+        source_sha256="d" * 64,
+        source_duration_ms=60_000,
+        transcript=transcript,
+        created_at=NOW,
+    )
+
+    assert len(artifact.proposals) == 1
+    proposal = artifact.proposals[0]
+    assert proposal.signal_type is ProposalSignalType.ASR_UTTERANCE
+    assert proposal.event_hypothesis is None
+    assert proposal.metadata["text"] == "wait, what just happened?"
+    assert proposal.metadata["speaker"] == "owner"
+    assert proposal.metadata["language"] == "en"
+    payload = proposal.model_dump(mode="json")
+    assert "creator_score" not in payload
+    assert "editorial_role" not in payload
+
+    with pytest.raises(ValueError, match="transcript source SHA-256"):
+        proposals_from_transcript(
+            session_id=SESSION_ID,
+            source_id=SOURCE_ID,
+            source_sha256="e" * 64,
+            source_duration_ms=60_000,
+            transcript=transcript,
+            created_at=NOW,
+        )
+
+
+def test_proposal_summary_measures_density_and_cluster_reduction() -> None:
+    artifact = ProposalArtifact(
+        created_at=NOW,
+        producer_version=__version__,
+        session_id=SESSION_ID,
+        source_id=SOURCE_ID,
+        source_duration_ms=1_800_000,
+        proposals=[
+            Proposal(
+                proposal_id="prop_0000000000000201",
+                start_ms=10_000,
+                end_ms=11_000,
+                signal_type=ProposalSignalType.MANUAL_MARKER,
+                event_hypothesis="OBJECTIVE_PLANTED",
+                confidence=1.0,
+                sources=["manual_marker", "local_audio_activity"],
+                metadata={"cluster_size": "3"},
+            ),
+            Proposal(
+                proposal_id="prop_0000000000000202",
+                start_ms=100_000,
+                end_ms=101_000,
+                signal_type=ProposalSignalType.ASR_UTTERANCE,
+                confidence=0.9,
+                sources=["transcript_fixture"],
+            ),
+        ],
+    )
+
+    summary = summarize_proposals(artifact)
+
+    assert summary.factual_anchor_count_before_clustering == 4
+    assert summary.proposal_neighborhood_count == 2
+    assert summary.clustered_reduction_count == 2
+    assert summary.multi_source_neighborhood_count == 1
+    assert summary.explicit_hypothesis_count == 1
+    assert summary.proposals_per_source_hour == 4.0
+    assert summary.by_signal_type == {"MANUAL_MARKER": 1, "ASR_UTTERANCE": 1}
+
+
+def test_proposal_routing_preserves_all_evidence_but_bounds_weak_semantic_inspection() -> None:
+    artifact = ProposalArtifact(
+        created_at=NOW,
+        producer_version=__version__,
+        session_id=SESSION_ID,
+        source_id=SOURCE_ID,
+        source_duration_ms=180_000,
+        proposals=[
+            Proposal(
+                proposal_id="prop_0000000000000301",
+                start_ms=5_000,
+                end_ms=6_000,
+                signal_type=ProposalSignalType.AUDIO_ACTIVITY,
+                confidence=1.0,
+                sources=["local_audio_activity"],
+            ),
+            Proposal(
+                proposal_id="prop_0000000000000302",
+                start_ms=10_000,
+                end_ms=11_000,
+                signal_type=ProposalSignalType.ASR_UTTERANCE,
+                confidence=0.8,
+                sources=["transcript_fixture"],
+            ),
+            Proposal(
+                proposal_id="prop_0000000000000303",
+                start_ms=70_000,
+                end_ms=71_000,
+                signal_type=ProposalSignalType.MANUAL_MARKER,
+                confidence=1.0,
+                sources=["manual_marker"],
+            ),
+            Proposal(
+                proposal_id="prop_0000000000000304",
+                start_ms=80_000,
+                end_ms=81_000,
+                signal_type=ProposalSignalType.SCENE_ACTIVITY,
+                confidence=1.0,
+                sources=["local_scene_activity"],
+            ),
+            Proposal(
+                proposal_id="prop_0000000000000305",
+                start_ms=130_000,
+                end_ms=131_000,
+                signal_type=ProposalSignalType.ASR_UTTERANCE,
+                confidence=0.9,
+                sources=["transcript_fixture", "local_audio_activity"],
+            ),
+            Proposal(
+                proposal_id="prop_0000000000000306",
+                start_ms=140_000,
+                end_ms=141_000,
+                signal_type=ProposalSignalType.AUDIO_ACTIVITY,
+                confidence=1.0,
+                sources=["local_audio_activity"],
+            ),
+        ],
+    )
+
+    routing = route_proposals(
+        artifact,
+        weak_sample_interval_ms=60_000,
+        created_at=NOW,
+    )
+    routed = selected_proposal_artifact(artifact, routing)
+    routes = {decision.proposal_id: decision.route for decision in routing.decisions}
+
+    assert len(artifact.proposals) == 6
+    assert routes["prop_0000000000000301"] is ProposalRoute.DEFERRED_WEAK
+    assert routes["prop_0000000000000302"] is ProposalRoute.SAMPLED_WEAK
+    assert routes["prop_0000000000000303"] is ProposalRoute.MUST_INSPECT
+    assert routes["prop_0000000000000304"] is ProposalRoute.DEFERRED_WEAK
+    assert routes["prop_0000000000000305"] is ProposalRoute.SUPPORTED
+    assert routes["prop_0000000000000306"] is ProposalRoute.DEFERRED_WEAK
+    assert routing.route_counts == {
+        "MUST_INSPECT": 1,
+        "SUPPORTED": 1,
+        "SAMPLED_WEAK": 1,
+        "DEFERRED_WEAK": 3,
+    }
+    assert routing.selected_per_source_hour == 60.0
+    assert [proposal.proposal_id for proposal in routed.proposals] == [
+        "prop_0000000000000302",
+        "prop_0000000000000303",
+        "prop_0000000000000305",
+    ]
+    assert len(artifact.proposals) == 6
 
 
 def test_story_assembly_requires_verified_complete_story_and_preserves_reaction_tail() -> None:
