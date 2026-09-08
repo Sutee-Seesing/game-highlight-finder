@@ -12,7 +12,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict
 
 from game_highlight_finder.config import AppConfig
-from game_highlight_finder.domain.models import ErrorRecord, SessionMap, StageStatus
+from game_highlight_finder.domain.models import ErrorRecord, ProxyMetadata, SessionMap, StageStatus
 from game_highlight_finder.domain.proposals import (
     ManualProposalMarkerSet,
     ProposalArtifact,
@@ -27,6 +27,10 @@ from game_highlight_finder.pipeline.creator_evaluation import (
     persist_creator_review_template,
 )
 from game_highlight_finder.pipeline.extraction import ExtractionResult, extract_candidates
+from game_highlight_finder.pipeline.hybrid_context_media import (
+    HybridContextPreparationResult,
+    prepare_hybrid_context_media,
+)
 from game_highlight_finder.pipeline.hybrid_triage import (
     HybridFixtureBundle,
     HybridTriagePersistence,
@@ -71,6 +75,7 @@ from game_highlight_finder.storage.sessions import (
     completed_stage_cache_is_valid,
     load_manifest,
     session_paths,
+    source_from_artifact,
     write_manifest,
 )
 
@@ -281,6 +286,42 @@ def prepare_hybrid_routing(
         routed_proposals=routed,
         routing_plan_path=paths.hybrid_routing_plan_path,
         routed_proposals_path=paths.hybrid_routed_proposals_path,
+    )
+
+
+def prepare_hybrid_contexts(
+    config: AppConfig,
+    session_id: str,
+    *,
+    force: bool = False,
+) -> HybridContextPreparationResult:
+    """Materialize routed initial semantic contexts from the committed analysis proxy."""
+
+    paths = session_paths(config.storage.data_dir, session_id)
+    required = [
+        paths.source,
+        paths.proxy_dir / "analysis_proxy.mp4",
+        paths.proxy_dir / "metadata.json",
+        paths.hybrid_routed_proposals_path,
+    ]
+    missing = [path for path in required if not path.is_file()]
+    if missing:
+        raise ConfigError(
+            "Hybrid context preparation is missing committed local artifacts.",
+            hint=", ".join(str(path) for path in missing),
+        )
+    source = source_from_artifact(paths.source)
+    proxy_metadata = ProxyMetadata.model_validate(read_json(paths.proxy_dir / "metadata.json"))
+    routed = ProposalArtifact.model_validate(read_json(paths.hybrid_routed_proposals_path))
+    return prepare_hybrid_context_media(
+        source=source,
+        session_id=session_id,
+        proxy_path=paths.proxy_dir / "analysis_proxy.mp4",
+        proxy_metadata=proxy_metadata,
+        routed_proposals=routed,
+        paths=paths,
+        config=config,
+        force=force,
     )
 
 

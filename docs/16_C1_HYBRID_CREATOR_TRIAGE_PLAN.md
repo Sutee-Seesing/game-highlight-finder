@@ -379,7 +379,7 @@ The first coherent hybrid contract now exists locally without provider inference
 
 - H1: explicit story/resolution/claim truth states and timestamped evidence gate;
 - H2: provider-neutral factual `Proposal` / `ProposalArtifact` plus deterministic local activity adapter as an interface proof;
-- H3: bounded proposal-centered context planning with explicit dynamic expansion;
+- H3: bounded proposal-centered context planning with explicit dynamic expansion, plus provider-free materialization of routed initial context media from the committed analysis proxy only;
 - H4: provider-neutral semantic-judge contract plus sequential FakeSemanticJudge fixtures for re-judgment after context expansion;
 - H5: independent CandidateVerification contract plus sequential FakeResolutionVerifier fixtures; verified/contradicted claims require timestamped evidence;
 - H6: verified StoryAssembly with setup/event/payoff/reaction semantic boundaries; story assembly is refused before COMPLETE + VERIFIED/NOT_APPLICABLE state;
@@ -391,7 +391,8 @@ This is a contract/orchestration milestone, **not yet evidence that real-VOD cre
 
 Provider-free follow-through after H6:
 
-- local CLI/session integration now exists through `hybrid proposals`, `hybrid run-fixture`, `hybrid review-template`, and `hybrid review-summary`; the historical flat-Scout path is still preserved separately;
+- local CLI/session integration now exists through `hybrid proposals`, `hybrid route`, `hybrid contexts`, `hybrid run-fixture`, `hybrid review-template`, and `hybrid review-summary`; the historical flat-Scout path is still preserved separately;
+- `hybrid contexts` materializes only routed initial proposal neighborhoods into `hybrid/contexts/<context_id>/analysis_context.mp4`, preserving parent analysis-proxy hash/provenance, deterministic materialization identity, cache reuse, and a validator that rejects RAW/source paths as future provider input;
 - creator-review worksheets and summaries now round-trip deterministically into the separate creator-evaluation corpus;
 - H2.1 adds source-bound `ManualProposalMarkerSet` fixtures plus deterministic proposal clustering: nearby compatible factual anchors can share one semantic neighborhood, while conflicting explicit event hypotheses are never merged;
 - H2.2 adds source-bound `TranscriptFixture` utterances as `ASR_UTTERANCE` factual evidence. Transcript text/speaker/language can help retrieve social/personality/joke setup, but speech presence alone never implies highlight quality;
@@ -402,11 +403,11 @@ Provider-free follow-through after H6:
 
 Next learning steps before any paid run:
 
-1. finish local validation of the transcript/density slice and exercise the enriched proposal workflow on a small real source without provider inference;
-2. compare proposal density/duplication with and without clustering/transcript evidence; keep the adapter only if recall/diversity improves without exploding semantic neighborhoods;
-3. design the real semantic-judge and independent resolution-verifier provider contracts, privacy boundary, cache identity, and exact cost preflight separately from the old full-window Scout contract;
-4. keep the historical Spike replay as a mandatory adapter regression and add more cross-game terminal-claim fixtures only when evidence justifies them;
-5. only then select unseen real media and request a fresh explicit hard THB authorization if paid inference still has enough learning value.
+1. design the real semantic-judge and independent resolution-verifier request contracts over committed routed `analysis_context.mp4` media, separately from the old full-window Scout contract;
+2. add an exact provider-free initial-pass preflight that counts logical calls and media minutes, quotes each request without reserving funds, records cache identity, fixes generation attempts at one, and explicitly excludes dynamic-expansion calls until a new bounded preflight is produced;
+3. preserve the context-only privacy boundary: RAW source is never provider input and normal chat continuation never constitutes live authorization;
+4. then exercise richer non-audio evidence on a non-FPS/social source and measure proposal recall/diversity against routed semantic-inspection density;
+5. keep the historical Spike replay as a mandatory regression and only request fresh explicit hard-THB authorization when the hybrid preflight shows enough learning value.
 
 ## Current authorization
 

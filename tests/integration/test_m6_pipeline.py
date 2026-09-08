@@ -24,11 +24,14 @@ from game_highlight_finder.domain.proposals import (
     TranscriptFixture,
     TranscriptUtterance,
 )
+from game_highlight_finder.errors import ValidationError
 from game_highlight_finder.media.ffmpeg import FFmpegCancelled
 from game_highlight_finder.pipeline.extraction import extract_candidates
 from game_highlight_finder.pipeline.gemini_scout import build_gemini_registry
+from game_highlight_finder.pipeline.hybrid_context_media import validate_hybrid_context_proxy
 from game_highlight_finder.pipeline.runner import (
     analyze_m6_source,
+    prepare_hybrid_contexts,
     prepare_hybrid_proposals,
     prepare_hybrid_routing,
 )
@@ -300,6 +303,68 @@ def test_hybrid_transcript_enrichment_stays_local_and_persists_density_summary(
         routing.routing.selected_proposal_ids
     )
     assert config.scout.allow_remote_upload is False
+
+
+def test_hybrid_routed_context_media_is_local_committed_cacheable_and_upload_scoped(
+    tmp_path: Path,
+    tiny_video: Path,
+    ffmpeg_path: Path,
+    ffprobe_path: Path,
+) -> None:
+    config = _config(tmp_path / "library", ffmpeg_path, ffprobe_path)
+    ingested = analyze_m6_source(tiny_video, config, stop_after="ingest")
+    source = ingested.ingest.source
+    transcript = TranscriptFixture(
+        source_sha256=source.sha256,
+        source_duration_ms=source.duration_ms,
+        utterances=[
+            TranscriptUtterance(
+                start_ms=500,
+                end_ms=min(1_000, source.duration_ms),
+                text="that was unexpected",
+                speaker="owner",
+                language="en",
+                confidence=0.95,
+            )
+        ],
+    )
+    prepared = prepare_hybrid_proposals(tiny_video, config, transcript=transcript)
+    routed = prepare_hybrid_routing(
+        config,
+        prepared.ingest.session_id,
+        weak_sample_interval_ms=1_000,
+    )
+    assert routed.routing.selected_proposal_ids
+
+    first = prepare_hybrid_contexts(config, prepared.ingest.session_id)
+    paths = session_paths(config.storage.data_dir, prepared.ingest.session_id)
+    parent_sha = read_json(paths.proxy_dir / "metadata.json")
+
+    assert len(first.contexts) == len(routed.routing.selected_proposal_ids)
+    assert first.generated == len(first.contexts)
+    assert first.cache_hits == 0
+    assert first.contexts_dir == paths.hybrid_contexts_dir
+    for context in first.contexts:
+        context_path = paths.root / context.proxy_path
+        assert context_path.is_file()
+        validated = validate_hybrid_context_proxy(
+            context_path,
+            paths.hybrid_contexts_dir,
+        )
+        assert validated == context
+        assert context.plan.context_start_ms <= context.plan.anchor_start_ms
+        assert context.plan.context_end_ms >= context.plan.anchor_end_ms
+        assert context.proxy_path.startswith("hybrid/contexts/")
+    assert parent_sha["proxy_path"] == "proxy/analysis_proxy.mp4"
+    assert config.scout.allow_remote_upload is False
+
+    second = prepare_hybrid_contexts(config, prepared.ingest.session_id)
+    assert second.generated == 0
+    assert second.cache_hits == len(first.contexts)
+    assert second.contexts == first.contexts
+
+    with pytest.raises(ValidationError, match="escapes the committed context root"):
+        validate_hybrid_context_proxy(tiny_video, paths.hybrid_contexts_dir)
 
 
 def test_m6_stops_before_reconcile_without_extracting(

@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "project": "vdo/game-highlight-finder",
-  "updated_at": "2026-09-09T04:52:00+07:00",
+  "updated_at": "2026-09-09T06:25:00+07:00",
   "resume_phrase": "ต่อ VDO",
   "canonical_repo": {
     "path": "C:\\Data\\Works\\Personal_Projects\\Active_Products\\game-highlight-finder",
@@ -62,7 +62,7 @@
     "decision": "Stop window-duration micro-optimization as the primary workstream; use benchmarks as regression evidence and pivot product work to multi-game creator usefulness."
   },
   "c1_provider_free_progress": {
-    "status": "c1_hybrid_h2_2_routing_provider_free_green",
+    "status": "c1_hybrid_h3_context_media_provider_free_green",
     "implemented": [
       "generic DISCOVERY category",
       "backward-compatible moment_summary and creator_reason",
@@ -79,6 +79,7 @@
       "H1 story/resolution/claim truth model with evidence-backed verification gate",
       "H2 provider-neutral factual Proposal artifacts plus deterministic local activity adapter",
       "H3 bounded proposal-centered dynamic context planner",
+      "H3 routed context-media materialization from committed analysis proxy with deterministic provenance/cache identity and RAW-source rejection",
       "H4 provider-free fake semantic judge with provisional unverified claims",
       "H5 independent CandidateVerification contract; terminal evidence required before standalone eligibility",
       "H6 verified StoryAssembly with setup/event/payoff/reaction boundaries",
@@ -100,14 +101,14 @@
       "latest_pre_hybrid_full_suite_result": "282 passed in 98.36s (0:01:38)",
       "previous_hybrid_full_suite_task": "a7e4def7-1b8d-473b-917b-dce7d71fb361",
       "previous_hybrid_full_suite_result": "291 passed in 101.96s",
-      "hybrid_focused_result": "47 passed in 56.37s after transcript/proposal-summary/routing/Spike-replay slice",
-      "hybrid_ruff_result": "All checks passed on changed Hybrid/CLI/M6 files",
-      "hybrid_mypy_result": "Success: no issues found in 72 source files",
-      "latest_completed_full_suite_task": "3c26aa87-0ab2-4e11-8f3d-30f7a2e62ad5",
-      "latest_completed_full_suite_result": "309 passed in 177.92s (0:02:57) after transcript/proposal-routing/Spike-replay slice",
-      "latest_full_suite_task": "3c26aa87-0ab2-4e11-8f3d-30f7a2e62ad5",
-      "latest_full_suite_result": "309 passed in 177.92s (0:02:57)",
-      "latest_full_suite_state_at_checkpoint": "COMPLETED_GREEN"
+      "hybrid_focused_result": "49 passed in 133.74s after routed context-media slice",
+      "hybrid_ruff_result": "All checks passed across src and tests after routed context-media slice",
+      "hybrid_mypy_result": "Success: no issues found in 73 source files",
+      "latest_completed_full_suite_task": "47b33ae3-f340-4223-8301-95f151253094",
+      "latest_completed_full_suite_result": "311 passed in 123.02s (0:02:03) after routed context-media slice",
+      "latest_full_suite_task": "47b33ae3-f340-4223-8301-95f151253094",
+      "latest_full_suite_result": "311 passed in 123.02s (0:02:03)",
+      "latest_full_suite_state_at_checkpoint": "COMPLETED_GREEN_PROVIDER_FREE"
     },
     "offline_demo": {
       "path": ".t/c1-creator-pack-demo/output/data/sessions/2026-09-07_unknown_c1c1c1c1c1c1/reports/index.html",
@@ -236,7 +237,7 @@
     "Local CLI/session workflow and creator-evaluation round-trip are implemented for proposals, routing, fixture runs, review templates, KEEP/MAYBE/rejections, role/boundary corrections, review time and MISS_OBVIOUS without mutating event GT.",
     "Historical Spike unresolved-outcome replay is a mandatory provider-free regression: ROUND_WON/CLUTCH_WIN stays unverified and excluded from standalone review without terminal evidence.",
     "Proposal-density evidence: A=860 weak anchors -> 84 neighborhoods (~503/hour), while existing B/C local-signal artifacts each produce 0 neighborhoods; do not tune local audio/activity into a universal detector.",
-    "Next provider-free slice: exercise a richer non-audio evidence source on non-FPS/social media (transcript first where a local fixture exists, otherwise bounded visual/OCR fixture), measure recall vs routed inspection density, then design the new routed semantic-judge/verifier provider preflight separately from the old flat Scout.",
+    "Next provider-free slice: design the routed semantic-judge/verifier request contract and exact initial-pass cost preflight over committed analysis_context.mp4 media; count calls/media minutes, quote without reservation, exclude expansion calls until separately preflighted, and keep live authorization false.",
     "B/C remain paused at the provider boundary: B=17 windows/15.224148 THB historical v21 preflight; C=26/23.218504; fresh explicit hard THB authorization is required before any future upload/generation.",
     "Keep GPU-first media optimization separate from the active correctness validation baseline."
   ],

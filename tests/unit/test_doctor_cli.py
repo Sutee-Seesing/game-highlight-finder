@@ -369,6 +369,52 @@ def test_hybrid_route_cli_is_provider_free_and_requires_explicit_sampling_interv
     assert "provider calls: ZERO" in result.output
 
 
+def test_hybrid_contexts_cli_materializes_local_contexts_without_provider_access(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    observed: dict[str, object] = {}
+    session_id = "2026-09-09_unknown_bbbbbbbbbbbb"
+
+    def fake_contexts(
+        config: AppConfig,
+        observed_session_id: str,
+        *,
+        force: bool = False,
+    ) -> object:
+        observed["allow_remote_upload"] = config.scout.allow_remote_upload
+        observed["session_id"] = observed_session_id
+        observed["force"] = force
+        return SimpleNamespace(
+            contexts=(object(), object()),
+            generated=2,
+            cache_hits=0,
+            contexts_dir=tmp_path / "data" / "sessions" / session_id / "hybrid" / "contexts",
+        )
+
+    monkeypatch.setattr("game_highlight_finder.cli.prepare_hybrid_contexts", fake_contexts)
+    result = runner.invoke(
+        app,
+        [
+            "--data-dir",
+            str(tmp_path / "data"),
+            "hybrid",
+            "contexts",
+            session_id,
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert observed == {
+        "allow_remote_upload": False,
+        "session_id": session_id,
+        "force": False,
+    }
+    assert "contexts: 2" in result.output
+    assert "source upload: FORBIDDEN" in result.output
+    assert "provider calls: ZERO" in result.output
+
+
 def test_m6_gemini_scout_still_requires_remote_upload(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

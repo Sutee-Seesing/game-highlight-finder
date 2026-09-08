@@ -70,6 +70,7 @@ from game_highlight_finder.pipeline.runner import (
     analyze_m6_source,
     analyze_source,
     analyze_v1_source,
+    prepare_hybrid_contexts,
     prepare_hybrid_proposals,
     prepare_hybrid_routing,
 )
@@ -967,6 +968,32 @@ def _hybrid_route(
     typer.echo(f"routes: {result.routing.route_counts}")
     typer.echo(f"routing plan: {result.routing_plan_path}")
     typer.echo(f"routed proposals: {result.routed_proposals_path}")
+    typer.echo("provider calls: ZERO")
+
+
+@hybrid_app.command("contexts")
+def hybrid_contexts(
+    ctx: typer.Context,
+    session_id: Annotated[
+        str,
+        typer.Argument(help="Session containing hybrid/routed_proposals.json."),
+    ],
+    force: Annotated[
+        bool,
+        typer.Option("--force", help="Regenerate committed local context proxies."),
+    ] = False,
+) -> None:
+    """Materialize routed proposal-centered context clips from the local analysis proxy."""
+    _execute(ctx, lambda options: _hybrid_contexts(options, session_id, force))
+
+
+def _hybrid_contexts(options: RuntimeOptions, session_id: str, force: bool) -> None:
+    result = prepare_hybrid_contexts(_load(options).config, session_id, force=force)
+    typer.echo("[PASS] hybrid context media prepared")
+    typer.echo(f"contexts: {len(result.contexts)}")
+    typer.echo(f"generated: {result.generated}; cache hits: {result.cache_hits}")
+    typer.echo(f"context root: {result.contexts_dir}")
+    typer.echo("source upload: FORBIDDEN")
     typer.echo("provider calls: ZERO")
 
 
