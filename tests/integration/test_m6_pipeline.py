@@ -29,10 +29,16 @@ from game_highlight_finder.media.ffmpeg import FFmpegCancelled
 from game_highlight_finder.pipeline.extraction import extract_candidates
 from game_highlight_finder.pipeline.gemini_scout import build_gemini_registry
 from game_highlight_finder.pipeline.hybrid_context_media import validate_hybrid_context_proxy
+from game_highlight_finder.pipeline.hybrid_provider_boundary import (
+    prepare_initial_semantic_preflight,
+    resolution_verifier_prompt,
+    semantic_judge_prompt,
+)
 from game_highlight_finder.pipeline.runner import (
     analyze_m6_source,
     prepare_hybrid_contexts,
     prepare_hybrid_proposals,
+    prepare_hybrid_provider_preflight,
     prepare_hybrid_routing,
 )
 from game_highlight_finder.pipeline.windowed_scout import (
@@ -365,6 +371,125 @@ def test_hybrid_routed_context_media_is_local_committed_cacheable_and_upload_sco
 
     with pytest.raises(ValidationError, match="escapes the committed context root"):
         validate_hybrid_context_proxy(tiny_video, paths.hybrid_contexts_dir)
+
+
+def test_hybrid_provider_preflight_quotes_contexts_without_reserving_or_calling_provider(
+    tmp_path: Path,
+    tiny_video: Path,
+    ffmpeg_path: Path,
+    ffprobe_path: Path,
+) -> None:
+    config = _config(tmp_path / "library", ffmpeg_path, ffprobe_path)
+    ingested = analyze_m6_source(tiny_video, config, stop_after="ingest")
+    source = ingested.ingest.source
+    transcript = TranscriptFixture(
+        source_sha256=source.sha256,
+        source_duration_ms=source.duration_ms,
+        utterances=[
+            TranscriptUtterance(
+                start_ms=500,
+                end_ms=min(1_000, source.duration_ms),
+                text="wait, what happened there?",
+                speaker="owner",
+                language="en",
+                confidence=0.95,
+            )
+        ],
+    )
+    prepared = prepare_hybrid_proposals(tiny_video, config, transcript=transcript)
+    routing = prepare_hybrid_routing(
+        config,
+        prepared.ingest.session_id,
+        weak_sample_interval_ms=1_000,
+    )
+    contexts = prepare_hybrid_contexts(config, prepared.ingest.session_id)
+    service = _gemini_cost_service(config)
+    assert service.calls() == ()
+
+    result = prepare_hybrid_provider_preflight(
+        config,
+        prepared.ingest.session_id,
+        cost_service=service,
+    )
+    preflight = result.preflight
+    paths = session_paths(config.storage.data_dir, prepared.ingest.session_id)
+    first_context = contexts.contexts[0]
+    first_proposal = next(
+        proposal
+        for proposal in routing.routed_proposals.proposals
+        if proposal.proposal_id == first_context.proposal_id
+    )
+    semantic_prompt = semantic_judge_prompt(first_proposal, first_context)
+    assert f'"source_start_ms":{first_context.plan.context_start_ms}' in semantic_prompt
+    assert "Do not emit context-relative timestamps" in semantic_prompt
+    verifier_prompt = resolution_verifier_prompt(
+        candidate_id="cand_test",
+        claim_hypotheses=["ROUND_WON"],
+        context_start_ms=first_context.plan.context_start_ms,
+        context_end_ms=first_context.plan.context_end_ms,
+    )
+    assert f'"source_start_ms":{first_context.plan.context_start_ms}' in verifier_prompt
+    assert "ROUND_WON" in verifier_prompt
+
+    assert preflight.logical_call_count == len(contexts.contexts)
+    assert preflight.logical_call_count > 0
+    assert preflight.total_media_input_ms == sum(
+        context.plan.context_duration_ms for context in contexts.contexts
+    )
+    assert preflight.aggregate_estimated_reserve_micro_thb > 0
+    assert preflight.verifier_preflight_state == "BLOCKED_UNTIL_SEMANTIC_OUTPUT"
+    assert preflight.dynamic_expansion_preflight_state == "SEPARATE_REPREFLIGHT_REQUIRED"
+    assert preflight.expansion_calls_included == 0
+    assert preflight.live_authorized is False
+    assert preflight.raw_source_upload_allowed is False
+    assert preflight.provider_calls == 0
+    assert preflight.uploads == 0
+    assert preflight.reservations_created == 0
+    assert service.calls() == ()
+    assert result.preflight_path == paths.hybrid_semantic_preflight_path
+    assert paths.hybrid_semantic_preflight_path.is_file()
+    persisted = read_json(paths.hybrid_semantic_preflight_path)
+    assert persisted["preflight_fingerprint"] == preflight.preflight_fingerprint
+    for request in preflight.requests:
+        assert request.stage == "SEMANTIC_JUDGE"
+        assert request.call_id == f"hsem_{request.request_fingerprint[:20]}"
+        assert request.max_generation_attempts == 1
+        assert request.automatic_generation_retries == 0
+        assert request.context_proxy_path.startswith("hybrid/contexts/")
+
+    with pytest.raises(ValidationError, match="one committed context per route"):
+        prepare_initial_semantic_preflight(
+            config=config,
+            session_id=prepared.ingest.session_id,
+            contexts=(),
+            routed_proposals=routing.routed_proposals,
+            paths=paths,
+            cost_service=service,
+        )
+
+    config_25 = config.model_copy(
+        update={"scout": config.scout.model_copy(update={"model": "gemini-2.5-flash-lite"})}
+    )
+    service_25 = _gemini_cost_service(config_25)
+    preflight_25 = prepare_hybrid_provider_preflight(
+        config_25,
+        prepared.ingest.session_id,
+        cost_service=service_25,
+    ).preflight
+    assert {request.call_id for request in preflight_25.requests} != {
+        request.call_id for request in preflight.requests
+    }
+    assert service_25.calls() == ()
+
+    analysis_proxy = paths.proxy_dir / "analysis_proxy.mp4"
+    analysis_proxy.write_bytes(analysis_proxy.read_bytes() + b"\x00")
+    with pytest.raises(ValidationError, match="parent provenance"):
+        prepare_hybrid_provider_preflight(
+            config,
+            prepared.ingest.session_id,
+            cost_service=service,
+        )
+    assert service.calls() == ()
 
 
 def test_m6_stops_before_reconcile_without_extracting(

@@ -632,7 +632,8 @@ def _request_parts(
     return prompt, schema, payload, estimate
 
 
-def _build_cost_service(config: AppConfig) -> CostService:
+def build_gemini_cost_service(config: AppConfig) -> CostService:
+    """Build the shared exact Gemini cost service without performing provider I/O."""
     if config.cost.pricing_catalog_path is not None:
         return CostService.from_config(config, registry=build_gemini_registry())
     fx = (
@@ -644,6 +645,12 @@ def _build_cost_service(config: AppConfig) -> CostService:
         pricing=production_pricing_catalog(),
         fx_snapshot=fx,
     )
+
+
+def _build_cost_service(config: AppConfig) -> CostService:
+    """Backward-compatible private alias for historical Scout call sites."""
+
+    return build_gemini_cost_service(config)
 
 
 def _validate_window(source: SourceAsset, config: AppConfig) -> None:
@@ -861,6 +868,7 @@ def _error_record(exc: BaseException) -> ErrorRecord:
 __all__ = [
     "FakeGeminiTransport",
     "GeminiPreflightResult",
+    "build_gemini_cost_service",
     "build_gemini_registry",
     "effective_gemini_thinking",
     "estimate_gemini_usage",

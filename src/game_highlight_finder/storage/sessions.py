@@ -66,6 +66,8 @@ class SessionPaths:
     hybrid_routing_plan_path: Path
     hybrid_routed_proposals_path: Path
     hybrid_contexts_dir: Path
+    hybrid_provider_dir: Path
+    hybrid_semantic_preflight_path: Path
     hybrid_run_path: Path
     hybrid_session_map_path: Path
     hybrid_review_map_path: Path
@@ -112,6 +114,8 @@ def session_paths(data_dir: Path, session_id: str) -> SessionPaths:
         hybrid_routing_plan_path=root / "hybrid" / "routing_plan.json",
         hybrid_routed_proposals_path=root / "hybrid" / "routed_proposals.json",
         hybrid_contexts_dir=root / "hybrid" / "contexts",
+        hybrid_provider_dir=root / "hybrid" / "provider",
+        hybrid_semantic_preflight_path=root / "hybrid" / "provider" / "semantic_preflight.json",
         hybrid_run_path=root / "hybrid" / "run.json",
         hybrid_session_map_path=root / "hybrid" / "session_map.json",
         hybrid_review_map_path=root / "hybrid" / "review_map.json",

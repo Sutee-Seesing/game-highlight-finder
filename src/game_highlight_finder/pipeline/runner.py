@@ -12,6 +12,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict
 
 from game_highlight_finder.config import AppConfig
+from game_highlight_finder.cost.service import CostService
 from game_highlight_finder.domain.models import ErrorRecord, ProxyMetadata, SessionMap, StageStatus
 from game_highlight_finder.domain.proposals import (
     ManualProposalMarkerSet,
@@ -27,9 +28,15 @@ from game_highlight_finder.pipeline.creator_evaluation import (
     persist_creator_review_template,
 )
 from game_highlight_finder.pipeline.extraction import ExtractionResult, extract_candidates
+from game_highlight_finder.pipeline.gemini_scout import build_gemini_cost_service
 from game_highlight_finder.pipeline.hybrid_context_media import (
     HybridContextPreparationResult,
     prepare_hybrid_context_media,
+)
+from game_highlight_finder.pipeline.hybrid_provider_boundary import (
+    HybridProviderPreflightResult,
+    load_committed_hybrid_contexts,
+    prepare_initial_semantic_preflight,
 )
 from game_highlight_finder.pipeline.hybrid_triage import (
     HybridFixtureBundle,
@@ -322,6 +329,33 @@ def prepare_hybrid_contexts(
         paths=paths,
         config=config,
         force=force,
+    )
+
+
+def prepare_hybrid_provider_preflight(
+    config: AppConfig,
+    session_id: str,
+    *,
+    cost_service: CostService | None = None,
+) -> HybridProviderPreflightResult:
+    """Quote routed semantic first-pass contexts without provider I/O or reservation."""
+
+    paths = session_paths(config.storage.data_dir, session_id)
+    if not paths.hybrid_routed_proposals_path.is_file():
+        raise ConfigError(
+            "Hybrid routed proposal artifact is missing.",
+            hint=str(paths.hybrid_routed_proposals_path),
+        )
+    routed = ProposalArtifact.model_validate(read_json(paths.hybrid_routed_proposals_path))
+    contexts = load_committed_hybrid_contexts(paths)
+    service = cost_service or build_gemini_cost_service(config)
+    return prepare_initial_semantic_preflight(
+        config=config,
+        session_id=session_id,
+        contexts=contexts,
+        routed_proposals=routed,
+        paths=paths,
+        cost_service=service,
     )
 
 

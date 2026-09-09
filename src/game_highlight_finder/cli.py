@@ -72,6 +72,7 @@ from game_highlight_finder.pipeline.runner import (
     analyze_v1_source,
     prepare_hybrid_contexts,
     prepare_hybrid_proposals,
+    prepare_hybrid_provider_preflight,
     prepare_hybrid_routing,
 )
 from game_highlight_finder.pipeline.windowed_scout import ExecutionActivity
@@ -995,6 +996,37 @@ def _hybrid_contexts(options: RuntimeOptions, session_id: str, force: bool) -> N
     typer.echo(f"context root: {result.contexts_dir}")
     typer.echo("source upload: FORBIDDEN")
     typer.echo("provider calls: ZERO")
+
+
+@hybrid_app.command("provider-preflight")
+def hybrid_provider_preflight(
+    ctx: typer.Context,
+    session_id: Annotated[
+        str,
+        typer.Argument(help="Session containing committed routed hybrid contexts."),
+    ],
+) -> None:
+    """Quote the exact hybrid semantic first pass without upload, reservation, or generation."""
+    _execute(ctx, lambda options: _hybrid_provider_preflight(options, session_id))
+
+
+def _hybrid_provider_preflight(options: RuntimeOptions, session_id: str) -> None:
+    result = prepare_hybrid_provider_preflight(_load(options).config, session_id)
+    preflight = result.preflight
+    typer.echo("[PASS] hybrid semantic provider preflight prepared")
+    typer.echo(f"logical calls: {preflight.logical_call_count}")
+    typer.echo(f"media minutes: {preflight.total_media_input_minutes:.3f}")
+    typer.echo(f"quoted reserve: ฿{preflight.aggregate_estimated_reserve_thb:.6f}")
+    typer.echo(f"budget sufficient: {str(preflight.budget_sufficient).upper()}")
+    typer.echo(f"verifier preflight: {preflight.verifier_preflight_state}")
+    typer.echo(f"dynamic expansion: {preflight.dynamic_expansion_preflight_state}")
+    typer.echo("expansion calls included: 0")
+    typer.echo("live authorization: FALSE")
+    typer.echo("source upload: FORBIDDEN")
+    typer.echo("provider calls: ZERO")
+    typer.echo("uploads: ZERO")
+    typer.echo("reservations: ZERO")
+    typer.echo(f"preflight: {result.preflight_path}")
 
 
 @hybrid_app.command("run-fixture")

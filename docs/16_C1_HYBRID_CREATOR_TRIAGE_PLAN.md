@@ -399,15 +399,18 @@ Provider-free follow-through after H6:
 - manual markers and transcripts are bound to exact source SHA-256 + duration, carry no creator/editorial score, and can enrich both `hybrid proposals` and the provider-free `hybrid run-fixture` path;
 - clustering preserves source provenance and records the contributing signal types rather than promoting loudness/activity/transcript text to semantic truth;
 - `ProposalSummary` persists density/duplication telemetry (`factual anchors -> clustered neighborhoods`, proposals/source-hour, source diversity, explicit hypotheses) so proposal recall improvements can be weighed against downstream inference/review burden;
+- a provider-free hybrid request boundary now exists over committed routed `analysis_context.mp4` media: `SEMANTIC_JUDGE` and `RESOLUTION_VERIFIER` are separate contracts, semantic outcome claims are provisional, verifier truth requires timestamped evidence, and `hybrid provider-preflight <session>` persists exact first-pass request fingerprints/cache keys plus logical-call/media-minute/cost accounting without reservation/upload/generation;
+- provider JSON-schema projections are fail-closed against the canonical `SemanticJudgment`, `CandidateVerification`, `CandidateClaim`, and `Evidence` contracts: version/enums come from canonical code and field-set drift raises locally before provider use;
+- dynamic context expansion is explicitly excluded from that first-pass quote until a separate re-preflight is produced, and verifier preflight remains blocked until semantic output exists;
 - the historical A Spike-plant failure now has a permanent provider-free replay regression: even when the semantic judge proposes `ROUND_WON`, an independent verifier that sees no terminal result leaves the claim `UNVERIFIED` and the item cannot enter the standalone review map.
 
 Next learning steps before any paid run:
 
-1. design the real semantic-judge and independent resolution-verifier request contracts over committed routed `analysis_context.mp4` media, separately from the old full-window Scout contract;
-2. add an exact provider-free initial-pass preflight that counts logical calls and media minutes, quotes each request without reserving funds, records cache identity, fixes generation attempts at one, and explicitly excludes dynamic-expansion calls until a new bounded preflight is produced;
-3. preserve the context-only privacy boundary: RAW source is never provider input and normal chat continuation never constitutes live authorization;
-4. then exercise richer non-audio evidence on a non-FPS/social source and measure proposal recall/diversity against routed semantic-inspection density;
-5. keep the historical Spike replay as a mandatory regression and only request fresh explicit hard-THB authorization when the hybrid preflight shows enough learning value.
+1. preserve the implemented provider boundary invariants: committed routed context media only, one generation attempt, zero automatic retry, RAW source forbidden, no reservation/upload/generation during preflight, and normal chat continuation never constitutes live authorization;
+2. exercise richer non-audio evidence on a non-FPS/social source and measure proposal recall/diversity against routed semantic-inspection density;
+3. use that evidence to decide whether a bounded real hybrid semantic pass has enough learning value to justify a fresh explicit hard-THB authorization;
+4. keep dynamic expansion and resolution-verifier cost as separate bounded preflights rather than silently folding unknown future calls into the initial quote;
+5. keep the historical Spike replay as a mandatory regression throughout provider integration.
 
 ## Current authorization
 
