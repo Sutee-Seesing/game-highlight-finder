@@ -17,6 +17,7 @@ from game_highlight_finder.config import (
 from game_highlight_finder.domain.models import StageStatus
 from game_highlight_finder.pipeline.ingest import ingest_source
 from game_highlight_finder.pipeline.local_signals import generate_local_signals
+from game_highlight_finder.pipeline.proposals import proposals_from_local_signals
 from game_highlight_finder.pipeline.proxy import generate_proxy
 from game_highlight_finder.status import get_session_status
 from game_highlight_finder.storage.hashing import hash_file
@@ -234,6 +235,14 @@ def test_bounded_multitrack_mix_joins_chunks_before_limiting(
     signals = generate_local_signals(ingest.source, proxy, config)
     assert signals.signals.audio_present is True
     assert signals.signals.audio_activity[-1].end_ms == ingest.source.duration_ms
+    # A full-duration mixed audio file must also carry usable evidence into C1.
+    proposals = proposals_from_local_signals(
+        session_id=ingest.session_id,
+        source_id=ingest.source.source_id,
+        signals=signals.signals,
+    )
+    assert proposals.proposals
+    assert any(proposal.signal_type.value == "AUDIO_ACTIVITY" for proposal in proposals.proposals)
     assert generate_proxy(ingest.source, config).cache_hit is True
 
 
