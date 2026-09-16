@@ -22,6 +22,8 @@ media:
     audio_bitrate_kbps: 64
     fps: 30
     video_codec: h264_nvenc
+    # cpu: software decode/scale + NVENC; cuda: GPU decode/scale + NVENC.
+    video_acceleration: cpu
     audio_codec: aac
     preset: p4
   audio:
@@ -29,6 +31,9 @@ media:
     channels: 1
     bitrate_kbps: 64
     codec: aac
+    # mix_all preserves separate OBS desktop/mic/Discord tracks for analysis.
+    # first is the explicit legacy behavior.
+    source_mix_mode: mix_all
   extraction:
     mode: accurate
     pre_roll_seconds: 5

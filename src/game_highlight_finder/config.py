@@ -46,6 +46,8 @@ class ProxyConfig(StrictModel):
     audio_bitrate_kbps: int = Field(default=64, ge=16, le=512)
     fps: float = Field(default=30.0, gt=0, le=120)
     video_codec: Literal["h264_nvenc", "libx264"] = "h264_nvenc"
+    # Opt-in CUDA decode and scale. NVENC alone accelerates only encoding.
+    video_acceleration: Literal["cpu", "cuda"] = "cpu"
     audio_codec: Literal["aac"] = "aac"
     preset: Literal[
         "p1",
@@ -70,6 +72,8 @@ class ProxyConfig(StrictModel):
             raise ValueError("h264_nvenc proxy requires an NVENC p1-p7 preset")
         if self.video_codec == "libx264" and nvenc:
             raise ValueError("libx264 proxy requires an x264 speed preset")
+        if self.video_acceleration == "cuda" and self.video_codec != "h264_nvenc":
+            raise ValueError("CUDA proxy acceleration requires h264_nvenc")
         return self
 
 
@@ -78,6 +82,10 @@ class AudioConfig(StrictModel):
     channels: Literal[1] = 1
     bitrate_kbps: int = Field(default=64, ge=16, le=512)
     codec: Literal["aac"] = "aac"
+    # OBS and similar recorders often store desktop, mic, Discord, and a mixed
+    # program feed on separate tracks. Analysis must not silently discard every
+    # track except the first one; ``first`` remains an explicit legacy escape hatch.
+    source_mix_mode: Literal["first", "mix_all"] = "mix_all"
 
 
 class ExtractionConfig(StrictModel):

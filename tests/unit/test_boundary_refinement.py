@@ -103,6 +103,7 @@ def test_slow_motion_command_preserves_audio_and_never_uses_shell() -> None:
         Path("ffmpeg"), Path("context.mp4"), Path("slow.mp4"), slowdown_factor=4, has_audio=True
     )
     assert command[0] == "ffmpeg"
+    assert "-nostdin" in command
     assert "-vf" in command and "setpts=4*(PTS-STARTPTS)" in command
     assert "-af" in command and "asetpts=PTS-STARTPTS,atempo=0.5,atempo=0.5" in command
     assert "shell" not in " ".join(command).lower()

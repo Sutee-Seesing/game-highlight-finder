@@ -22,7 +22,14 @@ from game_highlight_finder.domain.models import (
 )
 from game_highlight_finder.errors import AppError, ErrorCategory, ValidationError
 from game_highlight_finder.logging import RunLogger
-from game_highlight_finder.media.ffmpeg import build_audio_command, build_proxy_command, run_ffmpeg
+from game_highlight_finder.media.ffmpeg import (
+    analysis_audio_stream_indexes,
+    build_audio_command,
+    build_concat_mixed_audio_command,
+    build_mixed_audio_intermediate_command,
+    build_proxy_command,
+    run_ffmpeg,
+)
 from game_highlight_finder.media.ffprobe import run_ffprobe
 from game_highlight_finder.media.tools import tool_identity
 from game_highlight_finder.pipeline.manifest import (
@@ -32,7 +39,7 @@ from game_highlight_finder.pipeline.manifest import (
     recover_interrupted,
     start_stage,
 )
-from game_highlight_finder.storage.atomic import atomic_write_json, read_json
+from game_highlight_finder.storage.atomic import atomic_write_bytes, atomic_write_json, read_json
 from game_highlight_finder.storage.lock import SessionLock
 from game_highlight_finder.storage.preflight import check_disk_space
 from game_highlight_finder.storage.sessions import (
@@ -43,6 +50,10 @@ from game_highlight_finder.storage.sessions import (
     session_paths,
     write_manifest,
 )
+
+# Bounded mixing avoids source-dependent silent early EOF in a single multi-hour amix graph.
+MIX_CHUNK_DURATION_MS = 900_000
+MIX_CHUNK_TRIGGER_MS = 1_800_000
 
 
 class ProxyResult(BaseModel):
@@ -113,15 +124,42 @@ def generate_proxy(source: SourceAsset, config: AppConfig) -> ProxyResult:
         temp_dir.mkdir(parents=True, exist_ok=True)
         temp_proxy = temp_dir / "analysis_proxy.partial.mp4"
         temp_audio = temp_dir / "analysis_audio.partial.m4a"
+        temp_mixed_audio = temp_dir / "analysis_audio.mixed.nut"
         temp_metadata = temp_dir / "metadata.partial.json"
         try:
+            source_audio_indexes = analysis_audio_stream_indexes(source, config)
+            has_audio = bool(source_audio_indexes)
+            multi_track_mix = len(source_audio_indexes) > 1
             check_disk_space(
                 paths.root,
                 source_size_bytes=source.size_bytes,
                 duration_ms=source.duration_ms,
                 config=config,
+                lossless_mix_intermediate=multi_track_mix,
+                segmented_mix_intermediate=(
+                    multi_track_mix and source.duration_ms > MIX_CHUNK_TRIGGER_MS
+                ),
             )
-            has_audio = source.selected_audio_stream is not None
+            if multi_track_mix and source.duration_ms > MIX_CHUNK_TRIGGER_MS:
+                _generate_segmented_mixed_audio(
+                    ffmpeg.path, ffprobe.path, source, config, source_audio_indexes,
+                    temp_dir, temp_mixed_audio,
+                )
+            if multi_track_mix and source.duration_ms <= MIX_CHUNK_TRIGGER_MS:
+                run_ffmpeg(
+                    build_mixed_audio_intermediate_command(
+                        ffmpeg.path, source.path, temp_mixed_audio, config,
+                        audio_stream_indexes=source_audio_indexes,
+                    ),
+                    duration_ms=source.duration_ms,
+                    timeout_seconds=config.tools.ffmpeg_timeout_seconds,
+                    termination_grace_seconds=config.tools.termination_grace_seconds,
+                )
+                mixed_probe = run_ffprobe(
+                    ffprobe.path, temp_mixed_audio,
+                    timeout_seconds=config.tools.probe_timeout_seconds,
+                )
+                _validate_mixed_audio_probe(mixed_probe, source.duration_ms, config)
             run_ffmpeg(
                 build_proxy_command(
                     ffmpeg.path,
@@ -129,6 +167,8 @@ def generate_proxy(source: SourceAsset, config: AppConfig) -> ProxyResult:
                     temp_proxy,
                     config,
                     has_audio=has_audio,
+                    audio_stream_indexes=(None if multi_track_mix else source_audio_indexes),
+                    mixed_audio_path=(temp_mixed_audio if multi_track_mix else None),
                 ),
                 duration_ms=source.duration_ms,
                 timeout_seconds=config.tools.ffmpeg_timeout_seconds,
@@ -140,10 +180,19 @@ def generate_proxy(source: SourceAsset, config: AppConfig) -> ProxyResult:
                 timeout_seconds=config.tools.probe_timeout_seconds,
             )
             parsed = validate_proxy_probe(proxy_probe, source, config, expected_audio=has_audio)
+            if multi_track_mix:
+                _validate_proxy_audio_duration(proxy_probe, source.duration_ms)
             proxy_duration_ms = parsed["duration_ms"]
             if has_audio:
                 run_ffmpeg(
-                    build_audio_command(ffmpeg.path, source.path, temp_audio, config),
+                    build_audio_command(
+                        ffmpeg.path,
+                        temp_mixed_audio if multi_track_mix else source.path,
+                        temp_audio,
+                        config,
+                        audio_stream_indexes=(None if multi_track_mix else source_audio_indexes),
+                        mixed_audio_input=multi_track_mix,
+                    ),
                     duration_ms=source.duration_ms,
                     timeout_seconds=config.tools.ffmpeg_timeout_seconds,
                     termination_grace_seconds=config.tools.termination_grace_seconds,
@@ -167,6 +216,11 @@ def generate_proxy(source: SourceAsset, config: AppConfig) -> ProxyResult:
             warnings = list(source.warnings)
             if not has_audio:
                 warnings.append("Source has no audio; audio-specific signals will be empty.")
+            elif config.media.audio.source_mix_mode == "mix_all" and len(source_audio_indexes) > 1:
+                warnings.append(
+                    "Mixed all source audio streams into analysis audio so multi-track OBS "
+                    "voice/game sources are not silently discarded."
+                )
             metadata = ProxyMetadata(
                 created_at=datetime.now(UTC),
                 producer_version=__version__,
@@ -179,6 +233,8 @@ def generate_proxy(source: SourceAsset, config: AppConfig) -> ProxyResult:
                 audio_codec=parsed["audio_codec"],
                 audio_sample_rate_hz=parsed["audio_sample_rate_hz"],
                 audio_channels=parsed["audio_channels"],
+                audio_source_mode=(config.media.audio.source_mix_mode if has_audio else "none"),
+                audio_source_stream_indexes=list(source_audio_indexes),
                 timestamp_mapping=mapping,
                 warnings=warnings,
                 tool_identities={"ffmpeg": ffmpeg.version, "ffprobe": ffprobe.version},
@@ -231,6 +287,66 @@ def generate_proxy(source: SourceAsset, config: AppConfig) -> ProxyResult:
             raise
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+def _generate_segmented_mixed_audio(
+    ffmpeg_path: Path,
+    ffprobe_path: Path,
+    source: SourceAsset,
+    config: AppConfig,
+    audio_indexes: tuple[int, ...],
+    temp_dir: Path,
+    output_path: Path,
+) -> None:
+    """Bound every mix graph; stream-copy verified NUT chunks with exact time offsets."""
+
+    if MIX_CHUNK_DURATION_MS <= 0:
+        raise ValidationError("Lossless mix chunk duration must be positive.")
+    concat_lines = ["ffconcat version 1.0"]
+    for index, start_ms in enumerate(range(0, source.duration_ms, MIX_CHUNK_DURATION_MS)):
+        chunk_duration_ms = min(MIX_CHUNK_DURATION_MS, source.duration_ms - start_ms)
+        chunk_path = temp_dir / f"analysis_audio.part_{index:04d}.nut"
+        run_ffmpeg(
+            build_mixed_audio_intermediate_command(
+                ffmpeg_path, source.path, chunk_path, config,
+                audio_stream_indexes=audio_indexes,
+                start_ms=start_ms,
+                duration_ms=chunk_duration_ms,
+            ),
+            duration_ms=chunk_duration_ms,
+            timeout_seconds=config.tools.ffmpeg_timeout_seconds,
+            termination_grace_seconds=config.tools.termination_grace_seconds,
+        )
+        chunk_probe = run_ffprobe(
+            ffprobe_path, chunk_path, timeout_seconds=config.tools.probe_timeout_seconds
+        )
+        _validate_mixed_audio_probe(chunk_probe, chunk_duration_ms, config)
+        chunk_format = chunk_probe.get("format")
+        chunk_actual_ms = _duration_ms(
+            chunk_format.get("duration") if isinstance(chunk_format, dict) else None
+        )
+        if abs(chunk_actual_ms - chunk_duration_ms) > 250:
+            raise ValidationError(
+                "Lossless audio chunk ended before its requested interval "
+                f"({start_ms}+{chunk_actual_ms} vs {chunk_duration_ms} ms)."
+            )
+        # The NUT format duration may be a few milliseconds shorter than its last
+        # packet's end. Explicit requested durations prevent timestamp overlap.
+        concat_lines.extend(
+            [f"file '{chunk_path.name}'", f"duration {chunk_duration_ms / 1000:.3f}"]
+        )
+    concat_path = temp_dir / "analysis_audio.concat.ffconcat"
+    atomic_write_bytes(concat_path, ("\n".join(concat_lines) + "\n").encode("utf-8"))
+    run_ffmpeg(
+        build_concat_mixed_audio_command(ffmpeg_path, concat_path, output_path),
+        duration_ms=source.duration_ms,
+        timeout_seconds=config.tools.ffmpeg_timeout_seconds,
+        termination_grace_seconds=config.tools.termination_grace_seconds,
+    )
+    joined_probe = run_ffprobe(
+        ffprobe_path, output_path, timeout_seconds=config.tools.probe_timeout_seconds
+    )
+    _validate_mixed_audio_probe(joined_probe, source.duration_ms, config)
 
 
 def validate_proxy_probe(
@@ -292,6 +408,56 @@ def validate_proxy_probe(
     }
 
 
+def _validate_mixed_audio_probe(
+    raw: dict[str, Any], source_duration_ms: int, config: AppConfig
+) -> None:
+    """Reject silent early EOF before the limiter consumes the float intermediate."""
+
+    streams = raw.get("streams")
+    audio_streams = [
+        stream for stream in streams if isinstance(stream, dict)
+        and stream.get("codec_type") == "audio"
+    ] if isinstance(streams, list) else []
+    if len(audio_streams) != 1:
+        raise ValidationError("Lossless mixed audio must contain exactly one audio stream.")
+    audio = audio_streams[0]
+    if (
+        audio.get("codec_name") != "pcm_f32le"
+        or _optional_int(audio.get("sample_rate")) != config.media.audio.sample_rate_hz
+        or _optional_int(audio.get("channels")) != config.media.audio.channels
+    ):
+        raise ValidationError(
+            "Lossless mixed audio format does not match the expected PCM float contract."
+        )
+    format_data = raw.get("format")
+    duration_ms = _duration_ms(
+        format_data.get("duration") if isinstance(format_data, dict) else None
+    )
+    if abs(duration_ms - source_duration_ms) > 1000:
+        raise ValidationError(
+            "Lossless mixed audio duration differs from source beyond tolerance "
+            f"({duration_ms} vs {source_duration_ms} ms)."
+        )
+
+
+def _validate_proxy_audio_duration(raw: dict[str, Any], source_duration_ms: int) -> None:
+    """A full video container does not prove that its mixed audio reached the tail."""
+
+    streams = raw.get("streams")
+    audios = [
+        stream for stream in streams if isinstance(stream, dict)
+        and stream.get("codec_type") == "audio"
+    ] if isinstance(streams, list) else []
+    if len(audios) != 1:
+        raise ValidationError("Mixed proxy must contain exactly one audio stream.")
+    duration_ms = _duration_ms(audios[0].get("duration"))
+    if abs(duration_ms - source_duration_ms) > 1000:
+        raise ValidationError(
+            "Mixed proxy audio duration differs from source beyond tolerance "
+            f"({duration_ms} vs {source_duration_ms} ms)."
+        )
+
+
 def _validate_audio_probe(raw: dict[str, Any], source_duration_ms: int) -> None:
     streams = raw.get("streams")
     if not isinstance(streams, list) or not any(
@@ -302,7 +468,10 @@ def _validate_audio_probe(raw: dict[str, Any], source_duration_ms: int) -> None:
     if isinstance(format_data, dict):
         duration = _duration_ms(format_data.get("duration"))
         if abs(duration - source_duration_ms) > max(750, int(source_duration_ms * 0.03)):
-            raise ValidationError("Analysis audio duration differs from source beyond tolerance.")
+            raise ValidationError(
+                "Analysis audio duration differs from source beyond tolerance "
+                f"({duration} vs {source_duration_ms} ms)."
+            )
 
 
 def _duration_ms(value: object) -> int:

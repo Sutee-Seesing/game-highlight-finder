@@ -13,6 +13,7 @@ from decimal import Decimal
 from pathlib import Path
 
 from game_highlight_finder.config import AppConfig
+from game_highlight_finder.domain.models import SourceAsset
 from game_highlight_finder.errors import DependencyError, StorageError
 from game_highlight_finder.redaction import redact_text
 
@@ -161,6 +162,104 @@ def compute_proxy_dimensions(
     return max(2, scaled_width), max(2, scaled_height)
 
 
+def analysis_audio_stream_indexes(source: SourceAsset, config: AppConfig) -> tuple[int, ...]:
+    """Resolve deterministic source audio coverage for analysis and creator clips."""
+
+    indexes = tuple(sorted(stream.index for stream in source.audio_streams))
+    if not indexes:
+        return ()
+    if config.media.audio.source_mix_mode == "first":
+        selected = source.selected_audio_stream
+        if selected is None:
+            raise ValueError("source audio metadata has no selected legacy track")
+        return (selected,)
+    return indexes
+
+
+def _append_analysis_audio_mapping(
+    command: list[str],
+    audio_stream_indexes: tuple[int, ...] | None,
+    *,
+    limit_mix: bool = True,
+) -> None:
+    """Map one source track or deterministically mix explicit absolute stream indexes."""
+
+    # ``None`` keeps the historical direct-builder behavior for old call sites/tests.
+    if audio_stream_indexes is None:
+        command.extend(["-map", "0:a:0"])
+        return
+    if not audio_stream_indexes:
+        raise ValueError("audio stream indexes must be non-empty when audio is enabled")
+    if any(index < 0 for index in audio_stream_indexes) or len(set(audio_stream_indexes)) != len(
+        audio_stream_indexes
+    ):
+        raise ValueError("audio stream indexes must be unique non-negative integers")
+    if len(audio_stream_indexes) == 1:
+        command.extend(["-map", f"0:{audio_stream_indexes[0]}"])
+        return
+
+    inputs = "".join(f"[0:{index}]" for index in audio_stream_indexes)
+    # Keep source-track relative levels; long-form mixing uses a separate lossless
+    # intermediate so its limiter cannot prematurely terminate the amix graph.
+    filter_graph = (
+        f"{inputs}amix=inputs={len(audio_stream_indexes)}"
+        ":normalize=0:dropout_transition=0"
+    )
+    if limit_mix:
+        filter_graph += ",alimiter=limit=0.95"
+    filter_graph += "[analysis_audio]"
+    command.extend(["-filter_complex", filter_graph, "-map", "[analysis_audio]"])
+
+
+def build_mixed_audio_intermediate_command(
+    ffmpeg_path: Path,
+    source_path: Path,
+    output_path: Path,
+    config: AppConfig,
+    *,
+    audio_stream_indexes: tuple[int, ...],
+    start_ms: int = 0,
+    duration_ms: int | None = None,
+) -> list[str]:
+    """Mix source tracks to lossless float NUT, optionally in a bounded interval."""
+
+    if len(audio_stream_indexes) < 2:
+        raise ValueError("lossless intermediate requires multiple audio streams")
+    if start_ms < 0 or (duration_ms is not None and duration_ms <= 0):
+        raise ValueError("mix interval must have a non-negative start and positive duration")
+    if start_ms and duration_ms is None:
+        raise ValueError("a bounded mix start requires a duration")
+    command = [
+        str(ffmpeg_path), "-hide_banner", "-loglevel", "error", "-nostdin",
+        "-y",
+        *(["-ss", f"{start_ms / 1000:.3f}"] if start_ms else []),
+        "-i", str(source_path),
+    ]
+    _append_analysis_audio_mapping(command, audio_stream_indexes, limit_mix=False)
+    command.extend(
+        [
+            *(["-t", f"{duration_ms / 1000:.3f}"] if duration_ms is not None else []),
+            "-vn", "-c:a", "pcm_f32le", "-ac", str(config.media.audio.channels),
+            "-ar", str(config.media.audio.sample_rate_hz), "-f", "nut",
+            "-progress", "pipe:1", "-nostats", str(output_path),
+        ]
+    )
+    return command
+
+
+def build_concat_mixed_audio_command(
+    ffmpeg_path: Path, concat_list_path: Path, output_path: Path
+) -> list[str]:
+    """Join bounded PCM-float NUT chunks without decoding or re-encoding."""
+
+    return [
+        str(ffmpeg_path), "-hide_banner", "-loglevel", "error", "-nostdin",
+        "-y", "-f", "concat", "-safe", "0", "-i", str(concat_list_path),
+        "-map", "0:a:0", "-c:a", "copy", "-f", "nut",
+        "-progress", "pipe:1", "-nostats", str(output_path),
+    ]
+
+
 def build_proxy_command(
     ffmpeg_path: Path,
     source_path: Path,
@@ -168,20 +267,31 @@ def build_proxy_command(
     config: AppConfig,
     *,
     has_audio: bool,
+    audio_stream_indexes: tuple[int, ...] | None = None,
+    mixed_audio_path: Path | None = None,
 ) -> list[str]:
+    if mixed_audio_path is not None and (not has_audio or audio_stream_indexes is not None):
+        raise ValueError("mixed proxy audio must replace, not accompany, source audio mapping")
     proxy = config.media.proxy
+    use_cuda = proxy.video_acceleration == "cuda"
     scale = (
-        f"scale=w=min(iw\\,{proxy.max_width}):h=min(ih\\,{proxy.max_height})"
+        f"{'scale_cuda' if use_cuda else 'scale'}="
+        f"w=min(iw\\,{proxy.max_width}):h=min(ih\\,{proxy.max_height})"
         ":force_original_aspect_ratio=decrease:force_divisible_by=2"
     )
+    if use_cuda:
+        scale += ":format=nv12"
     command = [
         str(ffmpeg_path),
         "-hide_banner",
         "-loglevel",
         "error",
+        "-nostdin",
         "-y",
+        *(["-hwaccel", "cuda", "-hwaccel_output_format", "cuda"] if use_cuda else []),
         "-i",
         str(source_path),
+        *(["-i", str(mixed_audio_path)] if mixed_audio_path is not None else []),
         "-map",
         "0:v:0",
         "-vf",
@@ -196,14 +306,15 @@ def build_proxy_command(
         proxy.preset,
         "-b:v",
         f"{proxy.video_bitrate_kbps}k",
-        "-pix_fmt",
-        "yuv420p",
+        *([] if use_cuda else ["-pix_fmt", "yuv420p"]),
     ]
     if has_audio:
+        if mixed_audio_path is not None:
+            command.extend(["-map", "1:a:0", "-af", "alimiter=limit=0.90:level=0"])
+        else:
+            _append_analysis_audio_mapping(command, audio_stream_indexes)
         command.extend(
             [
-                "-map",
-                "0:a:0",
                 "-c:a",
                 proxy.audio_codec,
                 "-ac",
@@ -236,47 +347,66 @@ def build_audio_command(
     source_path: Path,
     output_path: Path,
     config: AppConfig,
+    *,
+    audio_stream_indexes: tuple[int, ...] | None = None,
+    mixed_audio_input: bool = False,
 ) -> list[str]:
+    if mixed_audio_input and audio_stream_indexes is not None:
+        raise ValueError("mixed audio input must not map original source streams")
     audio = config.media.audio
-    return [
+    command = [
         str(ffmpeg_path),
         "-hide_banner",
         "-loglevel",
         "error",
+        "-nostdin",
         "-y",
         "-i",
         str(source_path),
-        "-map",
-        "0:a:0",
-        "-vn",
-        "-c:a",
-        audio.codec,
-        "-ac",
-        str(audio.channels),
-        "-ar",
-        str(audio.sample_rate_hz),
-        "-b:a",
-        f"{audio.bitrate_kbps}k",
-        "-avoid_negative_ts",
-        "make_zero",
-        "-movflags",
-        "+faststart",
-        "-progress",
-        "pipe:1",
-        "-nostats",
-        str(output_path),
     ]
+    _append_analysis_audio_mapping(command, audio_stream_indexes)
+    if mixed_audio_input:
+        command.extend(["-af", "alimiter=limit=0.90:level=0"])
+    command.extend(
+        [
+            "-vn",
+            "-c:a",
+            audio.codec,
+            "-ac",
+            str(audio.channels),
+            "-ar",
+            str(audio.sample_rate_hz),
+            "-b:a",
+            f"{audio.bitrate_kbps}k",
+            "-avoid_negative_ts",
+            "make_zero",
+            "-movflags",
+            "+faststart",
+            "-progress",
+            "pipe:1",
+            "-nostats",
+            str(output_path),
+        ]
+    )
+    return command
 
 
 def build_signal_command(
     ffmpeg_path: Path,
     audio_path: Path,
     config: AppConfig,
+    *,
+    interval_ms: int | None = None,
 ) -> list[str]:
     silence = config.signals.silence
+    effective_interval_ms = (
+        config.signals.loudness.interval_ms if interval_ms is None else interval_ms
+    )
+    if effective_interval_ms <= 0:
+        raise ValueError("signal interval must be positive")
     samples = max(
         1,
-        round(config.media.audio.sample_rate_hz * config.signals.loudness.interval_ms / 1000),
+        round(config.media.audio.sample_rate_hz * effective_interval_ms / 1000),
     )
     filters = (
         f"silencedetect=noise={silence.noise_db:g}dB:d={silence.min_duration_seconds:g},"
@@ -291,6 +421,7 @@ def build_signal_command(
         "-hide_banner",
         "-loglevel",
         "info",
+        "-nostdin",
         "-i",
         str(audio_path),
         "-af",
@@ -335,6 +466,7 @@ def build_window_proxy_command(
         "-hide_banner",
         "-loglevel",
         "error",
+        "-nostdin",
         "-y",
         "-i",
         str(analysis_proxy_path),
@@ -391,6 +523,7 @@ def build_slow_motion_proxy_command(
         "-hide_banner",
         "-loglevel",
         "error",
+        "-nostdin",
         "-y",
         "-i",
         str(input_path),
@@ -435,6 +568,7 @@ def build_extraction_command(
     extraction: object,
     has_audio: bool,
     timestamp_origin_ms: int = 0,
+    audio_stream_indexes: tuple[int, ...] | None = None,
 ) -> list[str]:
     """Build an accurate or explicitly approximate source extraction command."""
 
@@ -448,6 +582,7 @@ def build_extraction_command(
         "-hide_banner",
         "-loglevel",
         "error",
+        "-nostdin",
         "-y",
         "-ss",
         _format_ms_seconds(seek_ms),
@@ -458,11 +593,14 @@ def build_extraction_command(
         "-map",
         "0:v:0",
     ]
+    mixed_audio = has_audio and audio_stream_indexes is not None and len(audio_stream_indexes) > 1
     if has_audio:
-        command.extend(["-map", "0:a:0?"])
+        _append_analysis_audio_mapping(command, audio_stream_indexes)
     if mode == "copy":
         command.extend(["-c:v", "copy"])
-        if has_audio:
+        if mixed_audio:
+            command.extend(["-c:a", str(getattr(extraction, "audio_codec", "aac"))])
+        elif has_audio:
             command.extend(["-c:a", "copy"])
         else:
             command.append("-an")
@@ -510,6 +648,7 @@ def build_thumbnail_command(
         "-hide_banner",
         "-loglevel",
         "error",
+        "-nostdin",
         "-y",
         "-ss",
         _format_ms_seconds(at_ms),

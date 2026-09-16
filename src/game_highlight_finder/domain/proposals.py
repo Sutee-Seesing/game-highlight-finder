@@ -68,7 +68,7 @@ class ProposalArtifact(PersistedModel):
     session_id: str = Field(min_length=1, max_length=128)
     source_id: str = Field(pattern=r"^src_[0-9a-f]{16}$")
     source_duration_ms: int = Field(gt=0)
-    proposals: list[Proposal] = Field(default_factory=list, max_length=10_000)
+    proposals: list[Proposal] = Field(default_factory=list, max_length=50_000)
     warnings: list[str] = Field(default_factory=list, max_length=100)
 
     @model_validator(mode="after")
@@ -159,9 +159,9 @@ class ProposalRoutingPlan(PersistedModel):
     source_id: str = Field(pattern=r"^src_[0-9a-f]{16}$")
     source_duration_ms: int = Field(gt=0)
     weak_sample_interval_ms: int = Field(gt=0)
-    decisions: list[ProposalRoutingDecision] = Field(default_factory=list, max_length=10_000)
-    selected_proposal_ids: list[str] = Field(default_factory=list, max_length=10_000)
-    deferred_proposal_ids: list[str] = Field(default_factory=list, max_length=10_000)
+    decisions: list[ProposalRoutingDecision] = Field(default_factory=list, max_length=50_000)
+    selected_proposal_ids: list[str] = Field(default_factory=list, max_length=50_000)
+    deferred_proposal_ids: list[str] = Field(default_factory=list, max_length=50_000)
     selected_per_source_hour: float = Field(ge=0)
     route_counts: dict[str, int] = Field(default_factory=dict, max_length=16)
 

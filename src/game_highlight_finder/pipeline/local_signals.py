@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import re
 import shutil
 from datetime import UTC, datetime
@@ -68,6 +69,18 @@ _ASTATS_RE = re.compile(
     re.IGNORECASE | re.DOTALL,
 )
 _INTEGRATED_RE = re.compile(r"^\s*I:\s*([-+]?\d+(?:\.\d+)?)\s*LUFS", re.MULTILINE)
+_MAX_SIGNAL_INTERVALS = 20_000
+
+
+def effective_loudness_interval_ms(*, duration_ms: int, configured_interval_ms: int) -> int:
+    """Keep bounded loudness buckets covering the complete analyzed duration."""
+
+    if duration_ms <= 0:
+        raise ValueError("duration_ms must be positive")
+    if configured_interval_ms <= 0:
+        raise ValueError("configured_interval_ms must be positive")
+    minimum_interval_ms = math.ceil(duration_ms / _MAX_SIGNAL_INTERVALS)
+    return max(configured_interval_ms, minimum_interval_ms)
 
 
 def generate_local_signals(
@@ -126,8 +139,17 @@ def generate_local_signals(
             warnings: list[str] = []
             stderr = ""
             if proxy.audio_path is not None and proxy.audio_path.is_file():
+                loudness_interval_ms = effective_loudness_interval_ms(
+                    duration_ms=proxy.metadata.duration_ms,
+                    configured_interval_ms=config.signals.loudness.interval_ms,
+                )
                 result = run_ffmpeg(
-                    build_signal_command(ffmpeg.path, proxy.audio_path, config),
+                    build_signal_command(
+                        ffmpeg.path,
+                        proxy.audio_path,
+                        config,
+                        interval_ms=loudness_interval_ms,
+                    ),
                     duration_ms=proxy.metadata.duration_ms,
                     timeout_seconds=config.tools.ffmpeg_timeout_seconds,
                     termination_grace_seconds=config.tools.termination_grace_seconds,
@@ -141,7 +163,7 @@ def generate_local_signals(
                 activity_proxy, overall_loudness = parse_loudness_activity(
                     stderr,
                     duration_ms=proxy.metadata.duration_ms,
-                    interval_ms=config.signals.loudness.interval_ms,
+                    interval_ms=loudness_interval_ms,
                     active_threshold_db=config.signals.silence.noise_db,
                 )
                 silence = _map_intervals(
@@ -169,6 +191,8 @@ def generate_local_signals(
                 silence = []
                 activity = []
                 overall_loudness = None
+            _validate_signal_interval_count("silence_intervals", silence)
+            _validate_signal_interval_count("audio_activity", activity)
             signals = LocalSignalsArtifact(
                 created_at=datetime.now(UTC),
                 producer_version=__version__,
@@ -301,7 +325,7 @@ def parse_loudness_activity(
                 integrated = value
         except ValueError:
             pass
-    return activity[:20_000], integrated
+    return activity, integrated
 
 
 def load_signals(path: Path) -> LocalSignalsArtifact:
@@ -325,7 +349,7 @@ def _merge_intervals(intervals: list[TimeInterval]) -> list[TimeInterval]:
             )
         else:
             merged.append(interval)
-    return merged[:20_000]
+    return merged
 
 
 def _map_intervals(
@@ -381,7 +405,15 @@ def _map_activity(
                     active=interval.active,
                 )
             )
-    return mapped[:20_000]
+    return mapped
+
+
+def _validate_signal_interval_count(name: str, intervals: list[Any]) -> None:
+    if len(intervals) > _MAX_SIGNAL_INTERVALS:
+        raise ValidationError(
+            "Local signal artifact exceeds the bounded interval capacity.",
+            hint=f"{name}={len(intervals)} max={_MAX_SIGNAL_INTERVALS}",
+        )
 
 
 def _proxy_artifact_hash(proxy: ProxyResult) -> str:

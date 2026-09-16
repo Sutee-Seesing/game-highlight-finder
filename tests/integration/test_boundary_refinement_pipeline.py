@@ -5,6 +5,7 @@ from pathlib import Path
 
 from game_highlight_finder.config import AppConfig, CostConfig, StorageConfig, ToolsConfig
 from game_highlight_finder.cost.fx import FxSnapshot
+from game_highlight_finder.cost.pricing import PricingCatalog
 from game_highlight_finder.cost.production import production_pricing_catalog
 from game_highlight_finder.cost.service import CostService
 from game_highlight_finder.domain.models import Candidate
@@ -18,11 +19,27 @@ from game_highlight_finder.pipeline.runner import analyze_m6_source
 from game_highlight_finder.providers.gemini import FakeGeminiTransport
 
 
+def _offline_pricing_catalog() -> PricingCatalog:
+    """Fresh synthetic pricing for offline fake-provider tests, never live billing."""
+
+    checked_at = datetime.now(UTC)
+    return PricingCatalog(
+        entry.model_copy(
+            update={
+                "verified_at": checked_at,
+                "source": "offline-test-pricing-fixture",
+                "notes": "Synthetic freshness for fake-transport tests; not a live pricing quote.",
+            }
+        )
+        for entry in production_pricing_catalog().entries()
+    )
+
+
 def _cost_service(config: AppConfig) -> CostService:
     return CostService(
         config,
         registry=build_gemini_registry(),
-        pricing=production_pricing_catalog(),
+        pricing=_offline_pricing_catalog(),
         fx_snapshot=FxSnapshot(
             base_currency="USD",
             quote_currency="THB",

@@ -19,12 +19,16 @@ from game_highlight_finder.media.ffmpeg import (
     FFmpegExecutionError,
     FFmpegProgressParser,
     build_audio_command,
+    build_concat_mixed_audio_command,
+    build_mixed_audio_intermediate_command,
     build_proxy_command,
+    build_signal_command,
     compute_proxy_dimensions,
     parse_progress_text,
     run_ffmpeg,
 )
 from game_highlight_finder.pipeline.local_signals import (
+    effective_loudness_interval_ms,
     parse_loudness_activity,
     parse_silence_intervals,
 )
@@ -59,10 +63,153 @@ def test_ffmpeg_commands_are_argument_arrays_and_preserve_unicode_paths() -> Non
     assert str(source) in command
     assert str(output) in command
     assert "shell=True" not in command
+    assert "-nostdin" in command
     assert "h264_nvenc" in command
     assert "p4" in command
     audio = build_audio_command(Path("C:/tools/ffmpeg.exe"), source, output, config)
     assert "-map" in audio and "0:a:0" in audio
+    assert "-nostdin" in audio
+    signal = build_signal_command(Path("C:/tools/ffmpeg.exe"), output, config)
+    assert "-nostdin" in signal
+
+
+def test_cuda_proxy_accelerates_video_without_changing_audio_mapping() -> None:
+    base = AppConfig()
+    cuda_proxy = base.media.proxy.model_copy(update={"video_acceleration": "cuda"})
+    config = base.model_copy(update={"media": base.media.model_copy(update={"proxy": cuda_proxy})})
+    source = Path("C:/recordings/à game.mkv")
+    mixed = Path("C:/library/tmp/mixed.nut")
+    command = build_proxy_command(
+        Path("ffmpeg"), source, Path("C:/library/tmp/proxy.mp4"), config,
+        has_audio=True, mixed_audio_path=mixed,
+    )
+    assert command[command.index("-hwaccel") + 1] == "cuda"
+    assert command[command.index("-hwaccel_output_format") + 1] == "cuda"
+    assert command.index("-hwaccel") < command.index("-i")
+    assert "scale_cuda=" in command[command.index("-vf") + 1]
+    assert ":format=nv12" in command[command.index("-vf") + 1]
+    assert "-pix_fmt" not in command
+    assert [command[i + 1] for i, arg in enumerate(command[:-1]) if arg == "-i"] == [
+        str(source), str(mixed)
+    ]
+    assert command[command.index("-af") + 1] == "alimiter=limit=0.90:level=0"
+    assert "1:a:0" in command
+    assert "-hwaccel" not in build_proxy_command(
+        Path("ffmpeg"), source, Path("C:/library/tmp/cpu.mp4"), base, has_audio=False,
+    )
+    with pytest.raises(ValueError, match="requires h264_nvenc"):
+        ProxyConfig(video_codec="libx264", preset="veryfast", video_acceleration="cuda")
+
+
+def test_analysis_audio_builders_mix_explicit_multitrack_sources_without_dropping_tracks() -> None:
+    config = AppConfig()
+    source = Path("C:/recordings/multitrack.mkv")
+    output = Path("C:/library/proxy/analysis.mp4")
+    indexes = (1, 2, 4)
+
+    proxy = build_proxy_command(
+        Path("ffmpeg"),
+        source,
+        output,
+        config,
+        has_audio=True,
+        audio_stream_indexes=indexes,
+    )
+    audio = build_audio_command(
+        Path("ffmpeg"),
+        source,
+        output,
+        config,
+        audio_stream_indexes=indexes,
+    )
+
+    for command in (proxy, audio):
+        assert "-filter_complex" in command
+        graph = command[command.index("-filter_complex") + 1]
+        assert "[0:1][0:2][0:4]" in graph
+        assert "amix=inputs=3:normalize=0:dropout_transition=0" in graph
+        assert "alimiter=limit=0.95[analysis_audio]" in graph
+        assert "[analysis_audio]" in command
+        assert "0:a:0" not in command
+
+    single = build_audio_command(
+        Path("ffmpeg"),
+        source,
+        output,
+        config,
+        audio_stream_indexes=(3,),
+    )
+    assert "-filter_complex" not in single
+    assert "0:3" in single
+
+
+def test_long_multitrack_uses_lossless_nut_then_limits_each_derivative() -> None:
+    config = AppConfig()
+    source = Path("C:/recordings/multitrack.mkv")
+    intermediate = Path("C:/library/tmp/mixed.nut")
+    proxy_path = Path("C:/library/tmp/proxy.mp4")
+    audio_path = Path("C:/library/tmp/analysis.m4a")
+    mixed = build_mixed_audio_intermediate_command(
+        Path("ffmpeg"), source, intermediate, config, audio_stream_indexes=(1, 2, 4)
+    )
+    graph = mixed[mixed.index("-filter_complex") + 1]
+    assert "[0:1][0:2][0:4]amix=inputs=3:normalize=0:dropout_transition=0" in graph
+    assert "alimiter" not in graph
+    assert mixed[mixed.index("-c:a") + 1] == "pcm_f32le"
+    assert mixed[mixed.index("-f") + 1] == "nut"
+    assert str(intermediate) == mixed[-1]
+
+    proxy = build_proxy_command(
+        Path("ffmpeg"), source, proxy_path, config,
+        has_audio=True, mixed_audio_path=intermediate,
+    )
+    assert [proxy[i + 1] for i, arg in enumerate(proxy[:-1]) if arg == "-i"] == [
+        str(source), str(intermediate)
+    ]
+    assert "-filter_complex" not in proxy
+    assert "1:a:0" in proxy
+    assert proxy[proxy.index("-af") + 1] == "alimiter=limit=0.90:level=0"
+
+    analysis = build_audio_command(
+        Path("ffmpeg"), intermediate, audio_path, config, mixed_audio_input=True
+    )
+    assert "-filter_complex" not in analysis
+    assert "0:a:0" in analysis
+    assert analysis[analysis.index("-af") + 1] == "alimiter=limit=0.90:level=0"
+    with pytest.raises(ValueError, match="multiple audio"):
+        build_mixed_audio_intermediate_command(
+            Path("ffmpeg"), source, intermediate, config, audio_stream_indexes=(1,)
+        )
+
+
+def test_bounded_lossless_mix_and_concat_copy_preserve_audio_contract() -> None:
+    config = AppConfig()
+    source = Path("C:/recordings/long.mkv")
+    chunk = Path("C:/library/tmp/analysis_audio.part_0003.nut")
+    command = build_mixed_audio_intermediate_command(
+        Path("ffmpeg"), source, chunk, config,
+        audio_stream_indexes=(1, 2, 3, 4),
+        start_ms=2_700_000,
+        duration_ms=900_000,
+    )
+    assert command[command.index("-ss") + 1] == "2700.000"
+    assert command[command.index("-t") + 1] == "900.000"
+    assert "-nostdin" in command
+    assert "alimiter" not in command[command.index("-filter_complex") + 1]
+    assert command[-1] == str(chunk)
+    with pytest.raises(ValueError, match="requires a duration"):
+        build_mixed_audio_intermediate_command(
+            Path("ffmpeg"), source, chunk, config,
+            audio_stream_indexes=(1, 2), start_ms=1000,
+        )
+
+    concat = build_concat_mixed_audio_command(
+        Path("ffmpeg"), chunk.parent / "parts.ffconcat", chunk.parent / "joined.nut"
+    )
+    assert concat[concat.index("-f") + 1] == "concat"
+    assert concat[concat.index("-c:a") + 1] == "copy"
+    assert concat[concat.index("-map") + 1] == "0:a:0"
+    assert "-filter_complex" not in concat and "-af" not in concat
 
 
 def test_proxy_encoder_defaults_to_nvenc_and_cpu_fallback_is_explicit() -> None:
@@ -180,6 +327,40 @@ def test_silence_and_loudness_parsers_clamp_to_source_duration() -> None:
     assert overall == -18
 
 
+def test_long_vod_loudness_interval_adapts_without_losing_tail() -> None:
+    duration_ms = 4 * 60 * 60 * 1000
+    interval_ms = effective_loudness_interval_ms(
+        duration_ms=duration_ms,
+        configured_interval_ms=500,
+    )
+    assert interval_ms == 720
+
+    command = build_signal_command(
+        Path("ffmpeg"),
+        Path("analysis_audio.m4a"),
+        AppConfig(),
+        interval_ms=interval_ms,
+    )
+    filters = command[command.index("-af") + 1]
+    assert "asetnsamples=n=11520:pad=1" in filters
+
+    text = """
+    [Parsed_ametadata] frame:0 pts_time:0.0
+    [Parsed_ametadata] lavfi.astats.Overall.RMS_level=-12.0
+    [Parsed_ametadata] frame:1 pts_time:14399.5
+    [Parsed_ametadata] lavfi.astats.Overall.RMS_level=-8.0
+    """
+    activity, _ = parse_loudness_activity(
+        text,
+        duration_ms=duration_ms,
+        interval_ms=interval_ms,
+        active_threshold_db=-35,
+    )
+    assert activity[0].start_ms == 0
+    assert activity[-1].start_ms == 14_399_280
+    assert activity[-1].end_ms == duration_ms
+
+
 def test_signal_models_reject_malformed_intervals() -> None:
     with pytest.raises(ValueError):
         TimeInterval(start_ms=100, end_ms=100)
@@ -201,6 +382,11 @@ def test_disk_preflight_estimate_is_conservative() -> None:
     assert audio > 0
     assert temporary == proxy + audio
     assert required > proxy + audio
+    _, _, mixed_temporary, mixed_required = estimate_required_bytes(
+        100_000_000, 60_000, AppConfig(), lossless_mix_intermediate=True
+    )
+    assert mixed_temporary >= temporary + (60 * AppConfig().media.audio.sample_rate_hz * 4)
+    assert mixed_required > required
 
 
 def test_stage_config_fingerprints_are_relevant_only() -> None:

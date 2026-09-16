@@ -23,7 +23,10 @@ from game_highlight_finder.domain.proposals import (
 
 ROUTING_POLICY_VERSION = "c1-proposal-routing-v1"
 DEFAULT_MAX_PROPOSAL_INTERVAL_MS = 20_000
-DEFAULT_MAX_PROPOSALS = 2_000
+# Four hours at the default 500 ms loudness cadence can legitimately yield ~28,800
+# factual audio anchors before clustering. Keep the safety ceiling above that product
+# horizon so the factual layer does not silently bias long VODs toward their first minutes.
+DEFAULT_MAX_PROPOSALS = 50_000
 DEFAULT_CLUSTER_GAP_MS = 750
 DEFAULT_MAX_CLUSTER_SPAN_MS = 12_000
 

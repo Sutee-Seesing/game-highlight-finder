@@ -472,6 +472,36 @@ def test_local_proposals_are_deterministic_factual_anchors_without_creator_score
         assert proposal.confidence == 1.0
 
 
+def test_long_vod_local_proposals_do_not_truncate_at_historical_2000_anchor_limit() -> None:
+    intervals = [
+        AudioActivityInterval(
+            start_ms=index * 500,
+            end_ms=(index + 1) * 500,
+            mean_db=-18.0,
+            active=True,
+        )
+        for index in range(2_001)
+    ]
+    signals = LocalSignalsArtifact(
+        created_at=NOW,
+        producer_version=__version__,
+        source_duration_ms=1_001_000,
+        audio_present=True,
+        audio_activity=intervals,
+    )
+
+    artifact = proposals_from_local_signals(
+        session_id=SESSION_ID,
+        source_id=SOURCE_ID,
+        signals=signals,
+        created_at=NOW,
+    )
+
+    assert len(artifact.proposals) == 2_001
+    assert artifact.proposals[-1].start_ms == 1_000_000
+    assert not any("kept first 2000" in warning for warning in artifact.warnings)
+
+
 def test_manual_marker_proposals_are_source_bound_factual_anchors() -> None:
     marker_set = ManualProposalMarkerSet(
         source_sha256="b" * 64,

@@ -17,6 +17,7 @@ from game_highlight_finder.domain.models import SessionMap, SourceAsset
 from game_highlight_finder.domain.reconcile import derive_clip_boundaries
 from game_highlight_finder.errors import ValidationError
 from game_highlight_finder.media.ffmpeg import (
+    analysis_audio_stream_indexes,
     build_extraction_command,
     build_thumbnail_command,
     run_ffmpeg,
@@ -81,8 +82,9 @@ def extraction_config_fingerprint(
     ffprobe_identity: object | None = None,
 ) -> str:
     payload = {
-        "version": 1,
+        "version": 2,
         "extraction": config.media.extraction.model_dump(mode="json"),
+        "source_audio_mix_mode": config.media.audio.source_mix_mode,
         "ffprobe": getattr(
             ffprobe_identity, "cache_payload", lambda: str(config.tools.ffprobe_path or "PATH")
         )(),
@@ -169,6 +171,8 @@ def extract_candidates(
     fingerprint = extraction_config_fingerprint(
         config, ffmpeg_identity=ffmpeg, ffprobe_identity=ffprobe
     )
+    source_audio_indexes = analysis_audio_stream_indexes(source, config)
+    has_audio = bool(source_audio_indexes)
     bounded_map = derive_clip_boundaries(session_map, source.duration_ms, config.media.extraction)
     now = datetime.now(UTC)
     old = _load_manifest(manifest_path)
@@ -215,8 +219,9 @@ def extract_candidates(
                     start_ms=candidate.clip_start_ms,
                     end_ms=candidate.clip_end_ms,
                     extraction=config.media.extraction,
-                    has_audio=source.selected_audio_stream is not None,
+                    has_audio=has_audio,
                     timestamp_origin_ms=source.timestamp_origin_ms or 0,
+                    audio_stream_indexes=source_audio_indexes,
                 ),
                 duration_ms=candidate.clip_end_ms - candidate.clip_start_ms,
                 timeout_seconds=config.tools.ffmpeg_timeout_seconds,

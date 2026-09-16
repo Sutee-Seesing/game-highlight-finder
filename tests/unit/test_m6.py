@@ -14,6 +14,7 @@ from game_highlight_finder.media.ffmpeg import (
     build_thumbnail_command,
     build_window_proxy_command,
 )
+from game_highlight_finder.pipeline.extraction import extraction_config_fingerprint
 from game_highlight_finder.pipeline.windowed_scout import FakeWindowScout, build_window_prompt
 
 
@@ -402,7 +403,55 @@ def test_command_builders_use_integer_seconds_and_never_shell() -> None:
     assert accurate_whole_seconds[accurate_whole_seconds.index("-t") + 1] == "20"
     assert "-c:v" in accurate and "libx264" in accurate
     assert "-frames:v" in thumbnail and "1.001" in thumbnail
+    commands = (window, accurate, accurate_whole_seconds, thumbnail)
+    assert all("-nostdin" in command for command in commands)
     assert all(isinstance(arg, str) for arg in accurate)
+
+
+def test_source_extraction_mix_all_preserves_multitrack_audio_for_creator_clip() -> None:
+    config = AppConfig()
+    indexes = (1, 2, 4)
+    accurate = build_extraction_command(
+        Path("ffmpeg"),
+        Path("multitrack-source.mkv"),
+        Path("candidate.mp4"),
+        start_ms=1_000,
+        end_ms=3_000,
+        extraction=config.media.extraction,
+        has_audio=True,
+        audio_stream_indexes=indexes,
+    )
+    graph = accurate[accurate.index("-filter_complex") + 1]
+    assert "[0:1][0:2][0:4]" in graph
+    assert "amix=inputs=3:normalize=0:dropout_transition=0" in graph
+    assert "[analysis_audio]" in accurate
+    assert "0:a:0?" not in accurate
+
+    copy_config = config.media.extraction.model_copy(update={"mode": "copy"})
+    copied = build_extraction_command(
+        Path("ffmpeg"),
+        Path("multitrack-source.mkv"),
+        Path("candidate-copy.mp4"),
+        start_ms=1_000,
+        end_ms=3_000,
+        extraction=copy_config,
+        has_audio=True,
+        audio_stream_indexes=indexes,
+    )
+    assert copied[copied.index("-c:v") + 1] == "copy"
+    assert copied[copied.index("-c:a") + 1] == "aac"
+
+
+def test_extraction_cache_identity_includes_source_audio_mix_policy() -> None:
+    base = AppConfig()
+    legacy = base.model_copy(
+        update={
+            "media": base.media.model_copy(
+                update={"audio": base.media.audio.model_copy(update={"source_mix_mode": "first"})}
+            )
+        }
+    )
+    assert extraction_config_fingerprint(base) != extraction_config_fingerprint(legacy)
 
 
 def test_nvenc_window_and_accurate_extraction_defaults_are_gpu_first() -> None:

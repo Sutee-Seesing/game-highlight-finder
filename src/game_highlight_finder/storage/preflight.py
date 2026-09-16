@@ -27,8 +27,11 @@ def estimate_required_bytes(
     source_size_bytes: int,
     duration_ms: int,
     config: AppConfig,
+    *,
+    lossless_mix_intermediate: bool = False,
+    segmented_mix_intermediate: bool = False,
 ) -> tuple[int, int, int, int]:
-    """Estimate outputs plus a duplicate temporary workspace, conservatively."""
+    """Estimate outputs plus temporary workspace, including lossless multi-track mix."""
 
     duration_seconds = max(1.0, duration_ms / 1000.0)
     proxy_by_bitrate = (
@@ -42,6 +45,15 @@ def estimate_required_bytes(
     proxy_bytes = max(int(proxy_by_bitrate), int(source_size_bytes * 0.05), 1 << 20)
     audio_bytes = max(int(audio_by_bitrate), int(duration_seconds * 1024), 64 * 1024)
     temporary_bytes = proxy_bytes + audio_bytes
+    if segmented_mix_intermediate and not lossless_mix_intermediate:
+        raise ValueError("segmented mix requires a lossless mix intermediate")
+    if lossless_mix_intermediate:
+        # Segmented jobs hold all NUT parts and the final joined NUT simultaneously.
+        copies = 2 if segmented_mix_intermediate else 1
+        temporary_bytes += copies * (int(
+            duration_seconds * config.media.audio.sample_rate_hz
+            * config.media.audio.channels * 4 * 1.02
+        ) + (1 << 20))
     required = int((proxy_bytes + audio_bytes + temporary_bytes) * config.disk.safety_factor)
     required = max(required, config.disk.minimum_free_bytes)
     return proxy_bytes, audio_bytes, temporary_bytes, required
@@ -53,9 +65,13 @@ def check_disk_space(
     source_size_bytes: int,
     duration_ms: int,
     config: AppConfig,
+    lossless_mix_intermediate: bool = False,
+    segmented_mix_intermediate: bool = False,
 ) -> DiskSpaceEstimate:
     proxy_bytes, audio_bytes, temporary_bytes, required = estimate_required_bytes(
-        source_size_bytes, duration_ms, config
+        source_size_bytes, duration_ms, config,
+        lossless_mix_intermediate=lossless_mix_intermediate,
+        segmented_mix_intermediate=segmented_mix_intermediate,
     )
     try:
         available = shutil.disk_usage(output_root).free

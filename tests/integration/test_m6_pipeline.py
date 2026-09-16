@@ -15,6 +15,7 @@ from game_highlight_finder.config import (
     ToolsConfig,
 )
 from game_highlight_finder.cost.fx import FxSnapshot
+from game_highlight_finder.cost.pricing import PricingCatalog
 from game_highlight_finder.cost.production import production_pricing_catalog
 from game_highlight_finder.cost.service import CostService
 from game_highlight_finder.domain.proposals import (
@@ -88,11 +89,27 @@ def _window_response(
     }
 
 
+def _offline_pricing_catalog() -> PricingCatalog:
+    """Fresh synthetic pricing for offline fake-provider tests, never live billing."""
+
+    checked_at = datetime.now(UTC)
+    return PricingCatalog(
+        entry.model_copy(
+            update={
+                "verified_at": checked_at,
+                "source": "offline-test-pricing-fixture",
+                "notes": "Synthetic freshness for fake-transport tests; not a live pricing quote.",
+            }
+        )
+        for entry in production_pricing_catalog().entries()
+    )
+
+
 def _gemini_cost_service(config: AppConfig) -> CostService:
     return CostService(
         config,
         registry=build_gemini_registry(),
-        pricing=production_pricing_catalog(),
+        pricing=_offline_pricing_catalog(),
         fx_snapshot=FxSnapshot(
             base_currency="USD",
             quote_currency="THB",
@@ -563,7 +580,7 @@ def test_m6_window_privacy_cache_and_aggregate_cost_preflight(
     service = CostService(
         gemini_config,
         registry=build_gemini_registry(),
-        pricing=production_pricing_catalog(),
+        pricing=_offline_pricing_catalog(),
         fx_snapshot=FxSnapshot(
             base_currency="USD",
             quote_currency="THB",

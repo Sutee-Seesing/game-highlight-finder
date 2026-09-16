@@ -17,6 +17,7 @@ from game_highlight_finder.config import (
     config_payload,
 )
 from game_highlight_finder.cost.fx import FxSnapshot
+from game_highlight_finder.cost.pricing import PricingCatalog
 from game_highlight_finder.cost.production import (
     GEMINI_37_CATALOG_VERSION,
     production_pricing_catalog,
@@ -86,15 +87,31 @@ def _config(tmp_path: Path, ffmpeg_path: Path, ffprobe_path: Path) -> AppConfig:
 
 
 def _service(config: AppConfig) -> CostService:
+    # Lifecycle tests use fake transports and synthetic fresh pricing, never live rates.
+    # Keep the 3.7 historical quote cases on the actual dated production snapshot.
+    historical_37 = config.scout.model == "gemini-3.7-flash"
+    checked_at = NOW if historical_37 else datetime.now(UTC)
+    catalog = production_pricing_catalog()
+    if not historical_37:
+        catalog = PricingCatalog(
+            entry.model_copy(
+                update={
+                    "verified_at": checked_at,
+                    "source": "offline-test-pricing-fixture",
+                    "notes": "Synthetic test pricing; not a live quote.",
+                }
+            )
+            for entry in catalog.entries()
+        )
     return CostService(
         config,
         registry=build_gemini_registry(),
-        pricing=production_pricing_catalog(),
+        pricing=catalog,
         fx_snapshot=FxSnapshot(
             base_currency="USD",
             quote_currency="THB",
             rate=Decimal("36"),
-            captured_at=NOW,
+            captured_at=checked_at,
             source="test",
         ),
     )

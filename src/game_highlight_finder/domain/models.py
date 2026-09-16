@@ -128,6 +128,8 @@ class ProxyMetadata(PersistedModel):
     audio_codec: str | None = Field(default=None, max_length=100)
     audio_sample_rate_hz: int | None = Field(default=None, gt=0)
     audio_channels: int | None = Field(default=None, gt=0)
+    audio_source_mode: Literal["legacy_first", "none", "first", "mix_all"] = "legacy_first"
+    audio_source_stream_indexes: list[int] = Field(default_factory=list, max_length=128)
     timestamp_mapping: TimestampMapping
     warnings: list[str] = Field(default_factory=list, max_length=100)
     tool_identities: dict[str, str] = Field(default_factory=dict, max_length=20)
