@@ -31,6 +31,8 @@ from game_highlight_finder.domain.proposals import (
     ProposalSignalType,
     TranscriptFixture,
     TranscriptUtterance,
+    VisualEvidenceFixture,
+    VisualEvidenceObservation,
 )
 from game_highlight_finder.pipeline.context_expansion import (
     expand_if_needed,
@@ -61,6 +63,7 @@ from game_highlight_finder.pipeline.proposals import (
     proposals_from_local_signals,
     proposals_from_manual_markers,
     proposals_from_transcript,
+    proposals_from_visual_evidence,
     route_proposals,
     selected_proposal_artifact,
     summarize_proposals,
@@ -663,6 +666,72 @@ def test_transcript_proposals_are_source_bound_speech_evidence_not_creator_truth
             source_duration_ms=60_000,
             transcript=transcript,
             created_at=NOW,
+        )
+
+
+def test_visual_ocr_evidence_is_source_bound_and_remains_factual() -> None:
+    fixture = VisualEvidenceFixture(
+        source_sha256="f" * 64,
+        source_duration_ms=60_000,
+        observations=[
+            VisualEvidenceObservation(
+                start_ms=20_000,
+                end_ms=21_000,
+                signal_type=ProposalSignalType.VISUAL_STATE_CHANGE,
+                description="objective icon changes to planted state",
+                event_hypothesis="OBJECTIVE_PLANTED",
+                confidence=0.95,
+                metadata={"region": "hud", "description": "untrusted override"},
+            ),
+            VisualEvidenceObservation(
+                start_ms=40_000,
+                end_ms=40_500,
+                signal_type=ProposalSignalType.OCR_STATE_CHANGE,
+                description="round banner text changes",
+                confidence=0.88,
+                metadata={"text_after": "VICTORY"},
+            ),
+        ],
+        notes=["bounded local fixture only"],
+    )
+    artifact = proposals_from_visual_evidence(
+        session_id=SESSION_ID,
+        source_id=SOURCE_ID,
+        source_sha256="f" * 64,
+        source_duration_ms=60_000,
+        visual_evidence=fixture,
+        created_at=NOW,
+    )
+
+    assert [item.signal_type for item in artifact.proposals] == [
+        ProposalSignalType.VISUAL_STATE_CHANGE,
+        ProposalSignalType.OCR_STATE_CHANGE,
+    ]
+    assert artifact.proposals[0].event_hypothesis == "OBJECTIVE_PLANTED"
+    assert artifact.proposals[0].sources == ["visual_fixture"]
+    assert artifact.proposals[0].metadata["description"] == (
+        "objective icon changes to planted state"
+    )
+    assert artifact.proposals[0].metadata["region"] == "hud"
+    assert artifact.proposals[1].sources == ["ocr_fixture"]
+    assert artifact.proposals[1].metadata["text_after"] == "VICTORY"
+    assert all("creator_score" not in item.model_dump(mode="json") for item in artifact.proposals)
+
+    with pytest.raises(ValueError, match="visual evidence source SHA-256"):
+        proposals_from_visual_evidence(
+            session_id=SESSION_ID,
+            source_id=SOURCE_ID,
+            source_sha256="0" * 64,
+            source_duration_ms=60_000,
+            visual_evidence=fixture,
+            created_at=NOW,
+        )
+    with pytest.raises(ValueError, match="visual evidence signal type"):
+        VisualEvidenceObservation(
+            start_ms=1,
+            end_ms=2,
+            signal_type=ProposalSignalType.AUDIO_ACTIVITY,
+            description="invalid modality",
         )
 
 

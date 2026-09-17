@@ -88,6 +88,7 @@ Source-bound provider-free evidence fixtures now include:
 
 - `ManualProposalMarkerSet`: owner/test factual markers bound to exact source SHA-256 + duration;
 - `TranscriptFixture`: timestamped utterances (text/speaker/language/confidence) bound to exact source SHA-256 + duration. Speech remains evidence only and never implies creator value by itself.
+- `VisualEvidenceFixture`: bounded `VISUAL_STATE_CHANGE` / `OCR_STATE_CHANGE` observations bound to exact source SHA-256 + duration, with factual description, optional event hypothesis, confidence and small provenance metadata. The fixture is an adapter contract for independently generated local visual/OCR evidence; it is not a creator score, semantic verdict, or license to replay benchmark GT as detector output.
 
 `ProposalSummary` records proposal density/duplication telemetry such as factual-anchor count before clustering, proposal neighborhoods after clustering, clustered reduction, multi-source neighborhoods, explicit hypotheses, proposals/source-hour and counts by signal type. These are retrieval-efficiency metrics, not creator-quality scores.
 

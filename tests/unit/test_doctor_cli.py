@@ -148,11 +148,13 @@ def test_hybrid_proposals_cli_is_local_only(
         *,
         manual_markers: object | None = None,
         transcript: object | None = None,
+        visual_evidence: object | None = None,
     ) -> object:
         observed["video"] = video
         observed["allow_remote_upload"] = config.scout.allow_remote_upload
         observed["manual_markers"] = manual_markers
         observed["transcript"] = transcript
+        observed["visual_evidence"] = visual_evidence
         return SimpleNamespace(
             proposals=SimpleNamespace(proposals=[object(), object()]),
             proposal_summary=SimpleNamespace(
@@ -179,6 +181,7 @@ def test_hybrid_proposals_cli_is_local_only(
         "allow_remote_upload": False,
         "manual_markers": None,
         "transcript": None,
+        "visual_evidence": None,
     }
     assert "proposals: 2" in result.output
     assert "proposal density/source-hour: 12.000" in result.output
@@ -208,11 +211,13 @@ def test_hybrid_proposals_cli_accepts_source_bound_manual_markers(
         *,
         manual_markers: object | None = None,
         transcript: object | None = None,
+        visual_evidence: object | None = None,
     ) -> object:
         observed["video"] = video
         observed["allow_remote_upload"] = config.scout.allow_remote_upload
         observed["manual_markers"] = manual_markers
         observed["transcript"] = transcript
+        observed["visual_evidence"] = visual_evidence
         proposal_path = tmp_path / "proposals.json"
         return SimpleNamespace(
             proposals=SimpleNamespace(proposals=[object()]),
@@ -248,6 +253,7 @@ def test_hybrid_proposals_cli_accepts_source_bound_manual_markers(
     assert marker_set.source_sha256 == "b" * 64
     assert marker_set.markers[0].event_hypothesis == "OBJECTIVE_PLANTED"
     assert observed["transcript"] is None
+    assert observed["visual_evidence"] is None
     assert "provider calls: ZERO" in result.output
 
 
@@ -273,11 +279,13 @@ def test_hybrid_proposals_cli_accepts_source_bound_transcript(
         *,
         manual_markers: object | None = None,
         transcript: object | None = None,
+        visual_evidence: object | None = None,
     ) -> object:
         observed["video"] = video
         observed["allow_remote_upload"] = config.scout.allow_remote_upload
         observed["manual_markers"] = manual_markers
         observed["transcript"] = transcript
+        observed["visual_evidence"] = visual_evidence
         proposal_path = tmp_path / "proposals.json"
         return SimpleNamespace(
             proposals=SimpleNamespace(proposals=[object()]),
@@ -313,6 +321,78 @@ def test_hybrid_proposals_cli_accepts_source_bound_transcript(
     assert transcript.source_sha256 == "c" * 64
     assert transcript.utterances[0].text == "that was close"
     assert observed["manual_markers"] is None
+    assert observed["visual_evidence"] is None
+    assert "provider calls: ZERO" in result.output
+
+
+def test_hybrid_proposals_cli_accepts_source_bound_visual_evidence(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    observed: dict[str, object] = {}
+    source = tmp_path / "synthetic.mp4"
+    evidence_file = tmp_path / "visual_evidence.json"
+    evidence_file.write_text(
+        '{"schema_version":1,"source_sha256":"'
+        + "d" * 64
+        + '","source_duration_ms":1000,"observations":[{'
+        '"start_ms":100,"end_ms":200,"signal_type":"VISUAL_STATE_CHANGE",'
+        '"description":"visible objective state changed",'
+        '"event_hypothesis":"OBJECTIVE_PLANTED","confidence":0.95,'
+        '"metadata":{"region":"hud"}}],"notes":[]}',
+        encoding="utf-8",
+    )
+
+    def fake_prepare(
+        video: Path,
+        config: AppConfig,
+        *,
+        manual_markers: object | None = None,
+        transcript: object | None = None,
+        visual_evidence: object | None = None,
+    ) -> object:
+        observed["video"] = video
+        observed["allow_remote_upload"] = config.scout.allow_remote_upload
+        observed["manual_markers"] = manual_markers
+        observed["transcript"] = transcript
+        observed["visual_evidence"] = visual_evidence
+        proposal_path = tmp_path / "proposals.json"
+        return SimpleNamespace(
+            proposals=SimpleNamespace(proposals=[object()]),
+            proposal_summary=SimpleNamespace(
+                proposals_per_source_hour=1.0,
+                clustered_reduction_count=0,
+            ),
+            proposals_path=proposal_path,
+            proposal_summary_path=proposal_path.with_name("proposal_summary.json"),
+            ingest=SimpleNamespace(
+                session_id="fixture",
+                source=SimpleNamespace(sha256="d" * 64),
+            ),
+        )
+
+    monkeypatch.setattr("game_highlight_finder.cli.prepare_hybrid_proposals", fake_prepare)
+    result = runner.invoke(
+        app,
+        [
+            "--data-dir",
+            str(tmp_path / "data"),
+            "hybrid",
+            "proposals",
+            str(source),
+            "--visual-evidence",
+            str(evidence_file),
+        ],
+    )
+
+    assert result.exit_code == 0
+    evidence = observed["visual_evidence"]
+    assert evidence is not None
+    assert evidence.source_sha256 == "d" * 64
+    assert evidence.observations[0].description == "visible objective state changed"
+    assert evidence.observations[0].event_hypothesis == "OBJECTIVE_PLANTED"
+    assert observed["manual_markers"] is None
+    assert observed["transcript"] is None
     assert "provider calls: ZERO" in result.output
 
 

@@ -20,6 +20,7 @@ from game_highlight_finder.domain.proposals import (
     ProposalRoutingPlan,
     ProposalSummary,
     TranscriptFixture,
+    VisualEvidenceFixture,
 )
 from game_highlight_finder.domain.reconcile import derive_clip_boundaries, reconcile_session_maps
 from game_highlight_finder.errors import ConfigError
@@ -61,6 +62,7 @@ from game_highlight_finder.pipeline.proposals import (
     proposals_from_local_signals,
     proposals_from_manual_markers,
     proposals_from_transcript,
+    proposals_from_visual_evidence,
     route_proposals,
     selected_proposal_artifact,
     summarize_proposals,
@@ -210,6 +212,7 @@ def prepare_hybrid_proposals(
     *,
     manual_markers: ManualProposalMarkerSet | None = None,
     transcript: TranscriptFixture | None = None,
+    visual_evidence: VisualEvidenceFixture | None = None,
 ) -> HybridProposalPreparationResult:
     """Run local ingest/proxy/signals, enrich factual anchors, and persist proposals."""
 
@@ -241,6 +244,17 @@ def prepare_hybrid_proposals(
                 source_sha256=local.ingest.source.sha256,
                 source_duration_ms=local.ingest.source.duration_ms,
                 transcript=transcript,
+                created_at=local.ingest.source.created_at,
+            )
+        )
+    if visual_evidence is not None:
+        artifacts.append(
+            proposals_from_visual_evidence(
+                session_id=local.ingest.session_id,
+                source_id=local.ingest.source.source_id,
+                source_sha256=local.ingest.source.sha256,
+                source_duration_ms=local.ingest.source.duration_ms,
+                visual_evidence=visual_evidence,
                 created_at=local.ingest.source.created_at,
             )
         )
@@ -366,6 +380,7 @@ def analyze_hybrid_fixture_source(
     *,
     manual_markers: ManualProposalMarkerSet | None = None,
     transcript: TranscriptFixture | None = None,
+    visual_evidence: VisualEvidenceFixture | None = None,
 ) -> HybridFixtureAnalysisResult:
     """Exercise the hybrid semantic center locally without any provider generation."""
 
@@ -374,6 +389,7 @@ def analyze_hybrid_fixture_source(
         config,
         manual_markers=manual_markers,
         transcript=transcript,
+        visual_evidence=visual_evidence,
     )
     triage = run_hybrid_fixture_bundle(
         proposals=preparation.proposals,

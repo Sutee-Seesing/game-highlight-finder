@@ -39,6 +39,8 @@ from game_highlight_finder.domain.proposals import (
     ProposalSummary,
     TranscriptFixture,
     TranscriptUtterance,
+    VisualEvidenceFixture,
+    VisualEvidenceObservation,
 )
 
 __all__ = [
@@ -68,6 +70,8 @@ __all__ = [
     "StoryState",
     "TranscriptFixture",
     "TranscriptUtterance",
+    "VisualEvidenceFixture",
+    "VisualEvidenceObservation",
     "canonicalize",
     "canonicalize_scout_output",
     "canonicalize_scout_response",

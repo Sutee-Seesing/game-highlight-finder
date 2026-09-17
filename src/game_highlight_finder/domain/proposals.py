@@ -124,6 +124,55 @@ class TranscriptFixture(PersistedModel):
         return self
 
 
+class VisualEvidenceObservation(PersistedModel):
+    """One source-relative visual/OCR observation; factual evidence, not creator truth."""
+
+    start_ms: int = Field(ge=0)
+    end_ms: int = Field(gt=0)
+    signal_type: ProposalSignalType
+    description: str = Field(min_length=1, max_length=1_000)
+    event_hypothesis: str | None = Field(default=None, min_length=1, max_length=128)
+    confidence: float = Field(default=1.0, ge=0, le=1)
+    metadata: dict[str, str] = Field(default_factory=dict, max_length=32)
+
+    @field_validator("start_ms", "end_ms", mode="before")
+    @classmethod
+    def strict_integer_time(cls, value: object) -> object:
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise ValueError("visual evidence timestamps must be integer milliseconds")
+        return value
+
+    @model_validator(mode="after")
+    def interval_and_modality_are_valid(self) -> VisualEvidenceObservation:
+        if self.end_ms <= self.start_ms:
+            raise ValueError("visual evidence interval must be non-empty")
+        if self.signal_type not in {
+            ProposalSignalType.VISUAL_STATE_CHANGE,
+            ProposalSignalType.OCR_STATE_CHANGE,
+        }:
+            raise ValueError(
+                "visual evidence signal type must be VISUAL_STATE_CHANGE or OCR_STATE_CHANGE"
+            )
+        return self
+
+
+class VisualEvidenceFixture(PersistedModel):
+    """Source-bound visual/OCR evidence fixture for provider-free proposal enrichment."""
+
+    schema_version: int = 1
+    source_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    source_duration_ms: int = Field(gt=0)
+    observations: list[VisualEvidenceObservation] = Field(default_factory=list, max_length=20_000)
+    notes: list[str] = Field(default_factory=list, max_length=100)
+
+    @model_validator(mode="after")
+    def observations_fit_source(self) -> VisualEvidenceFixture:
+        for observation in self.observations:
+            if observation.end_ms > self.source_duration_ms:
+                raise ValueError("visual evidence observation exceeds source duration")
+        return self
+
+
 class ProposalSummary(PersistedModel):
     """Provider-free density/duplication telemetry for one factual proposal timeline."""
 
@@ -237,4 +286,6 @@ __all__ = [
     "ProposalSummary",
     "TranscriptFixture",
     "TranscriptUtterance",
+    "VisualEvidenceFixture",
+    "VisualEvidenceObservation",
 ]

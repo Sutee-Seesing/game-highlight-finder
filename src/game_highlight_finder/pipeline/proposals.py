@@ -19,6 +19,7 @@ from game_highlight_finder.domain.proposals import (
     ProposalSignalType,
     ProposalSummary,
     TranscriptFixture,
+    VisualEvidenceFixture,
 )
 
 ROUTING_POLICY_VERSION = "c1-proposal-routing-v1"
@@ -239,6 +240,54 @@ def proposals_from_transcript(
         source_duration_ms=source_duration_ms,
         proposals=_ordered(proposals),
         warnings=list(transcript.notes),
+    )
+
+
+def proposals_from_visual_evidence(
+    *,
+    session_id: str,
+    source_id: str,
+    source_sha256: str,
+    source_duration_ms: int,
+    visual_evidence: VisualEvidenceFixture,
+    created_at: datetime | None = None,
+) -> ProposalArtifact:
+    """Bind source-checked visual/OCR observations as factual proposal anchors only."""
+
+    if visual_evidence.source_sha256 != source_sha256:
+        raise ValueError("visual evidence source SHA-256 does not match the analyzed source")
+    if visual_evidence.source_duration_ms != source_duration_ms:
+        raise ValueError("visual evidence source duration does not match the analyzed source")
+
+    proposals: list[Proposal] = []
+    for observation in visual_evidence.observations:
+        # The validated observation description is authoritative over free-form metadata.
+        metadata = {**observation.metadata, "description": observation.description}
+        source = (
+            "ocr_fixture"
+            if observation.signal_type is ProposalSignalType.OCR_STATE_CHANGE
+            else "visual_fixture"
+        )
+        proposals.append(
+            _proposal(
+                source_id=source_id,
+                start_ms=observation.start_ms,
+                end_ms=observation.end_ms,
+                signal_type=observation.signal_type,
+                source=source,
+                event_hypothesis=observation.event_hypothesis,
+                confidence=observation.confidence,
+                metadata=metadata,
+            )
+        )
+    return ProposalArtifact(
+        created_at=created_at or datetime.now(UTC),
+        producer_version=__version__,
+        session_id=session_id,
+        source_id=source_id,
+        source_duration_ms=source_duration_ms,
+        proposals=_ordered(proposals),
+        warnings=list(visual_evidence.notes),
     )
 
 
@@ -617,6 +666,7 @@ __all__ = [
     "proposals_from_local_signals",
     "proposals_from_manual_markers",
     "proposals_from_transcript",
+    "proposals_from_visual_evidence",
     "route_proposals",
     "selected_proposal_artifact",
     "summarize_proposals",

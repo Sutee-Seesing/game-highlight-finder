@@ -44,7 +44,11 @@ from game_highlight_finder.config import (
 )
 from game_highlight_finder.cost import CostService, Money
 from game_highlight_finder.doctor import run_doctor
-from game_highlight_finder.domain.proposals import ManualProposalMarkerSet, TranscriptFixture
+from game_highlight_finder.domain.proposals import (
+    ManualProposalMarkerSet,
+    TranscriptFixture,
+    VisualEvidenceFixture,
+)
 from game_highlight_finder.domain.time import format_duration
 from game_highlight_finder.errors import AppError, ConfigError, ErrorCategory
 from game_highlight_finder.media.ffmpeg import ProgressUpdate
@@ -877,11 +881,20 @@ def hybrid_proposals(
             help="Optional source-bound TranscriptFixture JSON; remains provider-free.",
         ),
     ] = None,
+    visual_evidence: Annotated[
+        Path | None,
+        typer.Option(
+            "--visual-evidence",
+            help="Optional source-bound VisualEvidenceFixture JSON; remains provider-free.",
+        ),
+    ] = None,
 ) -> None:
     """Persist clustered factual proposal anchors from provider-free local evidence."""
     _execute(
         ctx,
-        lambda options: _hybrid_proposals(options, video, manual_markers, transcript),
+        lambda options: _hybrid_proposals(
+            options, video, manual_markers, transcript, visual_evidence
+        ),
     )
 
 
@@ -890,6 +903,7 @@ def _hybrid_proposals(
     video: Path,
     manual_markers: Path | None,
     transcript: Path | None,
+    visual_evidence: Path | None,
 ) -> None:
     marker_set = (
         ManualProposalMarkerSet.model_validate(read_json(manual_markers))
@@ -901,11 +915,17 @@ def _hybrid_proposals(
         if transcript is not None
         else None
     )
+    visual_evidence_fixture = (
+        VisualEvidenceFixture.model_validate(read_json(visual_evidence))
+        if visual_evidence is not None
+        else None
+    )
     result = prepare_hybrid_proposals(
         video,
         _load(options).config,
         manual_markers=marker_set,
         transcript=transcript_fixture,
+        visual_evidence=visual_evidence_fixture,
     )
     typer.echo("[PASS] hybrid proposals prepared")
     typer.echo(f"proposals: {len(result.proposals.proposals)}")
@@ -1051,6 +1071,13 @@ def hybrid_run_fixture(
             help="Optional source-bound TranscriptFixture JSON; remains provider-free.",
         ),
     ] = None,
+    visual_evidence: Annotated[
+        Path | None,
+        typer.Option(
+            "--visual-evidence",
+            help="Optional source-bound VisualEvidenceFixture JSON; remains provider-free.",
+        ),
+    ] = None,
 ) -> None:
     """Run proposal -> judge -> verify -> story -> extraction using local fixtures."""
     _execute(
@@ -1061,6 +1088,7 @@ def hybrid_run_fixture(
             fixture,
             manual_markers,
             transcript,
+            visual_evidence,
         ),
     )
 
@@ -1071,6 +1099,7 @@ def _hybrid_run_fixture(
     fixture: Path,
     manual_markers: Path | None,
     transcript: Path | None,
+    visual_evidence: Path | None,
 ) -> None:
     bundle = HybridFixtureBundle.model_validate(read_json(fixture))
     marker_set = (
@@ -1083,12 +1112,18 @@ def _hybrid_run_fixture(
         if transcript is not None
         else None
     )
+    visual_evidence_fixture = (
+        VisualEvidenceFixture.model_validate(read_json(visual_evidence))
+        if visual_evidence is not None
+        else None
+    )
     result = analyze_hybrid_fixture_source(
         video,
         _load(options).config,
         bundle,
         manual_markers=marker_set,
         transcript=transcript_fixture,
+        visual_evidence=visual_evidence_fixture,
     )
     typer.echo("[PASS] hybrid fixture run completed")
     typer.echo(f"proposals: {len(result.preparation.proposals.proposals)}")

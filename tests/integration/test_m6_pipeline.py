@@ -24,6 +24,8 @@ from game_highlight_finder.domain.proposals import (
     ProposalSignalType,
     TranscriptFixture,
     TranscriptUtterance,
+    VisualEvidenceFixture,
+    VisualEvidenceObservation,
 )
 from game_highlight_finder.errors import ValidationError
 from game_highlight_finder.media.ffmpeg import FFmpegCancelled
@@ -325,6 +327,57 @@ def test_hybrid_transcript_enrichment_stays_local_and_persists_density_summary(
     assert len(routing.routed_proposals.proposals) == len(
         routing.routing.selected_proposal_ids
     )
+    assert config.scout.allow_remote_upload is False
+
+
+def test_hybrid_visual_evidence_enrichment_stays_local_and_routes_strong_facts(
+    tmp_path: Path,
+    tiny_video: Path,
+    ffmpeg_path: Path,
+    ffprobe_path: Path,
+) -> None:
+    config = _config(tmp_path / "library", ffmpeg_path, ffprobe_path)
+    ingested = analyze_m6_source(tiny_video, config, stop_after="ingest")
+    source = ingested.ingest.source
+    visual_evidence = VisualEvidenceFixture(
+        source_sha256=source.sha256,
+        source_duration_ms=source.duration_ms,
+        observations=[
+            VisualEvidenceObservation(
+                start_ms=500,
+                end_ms=900,
+                signal_type=ProposalSignalType.VISUAL_STATE_CHANGE,
+                description="visible state changes",
+                event_hypothesis="STATE_CHANGED",
+                confidence=0.95,
+            )
+        ],
+    )
+
+    prepared = prepare_hybrid_proposals(
+        tiny_video,
+        config,
+        visual_evidence=visual_evidence,
+    )
+    strong = [
+        proposal
+        for proposal in prepared.proposals.proposals
+        if "visual_fixture" in proposal.sources
+    ]
+    assert len(strong) == 1
+    assert strong[0].signal_type is ProposalSignalType.VISUAL_STATE_CHANGE
+    assert strong[0].event_hypothesis == "STATE_CHANGED"
+
+    routing = prepare_hybrid_routing(
+        config,
+        prepared.ingest.session_id,
+        weak_sample_interval_ms=1_000,
+    )
+    routes = {
+        decision.proposal_id: decision.route.value
+        for decision in routing.routing.decisions
+    }
+    assert routes[strong[0].proposal_id] == "MUST_INSPECT"
     assert config.scout.allow_remote_upload is False
 
 
