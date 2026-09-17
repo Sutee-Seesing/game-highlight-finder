@@ -15,10 +15,12 @@ from game_highlight_finder.config import (
     ToolsConfig,
 )
 from game_highlight_finder.domain.models import StageStatus
+from game_highlight_finder.errors import ValidationError
+from game_highlight_finder.media.ffprobe import run_ffprobe
 from game_highlight_finder.pipeline.ingest import ingest_source
 from game_highlight_finder.pipeline.local_signals import generate_local_signals
 from game_highlight_finder.pipeline.proposals import proposals_from_local_signals
-from game_highlight_finder.pipeline.proxy import generate_proxy
+from game_highlight_finder.pipeline.proxy import generate_proxy, validate_proxy_probe
 from game_highlight_finder.status import get_session_status
 from game_highlight_finder.storage.hashing import hash_file
 from game_highlight_finder.storage.sessions import load_manifest, session_paths, write_manifest
@@ -170,6 +172,57 @@ def test_m2_end_to_end_cache_and_source_immutability(
     assert status.stages["ingest"] is StageStatus.COMPLETED
     assert status.stages["proxy"] is StageStatus.COMPLETED
     assert status.stages["local_signals"] is StageStatus.COMPLETED
+
+
+def test_proxy_video_stream_must_reach_tail_even_when_container_audio_does(
+    tiny_video: Path,
+    ffmpeg_path: Path,
+    ffprobe_path: Path,
+    tmp_path: Path,
+) -> None:
+    config = _config(tmp_path / "video-tail-library", ffmpeg_path, ffprobe_path)
+    ingest = ingest_source(tiny_video, config)
+    proxy = generate_proxy(ingest.source, config)
+    probe = run_ffprobe(ffprobe_path, proxy.proxy_path, timeout_seconds=30)
+    assert abs(float(probe["format"]["duration"]) * 1000 - ingest.source.duration_ms) < 500
+    videos = [stream for stream in probe["streams"] if stream.get("codec_type") == "video"]
+    assert len(videos) == 1
+    videos[0]["duration"] = "0.100000"
+    with pytest.raises(ValidationError, match="Proxy video stream duration differs"):
+        validate_proxy_probe(probe, ingest.source, config, expected_audio=True)
+    videos[0].pop("duration")
+    with pytest.raises(ValidationError, match="Media duration is missing"):
+        validate_proxy_probe(probe, ingest.source, config, expected_audio=True)
+
+
+def test_cached_proxy_rejects_video_tail_truncation_despite_valid_file_hash(
+    tiny_video: Path,
+    ffmpeg_path: Path,
+    ffprobe_path: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import game_highlight_finder.pipeline.proxy as proxy_module
+
+    config = _config(tmp_path / "cache-video-tail-library", ffmpeg_path, ffprobe_path)
+    ingest = ingest_source(tiny_video, config)
+    first = generate_proxy(ingest.source, config)
+    real_probe = proxy_module.run_ffprobe
+
+    def misleading_cached_probe(probe_path: Path, media_path: Path, *, timeout_seconds: int):
+        result = real_probe(probe_path, media_path, timeout_seconds=timeout_seconds)
+        if media_path == first.proxy_path:
+            video = next(
+                stream for stream in result["streams"] if stream.get("codec_type") == "video"
+            )
+            video["duration"] = "0.100000"
+        return result
+
+    monkeypatch.setattr(proxy_module, "run_ffprobe", misleading_cached_probe)
+    refreshed = generate_proxy(ingest.source, config)
+    assert refreshed.cache_hit is False
+    assert refreshed.proxy_path == first.proxy_path
+    assert refreshed.metadata.duration_ms == first.metadata.duration_ms
 
 
 def test_multitrack_obs_audio_is_mixed_into_analysis_derivatives_by_default(

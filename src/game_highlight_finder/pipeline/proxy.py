@@ -20,7 +20,7 @@ from game_highlight_finder.domain.models import (
     TimestampMapping,
     model_json,
 )
-from game_highlight_finder.errors import AppError, ErrorCategory, ValidationError
+from game_highlight_finder.errors import AppError, ErrorCategory, SourceError, ValidationError
 from game_highlight_finder.logging import RunLogger
 from game_highlight_finder.media.ffmpeg import (
     analysis_audio_stream_indexes,
@@ -97,6 +97,25 @@ def generate_proxy(source: SourceAsset, config: AppConfig) -> ProxyResult:
         valid, reason = completed_stage_cache_is_valid(
             paths, manifest, stage_name="proxy", expected_cache_key=cache_key
         )
+        if valid:
+            # A matching cache key and file hash cannot prove that the encoded
+            # video reached the end: older B proxies had full-length audio but
+            # a video stream that stopped midway through the recording.
+            try:
+                cached_probe = run_ffprobe(
+                    ffprobe.path, proxy_path,
+                    timeout_seconds=config.tools.probe_timeout_seconds,
+                )
+                cached_audio_indexes = analysis_audio_stream_indexes(source, config)
+                validate_proxy_probe(
+                    cached_probe, source, config,
+                    expected_audio=bool(cached_audio_indexes),
+                )
+                if len(cached_audio_indexes) > 1:
+                    _validate_proxy_audio_duration(cached_probe, source.duration_ms)
+            except (SourceError, ValidationError) as exc:
+                valid = False
+                reason = f"Cached proxy media failed validation: {exc}"
         if valid:
             metadata = _load_metadata(metadata_path)
             return ProxyResult(
@@ -391,6 +410,14 @@ def validate_proxy_probe(
         raise ValidationError(
             "Proxy duration differs from source beyond tolerance "
             f"({duration_ms} vs {source.duration_ms} ms)."
+        )
+    # Container duration may be set by full-length audio even when the video
+    # stream silently ended much earlier; the video stream itself must reach the tail.
+    video_duration_ms = _duration_ms(video.get("duration"))
+    if abs(video_duration_ms - source.duration_ms) > 1000:
+        raise ValidationError(
+            "Proxy video stream duration differs from source beyond tolerance "
+            f"({video_duration_ms} vs {source.duration_ms} ms)."
         )
     if expected_audio and len(audios) != 1:
         raise ValidationError("Source audio was present but proxy audio is missing.")
