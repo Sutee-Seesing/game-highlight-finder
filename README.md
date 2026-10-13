@@ -11,7 +11,7 @@ M3 remains offline and deterministic. M4 adds provider-neutral contracts and a f
 Requirements:
 
 - Windows 11 (Windows is the supported M2 platform)
-- [uv](https://docs.astral.sh/uv/) for Python and dependency management
+- [uv](https://sutee-seesing.github.io) for Python and dependency management
 - Python 3.12 managed by uv
 - FFmpeg and ffprobe
 
@@ -285,8 +285,8 @@ The M5 adapter targets the exact stable model `gemini-3.5-flash-lite` using the
 Google Developer API Standard tier. The dated pricing snapshot uses USD 0.30 per
 million input tokens for text/image/video/audio and USD 2.50 per million output
 tokens including thinking, verified against Google's official pages on 2026-08-13
-(Asia/Bangkok): [pricing](https://ai.google.dev/gemini-api/docs/pricing) and
-[model](https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash-lite).
+(Asia/Bangkok): [pricing](https://sutee-seesing.github.io) and
+[model](https://sutee-seesing.github.io).
 The Interactions adapter resolves media and thinking capabilities per model before
 the provider boundary. Gemini 3.5 Flash-Lite sends per-content `resolution: "low"`
 and reserves about 66 vision tokens/second plus 32 audio tokens/second. Gemini 2.5
